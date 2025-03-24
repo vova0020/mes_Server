@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Модель пользователя
+model User {
+  id          Int         @id @default(autoincrement())
+  username    String      @unique       // Логин пользователя, уникальное значение
+  password    String                    // Хэш пароля
+  role        Role        @relation(fields: [roleId], references: [id])  // Связь с моделью роли
+  roleId      Int
+  details     UserDetail?               // Дополнительные данные пользователя (опционально)
+  loginLogs   LoginLog[]                // Логи входа пользователя
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// Модель роли пользователя
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique      // Название роли (например, admin, operator)
+  users     User[]                // Список пользователей с этой ролью
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Модель подробной информации о пользователе
+model UserDetail {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int      @unique         // Каждому пользователю соответствует ровно одна запись
+  fullName  String                   // Полное имя пользователя
+  phone     String?                  // Телефон (опционально)
+  position  String?                  // Должность (опционально)
+  salary    Float?                   // Зарплата, статистика и др. данные (опционально)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Модель лога входа для контроля безопасности
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  loginAt   DateTime @default(now())       // Дата и время входа
+  ip        String?  // IP-адрес пользователя (опционально)
+  userAgent String?  // Информация о браузере/устройстве (опционально)
+}
