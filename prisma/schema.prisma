@@ -51,9 +51,26 @@ model UserDetail {
 // Модель лога входа для контроля безопасности
 model LoginLog {
   id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  loginAt   DateTime @default(now())       // Дата и время входа
-  ip        String?  // IP-адрес пользователя (опционально)
-  userAgent String?  // Информация о браузере/устройстве (опционально)
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    Int?                 // Сделали опциональным для неудачных попыток
+  loginAt   DateTime @default(now())
+  ip        String?              // IP-адрес пользователя (опционально)
+  userAgent String?              // Информация о браузере/устройстве (опционально)
+  success   Boolean              // Статус попытки входа: true – успешный, false – неудачный
+}
+
+
+// ======================================================
+// Блок работы с заказми
+
+// таблица с заказми
+model ProductionOrder {
+  id           Int       @id @default(autoincrement())
+  runNumber    String    // Номер запуска
+  name         String    // Название
+  progress     Float?    // Процент выполнения
+  createdAt    DateTime  @default(now()) // Дата создания
+  finishedAt   DateTime? // Дата завершения
+  allowedToRun Boolean   // Разрешено ли к запуску
+  completed    Boolean   // Завершено ли
 }

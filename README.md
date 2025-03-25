@@ -96,3 +96,61 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+
+
+
+
+## Схема
+project-root/
+└── src/
+    ├── common/                 # Общие утилиты, декораторы, фильтры, интерсепторы и т.д.
+    │   ├── decorators/
+    │   │   └── current-user.decorator.ts
+    │   ├── filters/
+    │   ├── interceptors/
+    │   └── pipes/
+    │
+    ├── config/                 # Файлы конфигурации (например, конфигурация подключения к БД, JWT и т.д.)
+    │   └── configuration.ts
+    │
+    ├── modules/                # Доменные модули приложения
+    │   ├── auth/               # Модуль авторизации
+    │   │   ├── controllers/
+    │   │   │   └── auth.controller.ts
+    │   │   ├── dto/
+    │   │   │   ├── login.dto.ts
+    │   │   │   └── register.dto.ts
+    │   │   ├── entities/
+    │   │   │   └── user.entity.ts
+    │   │   ├── guards/
+    │   │   │   └── jwt-auth.guard.ts
+    │   │   ├── strategies/
+    │   │   │   └── jwt.strategy.ts
+    │   │   ├── services/
+    │   │   │   └── auth.service.ts
+    │   │   └── auth.module.ts
+    │   │
+    │   ├── users/              # Модуль управления пользователями
+    │   │   ├── controllers/
+    │   │   │   └── users.controller.ts
+    │   │   ├── dto/
+    │   │   ├── entities/
+    │   │   ├── services/
+    │   │   │   └── users.service.ts
+    │   │   └── users.module.ts
+    │   │
+    │   └── orders/             # Пример другого модуля (например, управление заказами)
+    │       ├── controllers/
+    │       │   └── orders.controller.ts
+    │       ├── dto/
+    │       ├── entities/
+    │       ├── services/
+    │       │   └── orders.service.ts
+    │       └── orders.module.ts
+    │
+    ├── shared/                 # Общий модуль для переиспользуемых сервисов и компонентов
+    │   └── shared.module.ts
+    │
+    ├── app.module.ts           # Главный модуль приложения, который импортирует все доменные модули
+    └── main.ts                 # Точка входа в приложение

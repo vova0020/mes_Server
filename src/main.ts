@@ -1,14 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  // Создаем приложение NestJS
   const app = await NestFactory.create(AppModule);
-
-  // Включаем глобальный пайп для валидации (опционально)
-  // app.useGlobalPipes(new ValidationPipe());
-
-  // Запускаем сервер на порту 3000 (можно изменить в .env или конфигурации)
+  app.useGlobalPipes(new ValidationPipe());
   await app.listen(3000);
 }
 bootstrap();
