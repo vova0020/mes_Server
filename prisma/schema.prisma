@@ -13,64 +13,308 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Модель пользователя
+// ======================================================
+// Модуль авторизации
+// Содержит модели для управления пользователями, ролями,
+// деталями пользователей и логами входа в систему
+// ======================================================
+
 model User {
-  id          Int         @id @default(autoincrement())
-  username    String      @unique       // Логин пользователя, уникальное значение
-  password    String                    // Хэш пароля
-  role        Role        @relation(fields: [roleId], references: [id])  // Связь с моделью роли
-  roleId      Int
-  details     UserDetail?               // Дополнительные данные пользователя (опционально)
-  loginLogs   LoginLog[]                // Логи входа пользователя
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                   Int               @id @default(autoincrement())
+  username             String            @unique  // Уникальное имя пользователя для входа
+  password             String            // Хэшированный пароль пользователя
+  role                 Role              @relation(fields: [roleId], references: [id])  // Связь с ролью пользователя
+  roleId               Int               // Внешний ключ для связи с ролью
+  details              UserDetail?       // Связь с дополнительными данными пользователя (один-к-одному)
+  loginLogs            LoginLog[]        // История входов пользователя в систему (один-ко-многим)
+  operatorOperations   DetailOperation[] @relation("OperatorOperations")  // Операции, где пользователь выступает оператором
+  masterOperations     DetailOperation[] @relation("MasterOperations")    // Операции, где пользователь выступает мастером
+  createdAt            DateTime          @default(now())  // Дата создания пользователя
+  updatedAt            DateTime          @updatedAt       // Дата последнего обновления пользователя
 }
 
-// Модель роли пользователя
 model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique      // Название роли (например, admin, operator)
-  users     User[]                // Список пользователей с этой ролью
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  name       String   @unique  // Уникальное название роли (например, "admin", "operator", "master")
+  users      User[]   // Обратная связь с пользователями, имеющими данную роль
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
-// Модель подробной информации о пользователе
 model UserDetail {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int      @unique         // Каждому пользователю соответствует ровно одна запись
-  fullName  String                   // Полное имя пользователя
-  phone     String?                  // Телефон (опционально)
-  position  String?                  // Должность (опционально)
-  salary    Float?                   // Зарплата, статистика и др. данные (опционально)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id])  // Связь с пользователем
+  userId     Int      @unique  // Внешний ключ с ограничением уникальности (один-к-одному)
+  fullName   String   // Полное имя пользователя
+  phone      String?  // Телефон (опционально)
+  position   String?  // Должность (опционально)
+  salary     Float?   // Заработная плата (опционально)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
-// Модель лога входа для контроля безопасности
 model LoginLog {
-  id        Int      @id @default(autoincrement())
-  user      User?    @relation(fields: [userId], references: [id])
-  userId    Int?                 // Сделали опциональным для неудачных попыток
-  loginAt   DateTime @default(now())
-  ip        String?              // IP-адрес пользователя (опционально)
-  userAgent String?              // Информация о браузере/устройстве (опционально)
-  success   Boolean              // Статус попытки входа: true – успешный, false – неудачный
+  id         Int      @id @default(autoincrement())
+  user       User?    @relation(fields: [userId], references: [id])  // Связь с пользователем (может быть null при неудачном входе)
+  userId     Int?     // Внешний ключ (может быть null)
+  loginAt    DateTime @default(now())  // Время попытки входа
+  ip         String?  // IP-адрес, с которого выполнялся вход
+  userAgent  String?  // Информация о браузере/устройстве
+  success    Boolean  // Успешность входа (true - успешно, false - неудачно)
 }
-
 
 // ======================================================
-// Блок работы с заказми
+// Блок заказов и производства
+// Модели для управления производственными заказами,
+// упаковками (УПАК), деталями и поддонами
+// ======================================================
 
-// таблица с заказми
 model ProductionOrder {
-  id           Int       @id @default(autoincrement())
-  runNumber    String    // Номер запуска
-  name         String    // Название
-  progress     Float?    // Процент выполнения
-  createdAt    DateTime  @default(now()) // Дата создания
-  finishedAt   DateTime? // Дата завершения
-  allowedToRun Boolean   // Разрешено ли к запуску
-  completed    Boolean   // Завершено ли
+  id           Int               @id @default(autoincrement())
+  runNumber    String            // Номер партии/прогона
+  name         String            // Название заказа
+  progress     Float?            // Процент выполнения заказа (0-100)
+  createdAt    DateTime          @default(now())  // Дата создания заказа
+  finishedAt   DateTime?         // Дата завершения заказа (null, если не завершен)
+  allowedToRun Boolean           // Разрешение на запуск (true - разрешено, false - запрещено)
+  completed    Boolean           // Статус завершенности (true - завершен, false - в процессе)
+  ypaks        ProductionYpak[]  // Связь с УПАКами, входящими в заказ
+}
+
+model ProductionYpak {
+  id       Int                    @id @default(autoincrement())
+  name     String                 // Название УПАКа
+  progress Float?                 // Процент выполнения УПАКа (0-100)
+  order    ProductionOrder        @relation(fields: [orderId], references: [id])  // Связь с заказом
+  orderId  Int                    // Внешний ключ для связи с заказом
+  details  ProductionYpakDetail[] // Связь с деталями, входящими в УПАК
+}
+
+model ProductionDetail {
+  id          Int                      @id @default(autoincrement())
+  article     String                   // Артикул детали
+  name        String                   // Название детали
+  material    String                   // Материал изготовления
+  size        String                   // Размер детали
+  totalNumber Int                      // Общее количество деталей в производстве
+  ypaks       ProductionYpakDetail[]   // Связь с УПАКами, в которые входит деталь
+  pallets     ProductionPallets[]      // Связь с поддонами, на которых размещается деталь
+
+  // Связь с маршрутом обработки, позволяющая задавать индивидуальную последовательность этапов
+  route       ProductionRoute?         @relation(fields: [routeId], references: [id])
+  routeId     Int?
+
+  // Общее количество готовых деталей для обработки на данном участке
+  // вычисляется через агрегирующие запросы, суммируя quantity поддонов,
+  // где соответствующая операция (DetailOperation) имеет нужный статус.
+}
+
+model ProductionYpakDetail {
+  id               Int                      @id @default(autoincrement())
+  ypak             ProductionYpak           @relation(fields: [ypakId], references: [id])  // Связь с УПАКом
+  ypakId           Int                      // Внешний ключ для связи с УПАКом
+  detail           ProductionDetail         @relation(fields: [detailId], references: [id])  // Связь с деталью
+  detailId         Int                      // Внешний ключ для связи с деталью
+  quantity         Int                      // Количество деталей данного типа в УПАКе
+
+  // Гарантирует, что комбинация УПАК+деталь уникальна (деталь может входить в УПАК только один раз)
+  @@unique([ypakId, detailId])
+}
+
+model ProductionPallets {
+  id               Int                      @id @default(autoincrement())
+  name             String                   // Название/номер поддона
+  quantity         Int                      // Количество деталей, размещенных на поддоне
+  detail           ProductionDetail         @relation(fields: [detailId], references: [id])  // Связь с типом детали на поддоне
+  detailId         Int                      // Внешний ключ для связи с деталью
+
+  // Обратная связь с операциями, выполняемыми на поддоне
+  detailOperations DetailOperation[]        // Операции, выполняемые с данным поддоном
+  
+  // Связь с ячейкой буфера - показывает, в какой ячейке буфера находится поддон (если находится)
+  bufferCell       BufferCell?              @relation(fields: [bufferCellId], references: [id])
+  bufferCellId     Int?                     // Внешний ключ для связи с ячейкой буфера (null, если поддон не в буфере)
+}
+
+// ======================================================
+// Модуль буферной системы
+// Содержит модели для управления буферами и ячейками буферов,
+// которые используются для временного хранения поддонов
+// между производственными операциями
+// ======================================================
+
+model Buffer {
+  id          Int           @id @default(autoincrement())
+  name        String        // Название буфера (например, "Основной буфер", "Буфер цеха №2")
+  description String?       // Подробное описание назначения и особенностей буфера
+  location    String?       // Физическое местоположение буфера (цех, участок, координаты)
+  cells       BufferCell[]  // Связь с ячейками, входящими в состав буфера (один-ко-многим)
+  
+  // Обратная связь для ProductionLine (буфер по умолчанию)
+  defaultForLines ProductionLine[] @relation("DefaultBufferForLine")
+  
+  // Обратная связь для ProductionSegment (буфер, назначенный участку)
+  segments        ProductionSegment[] @relation("BufferForSegment")
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model BufferCell {
+  id          Int                 @id @default(autoincrement())
+  code        String              // Код/номер ячейки для идентификации (например, "A1", "B2", "C3")
+  buffer      Buffer              @relation(fields: [bufferId], references: [id])  // Связь с буфером, которому принадлежит ячейка
+  bufferId    Int                 // Внешний ключ для связи с буфером
+  status      BufferCellStatus    @default(AVAILABLE)  // Текущий статус ячейки (доступна, занята, etc.)
+  capacity    Int                 @default(1)  // Вместимость ячейки (сколько поддонов может вместить)
+  pallets     ProductionPallets[] // Связь с поддонами, размещенными в ячейке (один-ко-многим)
+  createdAt   DateTime            @default(now())  // Дата создания записи о ячейке
+  updatedAt   DateTime            @updatedAt       // Дата последнего обновления записи о ячейке
+
+  // Гарантирует уникальность кода ячейки в пределах одного буфера
+  @@unique([bufferId, code])
+}
+
+enum BufferCellStatus {
+  AVAILABLE    // Ячейка доступна для размещения поддонов
+  OCCUPIED     // Ячейка занята (содержит поддоны в количестве равном или меньшем capacity)
+  RESERVED     // Ячейка зарезервирована для будущего размещения (но физически пока пуста)
+  MAINTENANCE  // Ячейка на обслуживании (недоступна для использования)
+}
+
+// ======================================================
+// Модуль производственных процессов
+// Модели для управления этапами производственного процесса,
+// станками и операциями над поддонами с деталями
+// ======================================================
+
+model ProcessStep {
+  id               Int                @id @default(autoincrement())
+  name             String             // Название этапа процесса (например, "Раскрой", "Присадка")
+  sequence         Int                // Порядковый номер этапа в производственном процессе
+  description      String?            // Подробное описание этапа
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  detailOperations DetailOperation[]  // Связь с операциями, выполняемыми на данном этапе
+  
+  // Обратная связь с маршрутами (RouteStep)
+  routeSteps     RouteStep[]         @relation("ProcessStepRouteSteps")
+}
+
+model Machine {
+  id               Int              @id @default(autoincrement())
+  name             String           // Название/номер станка
+  status           MachineStatus    // Текущий статус станка (активен, неактивен, на обслуживании)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  detailOperations DetailOperation[] // Связь с операциями, выполняемыми на данном станке
+  
+  // Связь с участком производства, к которому привязан станок
+  segment         ProductionSegment? @relation(fields: [segmentId], references: [id])
+  segmentId       Int?
+}
+
+// Фиксирует операции обработки, привязанные к конкретному поддону
+model DetailOperation {
+  id                     Int                   @id @default(autoincrement())
+  // Связь с поддоном, над которым выполняется операция
+  productionPallet       ProductionPallets     @relation(fields: [productionPalletId], references: [id])
+  productionPalletId     Int                   // Внешний ключ для связи с поддоном
+
+  // Связь с этапом производственного процесса
+  processStep            ProcessStep           @relation(fields: [processStepId], references: [id])
+  processStepId          Int                   // Внешний ключ для связи с этапом процесса
+
+  // Связь со станком, на котором выполняется операция (может быть null)
+  machine                Machine?              @relation(fields: [machineId], references: [id])
+  machineId              Int?                  // Внешний ключ для связи со станком (null, если станок не задействован)
+
+  // Связь с оператором, выполняющим операцию (может быть null)
+  operator               User?                 @relation("OperatorOperations", fields: [operatorId], references: [id])
+  operatorId             Int?                  // Внешний ключ для связи с оператором (null, если оператор не назначен)
+
+  // Связь с мастером, контролирующим операцию (может быть null)
+  master                 User?                 @relation("MasterOperations", fields: [masterId], references: [id])
+  masterId               Int?                  // Внешний ключ для связи с мастером (null, если мастер не назначен)
+
+  status                 OperationStatus       // Текущий статус операции (в процессе, завершена, в буфере)
+  startedAt              DateTime              @default(now())  // Время начала операции
+  completedAt            DateTime?             // Время завершения операции (null, если не завершена)
+  quantity               Int                   // Количество деталей, обработанных в рамках операции
+}
+
+enum OperationStatus {
+  IN_PROGRESS  // Операция выполняется
+  COMPLETED    // Операция завершена
+  BUFFERED     // Операция приостановлена, поддон помещен в буфер
+}
+
+enum MachineStatus {
+  ACTIVE       // Станок активен и готов к работе
+  INACTIVE     // Станок выключен или не используется
+  MAINTENANCE  // Станок на обслуживании или ремонте
+}
+
+// ======================================================
+// Модуль маршрутов обработки
+// Модели для определения технологических карт (маршрутов)
+// для деталей с разной последовательностью обработки
+// ======================================================
+
+model ProductionRoute {
+  id      Int                  @id @default(autoincrement())
+  name    String               // Название маршрута (например, "Кромка-присадка")
+  steps   RouteStep[]          // Список этапов маршрута с порядковыми номерами
+  details ProductionDetail[]   // Детали, для которых применяется данный маршрут
+}
+
+model RouteStep {
+  id            Int              @id @default(autoincrement())
+  route         ProductionRoute  @relation(fields: [routeId], references: [id])
+  routeId       Int
+  processStep   ProcessStep      @relation("ProcessStepRouteSteps", fields: [processStepId], references: [id])
+  processStepId Int
+  sequence      Int              // Порядковый номер этапа в маршруте
+}
+
+// ======================================================
+// Модуль производственных линий и участков
+// Модели для управления линиями (производственными участками)
+// и привязки к ним станков и буферов
+// ======================================================
+
+model ProductionLine {
+  id                Int                @id @default(autoincrement())
+  name              String             // Название линии
+  type              ProductionLineType // Тип линии (основная, второстепенная)
+  segments          ProductionSegment[]  // Участки, входящие в линию
+
+  // Буфер по умолчанию для линии (опционально)
+  defaultBuffer     Buffer?            @relation("DefaultBufferForLine", fields: [defaultBufferId], references: [id])
+  defaultBufferId   Int?
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model ProductionSegment {
+  id           Int                @id @default(autoincrement())
+  name         String             // Название участка
+  line         ProductionLine     @relation(fields: [lineId], references: [id])
+  lineId       Int                // Внешний ключ к линии
+  machines     Machine[]          // Станки, привязанные к участку
+  
+  // Связь с буфером. Один буфер может быть привязан к нескольким участкам (из разных линий)
+  buffer       Buffer?            @relation("BufferForSegment", fields: [bufferId], references: [id])
+  bufferId     Int?               // Внешний ключ для связи с буфером (опционально)
+  
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+enum ProductionLineType {
+  PRIMARY    // Основная линия
+  SECONDARY  // Второстепенная линия
 }

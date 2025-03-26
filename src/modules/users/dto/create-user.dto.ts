@@ -26,5 +26,10 @@ export class CreateUserDto {
   position?: string;
 
   @IsOptional()
-  salary?: number;
+  details?: {
+    fullName?: string;
+    phone?: string;
+    position?: string;
+    salary?: number;
+  };
 }

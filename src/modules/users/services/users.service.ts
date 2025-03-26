@@ -24,17 +24,16 @@ export class UsersService {
         username: dto.username,
         password: hashedPassword,
         role: { connect: { id: dto.roleId } },
-        details:
-          dto.fullName || dto.phone || dto.position || dto.salary
-            ? {
-                create: {
-                  fullName: dto.fullName || '',
-                  phone: dto.phone,
-                  position: dto.position,
-                  salary: dto.salary,
-                },
-              }
-            : undefined,
+        details: dto.details
+          ? {
+              create: {
+                fullName: dto.details.fullName || '',
+                phone: dto.details.phone,
+                position: dto.details.position,
+                salary: dto.details.salary,
+              },
+            }
+          : undefined,
       },
     });
 
@@ -52,7 +51,7 @@ export class UsersService {
   async findByUsername(username: string) {
     return this.prisma.user.findUnique({
       where: { username },
-      include: { role: true },
+      include: { details: true, role: true },
     });
   }
 

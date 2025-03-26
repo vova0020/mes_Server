@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Post,
+  Req,
+  Get,
+  UseGuards,
+} from '@nestjs/common';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UsersService } from '../services/users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -23,5 +32,13 @@ export class UsersController {
   @Roles(RoleEnum.ADMIN)
   async deleteUser(@Param('id') id: string) {
     return await this.usersService.deleteUser(Number(id));
+  }
+
+  // Этот маршрут возвращает профиль текущего пользователя по токену
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@Req() req) {
+    // Используем id пользователя из JWT токена
+    return this.usersService.findByUsername(req.user.username);
   }
 }
