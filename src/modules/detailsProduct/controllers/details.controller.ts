@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseIntPipe, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { DetailsService } from '../services/details.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 
@@ -10,8 +17,8 @@ export class DetailsController {
   @Get(':orderId')
   @ApiOperation({ summary: 'Получить список деталей для заказа' })
   @ApiParam({ name: 'orderId', description: 'ID заказа', type: 'number' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Список деталей успешно получен',
     schema: {
       type: 'array',
@@ -26,22 +33,22 @@ export class DetailsController {
           totalQuantity: { type: 'number', example: 10 },
           readyForProcessing: { type: 'number', example: 8 },
           distributed: { type: 'number', example: 8 },
-          completed: { type: 'number', example: 5 }
-        }
-      }
-    }
+          completed: { type: 'number', example: 5 },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Заказ не найден' })
-  @ApiResponse({ 
-    status: 500, 
+  @ApiResponse({
+    status: 500,
     description: 'Ошибка сервера',
     schema: {
       type: 'object',
       properties: {
         error: { type: 'string', example: 'Сообщение об ошибке' },
-        details: { type: 'string', example: 'Дополнительная информация' }
-      }
-    }
+        details: { type: 'string', example: 'Дополнительная информация' },
+      },
+    },
   })
   async getDetailsByOrderId(@Param('orderId', ParseIntPipe) orderId: number) {
     try {
@@ -50,13 +57,13 @@ export class DetailsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
       throw new HttpException(
         {
           error: 'Ошибка при получении деталей',
-          details: error.message
+          details: error.message,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
