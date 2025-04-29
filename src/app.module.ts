@@ -6,6 +6,8 @@ import { UsersModule } from './modules/users/users.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { DetailsModule } from './modules/detailsProduct/details.module';
 import { PalletsModule } from './modules/palletsProduct/pallets.module';
+import { BuffersModule } from './modules/buffer/buffer.module';
+import { MachinsModule } from './modules/machins/machin.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { PalletsModule } from './modules/palletsProduct/pallets.module';
     OrdersModule,
     DetailsModule,
     PalletsModule,
+    BuffersModule,
+    MachinsModule,
   ],
 })
 export class AppModule {}

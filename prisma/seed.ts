@@ -48,514 +48,568 @@
 //     await prisma.$disconnect();
 //   });
 
-
-
-import {
-  PrismaClient,
-  BufferCellStatus,
-  MachineStatus,
-  OperationStatus,
-  ProductionLineType,
-  BufferCell
-} from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Создание ролей
-  const roles = ['admin', 'user', 'operator', 'master'];
-  for (const role of roles) {
-    await prisma.role.upsert({
-      where: { name: role },
-      update: {},
-      create: {
-        name: role,
-      },
-    });
-  }
+  // ======================================================
+  // 1. Модуль авторизации: Роли, Пользователи, Дополнительные данные
+  // ======================================================
 
-  // Создание оператора
-  const operatorUser = await prisma.user.upsert({
-    where: { username: 'operator' },
-    update: {},
-    create: {
-      username: 'operator',
-      password: await bcrypt.hash('operator123', 10),
-      role: {
-        connect: { name: 'operator' },
-      },
+  // Создаём роли
+  const adminRole = await prisma.role.create({ data: { name: 'admin' } });
+  const operatorRole = await prisma.role.create({ data: { name: 'operator' } });
+  const masterRole = await prisma.role.create({ data: { name: 'master' } });
+
+  // Создаём пользователей с дополнительными данными
+  const adminUser = await prisma.user.create({
+    data: {
+      username: 'adminUser',
+      password: '123456789',
+      role: { connect: { id: adminRole.id } },
       details: {
         create: {
-          fullName: 'Иванов Иван Иванович',
-          phone: '+7 (999) 777-77-77',
-          position: 'Оператор станка',
-          salary: 50000,
+          fullName: 'Администратор Системы',
+          phone: '1234567890',
+          position: 'Системный администратор',
+          salary: 1500,
         },
       },
     },
   });
 
-  // Создание мастера
-  const masterUser = await prisma.user.upsert({
-    where: { username: 'master' },
-    update: {},
-    create: {
-      username: 'master',
-      password: await bcrypt.hash('master123', 10),
-      role: {
-        connect: { name: 'master' },
-      },
+  const operatorUser = await prisma.user.create({
+    data: {
+      username: 'operatorUser',
+      password: '123456789',
+      role: { connect: { id: operatorRole.id } },
       details: {
         create: {
-          fullName: 'Петров Петр Петрович',
-          phone: '+7 (999) 666-66-66',
-          position: 'Мастер участка',
-          salary: 70000,
+          fullName: 'Оператор Завода',
+          phone: '9876543210',
+          position: 'Оператор',
+          salary: 1000,
         },
       },
     },
   });
 
-  // Создание производственных линий
-  const primaryLine = await prisma.productionLine.create({
+  const masterUser = await prisma.user.create({
     data: {
-      name: 'Основная линия',
-      type: ProductionLineType.PRIMARY,
-    },
-  });
-
-  const secondaryLine = await prisma.productionLine.create({
-    data: {
-      name: 'Вторичная линия',
-      type: ProductionLineType.SECONDARY,
-    },
-  });
-
-  // Создание буферов
-  const mainBuffer = await prisma.buffer.create({
-    data: {
-      name: 'Основной буфер',
-      description: 'Буфер для основной линии производства',
-      location: 'Цех №1',
-    },
-  });
-
-  const secondaryBuffer = await prisma.buffer.create({
-    data: {
-      name: 'Вторичный буфер',
-      description: 'Буфер для вторичной линии производства',
-      location: 'Цех №2',
-    },
-  });
-
-  // Обновление линий с буферами по умолчанию
-  await prisma.productionLine.update({
-    where: { id: primaryLine.id },
-    data: {
-      defaultBuffer: {
-        connect: { id: mainBuffer.id },
-      },
-    },
-  });
-
-  await prisma.productionLine.update({
-    where: { id: secondaryLine.id },
-    data: {
-      defaultBuffer: {
-        connect: { id: secondaryBuffer.id },
-      },
-    },
-  });
-
-  // Создание ячеек буфера
-  const bufferCells: BufferCell[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const cell = await prisma.bufferCell.create({
-      data: {
-        code: `A${i}`,
-        buffer: {
-          connect: { id: mainBuffer.id },
+      username: 'masterUser',
+      password: '123456789',
+      role: { connect: { id: masterRole.id } },
+      details: {
+        create: {
+          fullName: 'Мастер Производства',
+          phone: '1112223333',
+          position: 'Мастер',
+          salary: 2000,
         },
-        status: BufferCellStatus.AVAILABLE,
-        capacity: 2,
-      },
-    });
-    bufferCells.push(cell);
-  }
-
-  for (let i = 1; i <= 5; i++) {
-    await prisma.bufferCell.create({
-      data: {
-        code: `B${i}`,
-        buffer: {
-          connect: { id: secondaryBuffer.id },
-        },
-        status: BufferCellStatus.AVAILABLE,
-        capacity: 1,
-      },
-    });
-  }
-
-  // Создание участков производства
-  const cuttingSegment = await prisma.productionSegment.create({
-    data: {
-      name: 'Участок раскроя',
-      line: {
-        connect: { id: primaryLine.id },
-      },
-      buffer: {
-        connect: { id: mainBuffer.id },
       },
     },
   });
 
-  const drillingSegment = await prisma.productionSegment.create({
-    data: {
-      name: 'Участок присадки',
-      line: {
-        connect: { id: primaryLine.id },
-      },
-    },
-  });
+  // ======================================================
+  // 2. Модуль производственных процессов: Этапы обработки и Станки
+  // ======================================================
 
-  const edgingSegment = await prisma.productionSegment.create({
-    data: {
-      name: 'Участок кромления',
-      line: {
-        connect: { id: secondaryLine.id },
-      },
-      buffer: {
-        connect: { id: secondaryBuffer.id },
-      },
-    },
-  });
-
-  // Создание станков
-  const cuttingMachine = await prisma.machine.create({
-    data: {
-      name: 'Раскроечный станок №1',
-      status: MachineStatus.ACTIVE,
-      segment: {
-        connect: { id: cuttingSegment.id },
-      },
-    },
-  });
-
-  const drillingMachine = await prisma.machine.create({
-    data: {
-      name: 'Присадочный станок №1',
-      status: MachineStatus.ACTIVE,
-      segment: {
-        connect: { id: drillingSegment.id },
-      },
-    },
-  });
-
-  const edgingMachine = await prisma.machine.create({
-    data: {
-      name: 'Кромочный станок №1',
-      status: MachineStatus.ACTIVE,
-      segment: {
-        connect: { id: edgingSegment.id },
-      },
-    },
-  });
-
-  await prisma.machine.create({
-    data: {
-      name: 'Раскроечный станок №2',
-      status: MachineStatus.MAINTENANCE,
-      segment: {
-        connect: { id: cuttingSegment.id },
-      },
-    },
-  });
-
-  // Создание этапов процесса
-  const cuttingStep = await prisma.processStep.create({
+  // Создаём этапы обработки
+  const processStepRaskroy = await prisma.processStep.create({
     data: {
       name: 'Раскрой',
       sequence: 1,
-      description: 'Раскрой листового материала на заготовки',
+      description: 'Первый этап обработки: раскрой деталей из исходного материала',
     },
   });
-
-  const drillingStep = await prisma.processStep.create({
+  const processStepPrisadka = await prisma.processStep.create({
     data: {
       name: 'Присадка',
       sequence: 2,
-      description: 'Сверление отверстий в заготовках',
+      description: 'Второй этап: присадка деталей',
     },
   });
-
-  const edgingStep = await prisma.processStep.create({
+  const processStepPokleyka = await prisma.processStep.create({
     data: {
-      name: 'Кромление',
+      name: 'Поклейка',
       sequence: 3,
-      description: 'Нанесение кромки на торцы деталей',
+      description: 'Третий этап: поклейка деталей',
     },
   });
 
-  // Создание маршрутов обработки
-  const standardRoute = await prisma.productionRoute.create({
-    data: {
-      name: 'Стандартный маршрут',
-      steps: {
-        create: [
-          {
-            processStep: {
-              connect: { id: cuttingStep.id },
-            },
-            sequence: 1,
-          },
-          {
-            processStep: {
-              connect: { id: drillingStep.id },
-            },
-            sequence: 2,
-          },
-          {
-            processStep: {
-              connect: { id: edgingStep.id },
-            },
-            sequence: 3,
-          },
-        ],
-      },
-    },
+  // Создаём несколько станков с различными статусами
+  const machine1 = await prisma.machine.create({
+    data: { name: 'Станок №1', status: 'ACTIVE' },
+  });
+  const machine2 = await prisma.machine.create({
+    data: { name: 'Станок №2', status: 'MAINTENANCE' },
+  });
+  const machine3 = await prisma.machine.create({
+    data: { name: 'Станок №3', status: 'INACTIVE' },
   });
 
-  const alternativeRoute = await prisma.productionRoute.create({
-    data: {
-      name: 'Альтернативный маршрут',
-      steps: {
-        create: [
-          {
-            processStep: {
-              connect: { id: cuttingStep.id },
-            },
-            sequence: 1,
-          },
-          {
-            processStep: {
-              connect: { id: edgingStep.id },
-            },
-            sequence: 2,
-          },
-          {
-            processStep: {
-              connect: { id: drillingStep.id },
-            },
-            sequence: 3,
-          },
-        ],
-      },
-    },
-  });
+  // ======================================================
+  // 3. Модуль заказов и производства: Заказы, УПАК, Детали
+  // ======================================================
 
-  // Создание производственного заказа
-  const order = await prisma.productionOrder.create({
+  // Заказ 1 – с двумя УПАКами и несколькими деталями
+  const order1 = await prisma.productionOrder.create({
     data: {
-      runNumber: 'RUN-2023-001',
-      name: 'Заказ на кухонные фасады',
-      progress: 25.5,
+      runNumber: 'RUN-001',
+      name: 'Заказ 1',
+      progress: 70,
       allowedToRun: true,
       completed: false,
-    },
-  });
-
-  // Создание УПАКов
-  const ypak1 = await prisma.productionYpak.create({
-    data: {
-      name: 'УПАК-001',
-      progress: 30.0,
-      order: {
-        connect: { id: order.id },
+      ypaks: {
+        create: [
+          {
+            name: 'УПАК-1',
+            progress: 80,
+            details: {
+              create: [
+                {
+                  // Деталь A1
+                  detail: {
+                    create: {
+                      article: 'A1',
+                      name: 'Деталь A1',
+                      material: 'Сталь',
+                      size: 'Маленькая',
+                      totalNumber: 100,
+                    },
+                  },
+                  quantity: 40,
+                },
+                {
+                  // Деталь A2
+                  detail: {
+                    create: {
+                      article: 'A2',
+                      name: 'Деталь A2',
+                      material: 'Алюминий',
+                      size: 'Средняя',
+                      totalNumber: 200,
+                    },
+                  },
+                  quantity: 60,
+                },
+              ],
+            },
+          },
+          {
+            name: 'УПАК-2',
+            progress: 50,
+            details: {
+              create: [
+                {
+                  // Деталь B1
+                  detail: {
+                    create: {
+                      article: 'B1',
+                      name: 'Деталь B1',
+                      material: 'Пластик',
+                      size: 'Большая',
+                      totalNumber: 150,
+                    },
+                  },
+                  quantity: 70,
+                },
+              ],
+            },
+          },
+        ],
       },
     },
+    include: { ypaks: { include: { details: true } } },
   });
 
-  const ypak2 = await prisma.productionYpak.create({
+  // Заказ 2 – с одним УПАКом и одной деталью
+  const order2 = await prisma.productionOrder.create({
     data: {
-      name: 'УПАК-002',
-      progress: 15.0,
-      order: {
-        connect: { id: order.id },
+      runNumber: 'RUN-002',
+      name: 'Заказ 2',
+      progress: 30,
+      allowedToRun: true,
+      completed: false,
+      ypaks: {
+        create: [
+          {
+            name: 'УПАК-3',
+            progress: 40,
+            details: {
+              create: [
+                {
+                  // Деталь C1
+                  detail: {
+                    create: {
+                      article: 'C1',
+                      name: 'Деталь C1',
+                      material: 'Медь',
+                      size: 'Стандартная',
+                      totalNumber: 80,
+                    },
+                  },
+                  quantity: 30,
+                },
+              ],
+            },
+          },
+        ],
       },
     },
+    include: { ypaks: { include: { details: true } } },
   });
 
-  // Создание деталей
-  const detail1 = await prisma.productionDetail.create({
+  // Заказ 3 – завершённый заказ с одним УПАКом и деталью D1
+  const order3 = await prisma.productionOrder.create({
     data: {
-      article: 'DET-001',
-      name: 'Фасад кухонный верхний',
-      material: 'ЛДСП 16мм',
-      size: '600x400',
-      totalNumber: 50,
-      route: {
-        connect: { id: standardRoute.id },
+      runNumber: 'RUN-003',
+      name: 'Заказ 3',
+      progress: 90,
+      allowedToRun: false,
+      completed: true,
+      finishedAt: new Date(),
+      ypaks: {
+        create: [
+          {
+            name: 'УПАК-4',
+            progress: 100,
+            details: {
+              create: [
+                {
+                  // Деталь D1
+                  detail: {
+                    create: {
+                      article: 'D1',
+                      name: 'Деталь D1',
+                      material: 'Ламинированная фанера',
+                      size: 'Стандартная',
+                      totalNumber: 120,
+                    },
+                  },
+                  quantity: 50,
+                },
+              ],
+            },
+          },
+        ],
       },
     },
+    include: { ypaks: { include: { details: true } } },
   });
 
-  const detail2 = await prisma.productionDetail.create({
-    data: {
-      article: 'DET-002',
-      name: 'Фасад кухонный нижний',
-      material: 'ЛДСП 16мм',
-      size: '600x800',
-      totalNumber: 30,
-      route: {
-        connect: { id: alternativeRoute.id },
-      },
-    },
-  });
+  // ======================================================
+  // 4. Создаём поддоны для деталей (ProductionPallets)
+  // ======================================================
 
-  // Связывание УПАКов с деталями
-  await prisma.productionYpakDetail.create({
-    data: {
-      ypak: {
-        connect: { id: ypak1.id },
-      },
-      detail: {
-        connect: { id: detail1.id },
-      },
-      quantity: 30,
-    },
-  });
+  // Получаем ранее созданные детали по артикулу
+  const detailA1 = await prisma.productionDetail.findFirst({ where: { article: 'A1' } });
+  const detailA2 = await prisma.productionDetail.findFirst({ where: { article: 'A2' } });
+  const detailB1 = await prisma.productionDetail.findFirst({ where: { article: 'B1' } });
+  const detailC1 = await prisma.productionDetail.findFirst({ where: { article: 'C1' } });
+  const detailD1 = await prisma.productionDetail.findFirst({ where: { article: 'D1' } });
 
-  await prisma.productionYpakDetail.create({
-    data: {
-      ypak: {
-        connect: { id: ypak1.id },
-      },
-      detail: {
-        connect: { id: detail2.id },
-      },
-      quantity: 15,
-    },
-  });
+  if (!detailA1 || !detailA2 || !detailB1 || !detailC1 || !detailD1) {
+    throw new Error('Одна из деталей не была создана');
+  }
 
-  await prisma.productionYpakDetail.create({
+  // Создаём поддоны
+  const palletA1 = await prisma.productionPallets.create({
     data: {
-      ypak: {
-        connect: { id: ypak2.id },
-      },
-      detail: {
-        connect: { id: detail1.id },
-      },
+      name: 'Поддон A1',
       quantity: 20,
+      detail: { connect: { id: detailA1.id } },
     },
   });
-
-  await prisma.productionYpakDetail.create({
+  const palletA2 = await prisma.productionPallets.create({
     data: {
-      ypak: {
-        connect: { id: ypak2.id },
-      },
-      detail: {
-        connect: { id: detail2.id },
-      },
+      name: 'Поддон A2',
+      quantity: 25,
+      detail: { connect: { id: detailA2.id } },
+    },
+  });
+  const palletB1 = await prisma.productionPallets.create({
+    data: {
+      name: 'Поддон B1',
+      quantity: 30,
+      detail: { connect: { id: detailB1.id } },
+    },
+  });
+  const palletC1 = await prisma.productionPallets.create({
+    data: {
+      name: 'Поддон C1',
       quantity: 15,
+      detail: { connect: { id: detailC1.id } },
     },
   });
-
-  // Создание поддонов
-  const pallet1 = await prisma.productionPallets.create({
+  const palletD1 = await prisma.productionPallets.create({
     data: {
-      name: 'Поддон-001',
-      quantity: 10,
-      detail: {
-        connect: { id: detail1.id },
-      },
-      bufferCell: {
-        connect: { id: bufferCells[0].id },
-      },
+      name: 'Поддон D1',
+      quantity: 40,
+      detail: { connect: { id: detailD1.id } },
     },
   });
 
-  const pallet2 = await prisma.productionPallets.create({
+  // ======================================================
+  // 5. Модуль буферной системы: Буферы и ячейки (Buffer, BufferCell)
+  // ======================================================
+
+  // Создаём основной буфер с несколькими ячейками
+  const bufferMain = await prisma.buffer.create({
     data: {
-      name: 'Поддон-002',
-      quantity: 8,
-      detail: {
-        connect: { id: detail2.id },
+      name: 'Основной буфер',
+      description: 'Основной буфер для поддонов',
+      location: 'Цех 1',
+      cells: {
+        create: [
+          { code: 'A1', capacity: 2, status: 'AVAILABLE' },
+          { code: 'B1', capacity: 1, status: 'OCCUPIED' },
+          { code: 'C1', capacity: 3, status: 'RESERVED' },
+        ],
+      },
+    },
+    include: { cells: true },
+  });
+
+  // Назначаем некоторые поддоны в ячейки буфера
+  await prisma.productionPallets.update({
+    where: { id: palletA2.id },
+    data: { bufferCell: { connect: { id: bufferMain.cells[0].id } } },
+  });
+  await prisma.productionPallets.update({
+    where: { id: palletC1.id },
+    data: { bufferCell: { connect: { id: bufferMain.cells[2].id } } },
+  });
+
+  // ======================================================
+  // 6. Модуль маршрутов обработки: Маршруты и этапы маршрута (ProductionRoute, RouteStep)
+  // ======================================================
+
+  const productionRoute = await prisma.productionRoute.create({
+    data: {
+      name: 'Маршрут обработки стандартной детали',
+      details: {
+        create: {
+          article: 'E1',
+          name: 'Деталь E1',
+          material: 'Пластик',
+          size: 'Маленькая',
+          totalNumber: 60,
+        },
+      },
+      steps: {
+        create: [
+          { processStep: { connect: { id: processStepRaskroy.id } }, sequence: 1 },
+          { processStep: { connect: { id: processStepPrisadka.id } }, sequence: 2 },
+          { processStep: { connect: { id: processStepPokleyka.id } }, sequence: 3 },
+        ],
       },
     },
   });
 
-  // Обновление статуса ячейки буфера
-  await prisma.bufferCell.update({
-    where: { id: bufferCells[0].id },
+  // ======================================================
+  // 7. Модуль производственных линий и участков: Линии, Участки, Станки, Буферы для участков
+  // ======================================================
+
+  const productionLine = await prisma.productionLine.create({
     data: {
-      status: BufferCellStatus.OCCUPIED,
+      name: 'Линия №1',
+      type: 'PRIMARY',
+      segments: {
+        create: [
+          {
+            name: 'Участок №1',
+            machines: {
+              create: [
+                { name: 'Станок №4', status: 'ACTIVE' },
+                { name: 'Станок №5', status: 'INACTIVE' },
+              ],
+            },
+          },
+          {
+            name: 'Участок №2',
+            machines: {
+              create: [{ name: 'Станок №6', status: 'MAINTENANCE' }],
+            },
+            buffer: {
+              create: {
+                name: 'Буфер для Участка №2',
+                description: 'Буфер участка №2',
+                location: 'Участок 2',
+                cells: {
+                  create: [
+                    { code: 'S1', capacity: 2, status: 'AVAILABLE' },
+                    { code: 'S2', capacity: 1, status: 'OCCUPIED' },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+      defaultBuffer: { connect: { id: bufferMain.id } },
     },
+    include: { segments: true },
   });
 
-  // Создание операций над поддонами
+  // ======================================================
+  // 8. Модуль производственных процессов: Операции над поддонами (DetailOperation)
+  // ======================================================
+
+  // Для поддона с Деталью A1 (palletA1) – прохождение всех этапов
   await prisma.detailOperation.create({
     data: {
-      productionPallet: {
-        connect: { id: pallet1.id },
-      },
-      processStep: {
-        connect: { id: cuttingStep.id },
-      },
-      machine: {
-        connect: { id: cuttingMachine.id },
-      },
-      operator: {
-        connect: { id: operatorUser.id },
-      },
-      master: {
-        connect: { id: masterUser.id },
-      },
-      status: OperationStatus.COMPLETED,
+      productionPallet: { connect: { id: palletA1.id } },
+      processStep: { connect: { id: processStepRaskroy.id } },
+      machine: { connect: { id: machine1.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'COMPLETED',
+      startedAt: new Date(),
       completedAt: new Date(),
       quantity: 10,
     },
   });
-
   await prisma.detailOperation.create({
     data: {
-      productionPallet: {
-        connect: { id: pallet1.id },
-      },
-      processStep: {
-        connect: { id: drillingStep.id },
-      },
-      status: OperationStatus.BUFFERED,
-      quantity: 10,
+      productionPallet: { connect: { id: palletA1.id } },
+      processStep: { connect: { id: processStepPrisadka.id } },
+      machine: { connect: { id: machine1.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      quantity: 15,
+    },
+  });
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletA1.id } },
+      processStep: { connect: { id: processStepPokleyka.id } },
+      // На этом этапе машина и операторы могут не использоваться, т.к. поддон переведён в буфер
+      status: 'BUFFERED',
+      startedAt: new Date(),
+      quantity: 0,
     },
   });
 
+  // Для поддона с Деталью A2 (palletA2)
   await prisma.detailOperation.create({
     data: {
-      productionPallet: {
-        connect: { id: pallet2.id },
-      },
-      processStep: {
-        connect: { id: cuttingStep.id },
-      },
-      machine: {
-        connect: { id: cuttingMachine.id },
-      },
-      operator: {
-        connect: { id: operatorUser.id },
-      },
-      status: OperationStatus.IN_PROGRESS,
+      productionPallet: { connect: { id: palletA2.id } },
+      processStep: { connect: { id: processStepRaskroy.id } },
+      machine: { connect: { id: machine2.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      quantity: 5,
+    },
+  });
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletA2.id } },
+      processStep: { connect: { id: processStepPrisadka.id } },
+      machine: { connect: { id: machine2.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'COMPLETED',
+      startedAt: new Date(),
+      completedAt: new Date(),
       quantity: 8,
     },
   });
 
-  console.log('Инициализация базы данных завершена.');
+  // Для поддона с Деталью B1 (palletB1)
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletB1.id } },
+      processStep: { connect: { id: processStepRaskroy.id } },
+      machine: { connect: { id: machine3.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'COMPLETED',
+      startedAt: new Date(),
+      completedAt: new Date(),
+      quantity: 12,
+    },
+  });
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletB1.id } },
+      processStep: { connect: { id: processStepPrisadka.id } },
+      machine: { connect: { id: machine3.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      quantity: 15,
+    },
+  });
+
+  // Для поддона с Деталью C1 (palletC1)
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletC1.id } },
+      processStep: { connect: { id: processStepRaskroy.id } },
+      machine: { connect: { id: machine1.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'BUFFERED',
+      startedAt: new Date(),
+      quantity: 0,
+    },
+  });
+
+  // Для поддона с Деталью D1 (palletD1)
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletD1.id } },
+      processStep: { connect: { id: processStepRaskroy.id } },
+      machine: { connect: { id: machine2.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'COMPLETED',
+      startedAt: new Date(),
+      completedAt: new Date(),
+      quantity: 20,
+    },
+  });
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletD1.id } },
+      processStep: { connect: { id: processStepPrisadka.id } },
+      machine: { connect: { id: machine2.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'COMPLETED',
+      startedAt: new Date(),
+      completedAt: new Date(),
+      quantity: 15,
+    },
+  });
+  await prisma.detailOperation.create({
+    data: {
+      productionPallet: { connect: { id: palletD1.id } },
+      processStep: { connect: { id: processStepPokleyka.id } },
+      machine: { connect: { id: machine2.id } },
+      operator: { connect: { id: operatorUser.id } },
+      master: { connect: { id: masterUser.id } },
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      quantity: 5,
+    },
+  });
+
+  console.log('Сидирование базы данных завершено.');
 }
 
-// Выполняем скрипт и закрываем соединение
 main()
-  .catch((e) => console.error(e))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
