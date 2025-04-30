@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-
+import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
@@ -11,12 +11,13 @@ async function main() {
   const adminRole = await prisma.role.create({ data: { name: 'admin' } });
   const operatorRole = await prisma.role.create({ data: { name: 'operator' } });
   const masterRole = await prisma.role.create({ data: { name: 'master' } });
+  
 
   // Создаём пользователей с дополнительными данными
   const adminUser = await prisma.user.create({
     data: {
       username: 'adminUser',
-      password: '123456789',
+      password: bcrypt.hashSync('123456789', 10),
       role: { connect: { id: adminRole.id } },
       details: {
         create: {
@@ -32,7 +33,7 @@ async function main() {
   const operatorUser = await prisma.user.create({
     data: {
       username: 'operatorUser',
-      password: '123456789',
+      password: bcrypt.hashSync('123456789', 10),
       role: { connect: { id: operatorRole.id } },
       details: {
         create: {
@@ -48,7 +49,7 @@ async function main() {
   const masterUser = await prisma.user.create({
     data: {
       username: 'masterUser',
-      password: '123456789',
+      password: bcrypt.hashSync('123456789', 10),
       role: { connect: { id: masterRole.id } },
       details: {
         create: {
@@ -590,7 +591,7 @@ async function main() {
   const operator2User = await prisma.user.create({
     data: {
       username: 'operator2User',
-      password: '123456789',
+      password: bcrypt.hashSync('123456789', 10),
       role: { connect: { id: operatorRole.id } },
       details: {
         create: {
@@ -623,7 +624,7 @@ async function main() {
   const master2User = await prisma.user.create({
     data: {
       username: 'master2User',
-      password: '123456789',
+      password: bcrypt.hashSync('123456789', 10),
       role: { connect: { id: masterRole.id } },
       details: {
         create: {
