@@ -29,6 +29,11 @@ model User {
   loginLogs            LoginLog[]        // История входов пользователя в систему (один-ко-многим)
   operatorOperations   DetailOperation[] @relation("OperatorOperations")  // Операции, где пользователь выступает оператором
   masterOperations     DetailOperation[] @relation("MasterOperations")    // Операции, где пользователь выступает мастером
+  
+  // Новые связи для прямого закрепления пользователей за станками и участками
+  assignedMachines     Machine[]         @relation("UserAssignedToMachine")  // Станки, к которым привязан пользователь (для операторов)
+  supervisedSegments   ProductionSegment[] @relation("UserSupervisesSegment") // Участки, которые контролирует пользователь (для мастеров)
+  
   createdAt            DateTime          @default(now())  // Дата создания пользователя
   updatedAt            DateTime          @updatedAt       // Дата последнего обновления пользователя
 }
@@ -214,6 +219,9 @@ model Machine {
   // Связь с участком производства, к которому привязан станок
   segment         ProductionSegment? @relation(fields: [segmentId], references: [id])
   segmentId       Int?
+  
+  // Новая связь с операторами, которые привязаны к этому станку
+  assignedOperators User[]          @relation("UserAssignedToMachine")
 }
 
 // Фиксирует операции обработки, привязанные к конкретному поддону
@@ -309,6 +317,9 @@ model ProductionSegment {
   // Связь с буфером. Один буфер может быть привязан к нескольким участкам (из разных линий)
   buffer       Buffer?            @relation("BufferForSegment", fields: [bufferId], references: [id])
   bufferId     Int?               // Внешний ключ для связи с буфером (опционально)
+  
+  // Новая связь с мастерами, которые контролируют этот участок
+  supervisors  User[]             @relation("UserSupervisesSegment")
   
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

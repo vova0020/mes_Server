@@ -12,6 +12,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    // Оставляем базовую информацию в контексте запроса
+    // Расширенная информация передается при авторизации
     return { id: payload.sub, username: payload.username, role: payload.role };
   }
 }

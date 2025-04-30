@@ -1,53 +1,3 @@
-
-// import { PrismaClient } from '@prisma/client';
-// import * as bcrypt from 'bcrypt';
-
-// const prisma = new PrismaClient();
-
-// async function main() {
-//   // Создание ролей
-//   const roles = ['admin', 'user'];
-//   for (const role of roles) {
-//     await prisma.role.upsert({
-//       where: { name: role },
-//       update: {},
-//       create: {
-//         name: role,
-//       },
-//     });
-//   }
-
-//   // Создание пользователя-администратора
-//   const hashedPassword = await bcrypt.hash('adminpassword', 10);
-//   const adminUser = await prisma.user.upsert({
-//     where: { username: 'admin' },
-//     update: {},
-//     create: {
-//       username: 'admin',
-//       password: hashedPassword,
-//       role: {
-//         connect: { name: 'admin' },
-//       },
-//       details: {
-//         create: {
-//           fullName: 'Администратор',
-//           phone: '+7 (999) 888-88-88',
-//           position: 'System Administrator',
-//         },
-//       },
-//     },
-//   });
-
-//   console.log('Инициализация базы данных завершена.');
-// }
-
-// // Выполняем скрипт и закрываем соединение
-// main()
-//   .catch((e) => console.error(e))
-//   .finally(async () => {
-//     await prisma.$disconnect();
-//   });
-
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -57,7 +7,7 @@ async function main() {
   // 1. Модуль авторизации: Роли, Пользователи, Дополнительные данные
   // ======================================================
 
-  // Создаём роли
+  // Создаём ро��и
   const adminRole = await prisma.role.create({ data: { name: 'admin' } });
   const operatorRole = await prisma.role.create({ data: { name: 'operator' } });
   const masterRole = await prisma.role.create({ data: { name: 'master' } });
@@ -120,7 +70,8 @@ async function main() {
     data: {
       name: 'Раскрой',
       sequence: 1,
-      description: 'Первый этап обработки: раскрой деталей из исходного материала',
+      description:
+        'Первый этап обработки: раскрой деталей из исходного материала',
     },
   });
   const processStepPrisadka = await prisma.processStep.create({
@@ -304,11 +255,21 @@ async function main() {
   // ======================================================
 
   // Получаем ранее созданные детали по артикулу
-  const detailA1 = await prisma.productionDetail.findFirst({ where: { article: 'A1' } });
-  const detailA2 = await prisma.productionDetail.findFirst({ where: { article: 'A2' } });
-  const detailB1 = await prisma.productionDetail.findFirst({ where: { article: 'B1' } });
-  const detailC1 = await prisma.productionDetail.findFirst({ where: { article: 'C1' } });
-  const detailD1 = await prisma.productionDetail.findFirst({ where: { article: 'D1' } });
+  const detailA1 = await prisma.productionDetail.findFirst({
+    where: { article: 'A1' },
+  });
+  const detailA2 = await prisma.productionDetail.findFirst({
+    where: { article: 'A2' },
+  });
+  const detailB1 = await prisma.productionDetail.findFirst({
+    where: { article: 'B1' },
+  });
+  const detailC1 = await prisma.productionDetail.findFirst({
+    where: { article: 'C1' },
+  });
+  const detailD1 = await prisma.productionDetail.findFirst({
+    where: { article: 'D1' },
+  });
 
   if (!detailA1 || !detailA2 || !detailB1 || !detailC1 || !detailD1) {
     throw new Error('Одна из деталей не была создана');
@@ -358,7 +319,7 @@ async function main() {
   // Создаём основной буфер с несколькими ячейками
   const bufferMain = await prisma.buffer.create({
     data: {
-      name: 'Основной буфер',
+      name: 'Осн��вной буфер',
       description: 'Основной буфер для поддонов',
       location: 'Цех 1',
       cells: {
@@ -400,9 +361,18 @@ async function main() {
       },
       steps: {
         create: [
-          { processStep: { connect: { id: processStepRaskroy.id } }, sequence: 1 },
-          { processStep: { connect: { id: processStepPrisadka.id } }, sequence: 2 },
-          { processStep: { connect: { id: processStepPokleyka.id } }, sequence: 3 },
+          {
+            processStep: { connect: { id: processStepRaskroy.id } },
+            sequence: 1,
+          },
+          {
+            processStep: { connect: { id: processStepPrisadka.id } },
+            sequence: 2,
+          },
+          {
+            processStep: { connect: { id: processStepPokleyka.id } },
+            sequence: 3,
+          },
         ],
       },
     },
@@ -599,6 +569,76 @@ async function main() {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       quantity: 5,
+    },
+  });
+
+  // ======================================================
+  // 9. Новые связи между пользователями, станками и участками
+  // ======================================================
+
+  // Назначение операторов на станки
+  await prisma.user.update({
+    where: { id: operatorUser.id },
+    data: {
+      assignedMachines: {
+        connect: [{ id: machine1.id }, { id: machine2.id }],
+      },
+    },
+  });
+
+  // Создаем второго оператора и назначаем ему станки
+  const operator2User = await prisma.user.create({
+    data: {
+      username: 'operator2User',
+      password: '123456789',
+      role: { connect: { id: operatorRole.id } },
+      details: {
+        create: {
+          fullName: 'Второй Оператор',
+          phone: '5556667777',
+          position: 'Оператор',
+          salary: 950,
+        },
+      },
+      // Сразу назначаем станки
+      assignedMachines: {
+        connect: [{ id: machine3.id }],
+      },
+    },
+  });
+
+  // Назначение мастеров на участки
+  await prisma.user.update({
+    where: { id: masterUser.id },
+    data: {
+      supervisedSegments: {
+        connect: [
+          { id: productionLine.segments[0].id }, // Участок №1
+        ],
+      },
+    },
+  });
+
+  // Создаем второго мастера и назначаем ему участки
+  const master2User = await prisma.user.create({
+    data: {
+      username: 'master2User',
+      password: '123456789',
+      role: { connect: { id: masterRole.id } },
+      details: {
+        create: {
+          fullName: 'Второй Мастер',
+          phone: '7778889999',
+          position: 'Мастер',
+          salary: 1800,
+        },
+      },
+      // Сразу назначаем участки
+      supervisedSegments: {
+        connect: [
+          { id: productionLine.segments[1].id }, // Участок №2
+        ],
+      },
     },
   });
 
