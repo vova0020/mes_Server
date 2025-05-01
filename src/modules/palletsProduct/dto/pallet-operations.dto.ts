@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsPositive } from 'class-validator';
 
 // DTO для назначения поддона на станок
 export class AssignPalletToMachineDto {
@@ -27,10 +27,10 @@ export class AssignPalletToMachineDto {
 
 // DTO для перемещения поддона в буфер
 export class MovePalletToBufferDto {
-  @ApiProperty({ description: 'ID операции, которую нужно приостановить', example: 1 })
+  @ApiProperty({ description: 'ID поддона', example: 1 })
   @IsNumber()
   @IsPositive()
-  operationId: number;
+  palletId: number;
 
   @ApiProperty({ description: 'ID ячейки буфера', example: 1 })
   @IsNumber()
@@ -38,7 +38,36 @@ export class MovePalletToBufferDto {
   bufferCellId: number;
 }
 
-// DTO для завершения операции
+// Перечисление для новых статусов операций
+export enum OperationCompletionStatus {
+  COMPLETED = 'COMPLETED',           // Готово
+  IN_PROGRESS = 'IN_PROGRESS',       // В работе
+  PARTIALLY_COMPLETED = 'PARTIALLY_COMPLETED', // Выполнено частично
+}
+
+// DTO для обновления статуса операции
+export class UpdateOperationStatusDto {
+  @ApiProperty({ description: 'ID операции', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  operationId: number;
+  
+  @ApiProperty({ 
+    description: 'Новый статус операции', 
+    enum: OperationCompletionStatus,
+    example: OperationCompletionStatus.COMPLETED 
+  })
+  @IsEnum(OperationCompletionStatus)
+  status: OperationCompletionStatus;
+  
+  @ApiPropertyOptional({ description: 'ID мастера, подтверждающего обновление (опционально)', example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  masterId?: number;
+}
+
+// DTO для завершения операции (устаревший, используйте UpdateOperationStatusDto)
 export class CompleteOperationDto {
   @ApiProperty({ description: 'ID операции, которую нужно завершить', example: 1 })
   @IsNumber()
@@ -58,6 +87,7 @@ export class PalletOperationResponseDto {
   operation: {
     id: number;
     status: string;
+    completionStatus?: string;    // Добавлен новый статус завершения
     startedAt: Date;
     completedAt?: Date;
     quantity: number;

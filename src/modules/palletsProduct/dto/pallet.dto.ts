@@ -11,6 +11,21 @@ export class MachineDto {
   status: string;
 }
 
+export class ProcessStepDto {
+  id: number;
+  name: string;
+  sequence?: number;
+}
+
+export class OperationStatusDto {
+  id: number;
+  status: string;             // Общий статус (IN_PROGRESS, COMPLETED)
+  completionStatus?: string;  // Статус выполнения (COMPLETED, IN_PROGRESS, PARTIALLY_COMPLETED)
+  processStep?: ProcessStepDto; // Информация о текущем шаге процесса
+  startedAt: Date;
+  completedAt?: Date;
+}
+
 export class PalletDto {
   id: number;
   name: string;
@@ -22,6 +37,9 @@ export class PalletDto {
 
   // Информация о станке (если есть)
   machine?: MachineDto | null;
+
+  // Информация о текущей операции (если есть)
+  currentOperation?: OperationStatusDto | null;
 }
 
 export class PalletsResponseDto {

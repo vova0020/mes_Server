@@ -9,7 +9,7 @@ export class PalletsService {
   /**
    * Получить все поддоны по ID детали
    * @param detailId ID детали
-   * @returns Список поддонов с информацией о буфере и станке
+   * @returns Список поддонов с информацией о буфере, станке и текущей операции
    */
   async getPalletsByDetailId(detailId: number): Promise<PalletsResponseDto> {
     // Получаем все поддоны для указанной детали
@@ -24,13 +24,14 @@ export class PalletsService {
             buffer: true, // Включаем данные о буфере для получения его имени
           },
         },
-        // Включаем данные о текущей операции для получения информации о станке
+        // Включаем данные о текущей операции для получения информации о станке и статусе
         detailOperations: {
           where: {
             status: 'IN_PROGRESS', // Выбираем только активные операции
           },
           include: {
-            machine: true, // Включаем данные о станке
+            machine: true,     // Включаем данные о станке
+            processStep: true, // Включаем данные о шаге процесса
           },
           orderBy: {
             startedAt: 'desc', // Сортируем по дате начала, чтобы получить самую последнюю операцию
@@ -68,6 +69,23 @@ export class PalletsService {
               status: machine.status,
             }
           : null,
+        // Добавляем информацию о текущей операции
+        currentOperation: currentOperation
+          ? {
+              id: currentOperation.id,
+              status: currentOperation.status,
+              completionStatus: currentOperation.completionStatus || undefined,
+              startedAt: currentOperation.startedAt,
+              completedAt: currentOperation.completedAt || undefined,
+              processStep: currentOperation.processStep
+                ? {
+                    id: currentOperation.processStep.id,
+                    name: currentOperation.processStep.name,
+                    sequence: currentOperation.processStep.sequence,
+                  }
+                : undefined,
+            }
+          : null,
       };
     });
 
@@ -78,7 +96,7 @@ export class PalletsService {
   }
 
   /**
-   * Получить поддон по ID с информацией о буфере и станке
+   * Получить поддон по ID с информацией о буфере, станке и текущей операции
    * @param id ID поддона
    * @returns Данные о поддоне
    */
@@ -97,6 +115,7 @@ export class PalletsService {
           },
           include: {
             machine: true,
+            processStep: true,
           },
           orderBy: {
             startedAt: 'desc',
@@ -129,6 +148,23 @@ export class PalletsService {
             id: machine.id,
             name: machine.name,
             status: machine.status,
+          }
+        : null,
+      // Добавляем информацию о текущей операции
+      currentOperation: currentOperation
+        ? {
+            id: currentOperation.id,
+            status: currentOperation.status,
+            completionStatus: currentOperation.completionStatus || undefined,
+            startedAt: currentOperation.startedAt,
+            completedAt: currentOperation.completedAt || undefined,
+            processStep: currentOperation.processStep
+              ? {
+                  id: currentOperation.processStep.id,
+                  name: currentOperation.processStep.name,
+                  sequence: currentOperation.processStep.sequence,
+                }
+              : undefined,
           }
         : null,
     };

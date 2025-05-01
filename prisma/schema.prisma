@@ -248,6 +248,7 @@ model DetailOperation {
   masterId               Int?                  // Внешний ключ для связи с мастером (null, если мастер не назначен)
 
   status                 OperationStatus       // Текущий статус операции (в процессе, завершена, в буфере)
+  completionStatus       String?               // Статус выполнения: "COMPLETED", "IN_PROGRESS", "PARTIALLY_COMPLETED"
   startedAt              DateTime              @default(now())  // Время начала операции
   completedAt            DateTime?             // Время завершения операции (null, если не завершена)
   quantity               Int                   // Количество деталей, обработанных в рамках операции

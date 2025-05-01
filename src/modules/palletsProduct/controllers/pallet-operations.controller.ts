@@ -21,7 +21,7 @@ import { PalletOperationsService } from '../services/pallet-operations.service';
 import {
   AssignPalletToMachineDto,
   MovePalletToBufferDto,
-  CompleteOperationDto,
+  UpdateOperationStatusDto,
   PalletOperationResponseDto,
 } from '../dto/pallet-operations.dto';
 
@@ -39,7 +39,7 @@ export class PalletOperationsController {
   @ApiBody({ type: AssignPalletToMachineDto })
   @ApiResponse({
     status: 200,
-    description: 'Поддон успешно назначен на станок',
+    description: 'Поддон успешно назначен на стано��',
     type: PalletOperationResponseDto,
   })
   async assignPalletToMachine(@Body() assignDto: AssignPalletToMachineDto) {
@@ -74,22 +74,21 @@ export class PalletOperationsController {
 
   @Post('move-to-buffer')
   @ApiOperation({
-    summary: 'Переместить поддон в буфер (приостановить операцию)',
+    summary: 'Переместить поддон в буфер (без влияния на статус операции)',
   })
   @ApiBody({ type: MovePalletToBufferDto })
   @ApiResponse({
     status: 200,
     description: 'Поддон успешно перемещен в буфер',
-    type: PalletOperationResponseDto,
   })
   async movePalletToBuffer(@Body() moveDto: MovePalletToBufferDto) {
     this.logger.log(
-      `Получен запрос на перемещение поддона в буфер (операция ${moveDto.operationId})`,
+      `Получен запрос на перемещение поддона ${moveDto.palletId} в буфер`,
     );
 
     try {
       return await this.palletOperationsService.movePalletToBuffer(
-        moveDto.operationId,
+        moveDto.palletId,
         moveDto.bufferCellId,
       );
     } catch (error) {
@@ -110,23 +109,24 @@ export class PalletOperationsController {
     }
   }
 
-  @Post('complete')
-  @ApiOperation({ summary: 'Завершить операцию с поддоном' })
-  @ApiBody({ type: CompleteOperationDto })
+  @Post('update-status')
+  @ApiOperation({ summary: 'Обновить статус операции (гот��во/в работе/выполнено частично)' })
+  @ApiBody({ type: UpdateOperationStatusDto })
   @ApiResponse({
     status: 200,
-    description: 'Операция успешно завершена',
+    description: 'Статус операции успешно обновлен',
     type: PalletOperationResponseDto,
   })
-  async completeOperation(@Body() completeDto: CompleteOperationDto) {
+  async updateOperationStatus(@Body() updateDto: UpdateOperationStatusDto) {
     this.logger.log(
-      `Получен запрос на завершение операции ${completeDto.operationId}`,
+      `Получен запрос на обновление статуса операции ${updateDto.operationId} на ${updateDto.status}`,
     );
 
     try {
-      return await this.palletOperationsService.completeOperation(
-        completeDto.operationId,
-        completeDto.masterId,
+      return await this.palletOperationsService.updateOperationStatus(
+        updateDto.operationId,
+        updateDto.status,
+        updateDto.masterId,
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -137,9 +137,9 @@ export class PalletOperationsController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(`Ошибка при завершении операции: ${error.message}`);
+      this.logger.error(`Ошибка при обновлении статуса операции: ${error.message}`);
       throw new InternalServerErrorException(
-        'Произошла ошибка при завершении операции',
+        'Произошла ошибка при обновлении статуса операции',
       );
     }
   }
@@ -166,22 +166,22 @@ export class PalletOperationsController {
   }
 
   @Get('buffered')
-  @ApiOperation({ summary: 'Получить список операций в буфере' })
+  @ApiOperation({ summary: 'Получить список поддонов в буфере' })
   @ApiResponse({
     status: 200,
-    description: 'Список операций в буфере успешно получен',
+    description: 'Список поддонов в буфере успешно получен',
   })
   async getBufferedOperations() {
-    this.logger.log('Получен запрос на получение операций в буфере');
+    this.logger.log('Получен запрос на получение поддонов в буфере');
 
     try {
       return await this.palletOperationsService.getBufferedOperations();
     } catch (error) {
       this.logger.error(
-        `Ошибка при получении операций в буфере: ${error.message}`,
+        `Ошибка при получении поддонов в бу��ере: ${error.message}`,
       );
       throw new InternalServerErrorException(
-        'Произошла оши��ка при получении операций в буфере',
+        'Произошла ошибка при получении поддонов в буфере',
       );
     }
   }
