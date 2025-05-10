@@ -11,4 +11,4 @@ import { MachineSegmentService } from './services/machine-segment.service';
   providers: [MachinService, MachineSegmentService],
   exports: [MachinService, MachineSegmentService],
 })
-export class MachinsModule {}
+export class MachinsMasterModule {}
