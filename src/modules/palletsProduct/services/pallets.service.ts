@@ -26,11 +26,8 @@ export class PalletsService {
         },
         // Включаем данные о текущей операции для получения информации о станке и статусе
         detailOperations: {
-          where: {
-            status: 'IN_PROGRESS', // Выбираем только активные операции
-          },
           include: {
-            machine: true,     // Включаем данные о станке
+            machine: true, // Включаем данные о станке
             processStep: true, // Включаем данные о шаге процесса
           },
           orderBy: {

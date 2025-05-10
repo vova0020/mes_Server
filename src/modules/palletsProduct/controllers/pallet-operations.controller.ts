@@ -39,7 +39,7 @@ export class PalletOperationsController {
   @ApiBody({ type: AssignPalletToMachineDto })
   @ApiResponse({
     status: 200,
-    description: 'Поддон успешно назначен на стано��',
+    description: 'Поддон успешно назначен на станок',
     type: PalletOperationResponseDto,
   })
   async assignPalletToMachine(@Body() assignDto: AssignPalletToMachineDto) {
@@ -51,7 +51,7 @@ export class PalletOperationsController {
       return await this.palletOperationsService.assignPalletToMachine(
         assignDto.palletId,
         assignDto.machineId,
-        assignDto.processStepId,
+        assignDto.segmentId,
         assignDto.operatorId,
       );
     } catch (error) {

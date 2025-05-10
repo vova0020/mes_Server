@@ -8,20 +8,43 @@ export class MachinService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // Получение списка ячеек буфера с включением связанных данных
-  async getMachines() {
-    this.logger.log('Запрос на получение списка станков');
+  // Получение списка станков с включением связанных данных
+  async getMachines(segmentId?: number) {
+    this.logger.log(
+      `Запрос на получение списка станков${segmentId ? ` для участка: ${segmentId}` : ''}`,
+    );
 
     try {
-      // Проверяем, есть ли вообще записи в таблице
+      // Проверяем, есть ли записи в таблице
       const count = await this.prisma.machine.count();
       this.logger.log(`Найдено ${count} станков в базе данных`);
 
-      // Получаем ячейки буфера с включением связанных данных
-      const machineAll = await this.prisma.machine.findMany({});
+      // Строим параметры запроса в зависимости от наличия segmentId
+      const where: any = {};
+
+      if (segmentId) {
+        // Если передан ID участка, фильтруем станки по участку
+        where.segmentId = segmentId;
+      } else {
+        // Если ID участка не передан, возвращаем только активные станки
+        where.status = 'ACTIVE';
+      }
+
+      // Получаем станки с учетом фильтров
+      const machineAll = await this.prisma.machine.findMany({
+        where,
+        include: {
+          // Включаем информацию об участке для отображения
+          segment: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
 
       this.logger.log(`Получено ${machineAll.length} станков с данными`);
-
 
       return machineAll;
     } catch (error) {
@@ -49,11 +72,11 @@ export class MachinService {
       });
 
       // Преобразуем данные для более удобного использования на клиенте
-      const formattedMachines = machinesWithPallets.map(machine => ({
+      const formattedMachines = machinesWithPallets.map((machine) => ({
         id: machine.id,
         name: machine.name,
         status: machine.status,
-        activePallets: machine.detailOperations.map(operation => ({
+        activePallets: machine.detailOperations.map((operation) => ({
           palletId: operation.productionPallet.id,
           palletName: operation.productionPallet.name,
           quantity: operation.productionPallet.quantity,
@@ -62,17 +85,23 @@ export class MachinService {
         })),
       }));
 
-      this.logger.log(`Получено ${formattedMachines.length} станков с информацией об активных поддонах`);
+      this.logger.log(
+        `Получено ${formattedMachines.length} станков с информацией об активных поддонах`,
+      );
       return formattedMachines;
     } catch (error) {
-      this.logger.error(`Ошибка при получении станков с активными поддонами: ${error.message}`);
+      this.logger.error(
+        `Ошибка при получении станков с активными поддонами: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // Получение информации о конкретном станке с активными поддонами
   async getMachineWithActivePalletsById(id: number) {
-    this.logger.log(`Запрос на получение станка с ID ${id} и активными поддонами`);
+    this.logger.log(
+      `Запрос на получение станка с ID ${id} и активными поддонами`,
+    );
 
     try {
       const machine = await this.prisma.machine.findUnique({
@@ -104,7 +133,7 @@ export class MachinService {
         id: machine.id,
         name: machine.name,
         status: machine.status,
-        activePallets: machine.detailOperations.map(operation => ({
+        activePallets: machine.detailOperations.map((operation) => ({
           palletId: operation.productionPallet.id,
           palletName: operation.productionPallet.name,
           quantity: operation.productionPallet.quantity,
@@ -116,13 +145,15 @@ export class MachinService {
         })),
       };
 
-      this.logger.log(`Получен станок с ID ${id} и ${formattedMachine.activePallets.length} активными поддонами`);
+      this.logger.log(
+        `Получен станок с ID ${id} и ${formattedMachine.activePallets.length} активными поддонами`,
+      );
       return formattedMachine;
     } catch (error) {
-      this.logger.error(`Ошибка при получении станка с ID ${id} и активными поддонами: ${error.message}`);
+      this.logger.error(
+        `Ошибка при получении станка с ID ${id} и активными поддонами: ${error.message}`,
+      );
       throw error;
     }
   }
-
- 
 }

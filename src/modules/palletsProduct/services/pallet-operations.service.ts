@@ -7,18 +7,22 @@ import { OperationCompletionStatus } from '../dto/pallet-operations.dto';
 export class PalletOperationsService {
   private readonly logger = new Logger(PalletOperationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Назначить поддон на станок
+   * @param palletId ID поддона
+   * @param machineId ID станка
+   * @param segmentId ID участка (ранее передавался как processStepId)
+   * @param operatorId ID оператора (опционально)
    */
   async assignPalletToMachine(
     palletId: number,
     machineId: number,
-    processStepId: number,
+    segmentId: number, // переименовано для ясности - фактически это ID участка
     operatorId?: number,
   ) {
-    this.logger.log(`Назначение поддона ${palletId} на станок ${machineId}`);
+    this.logger.log(`Назначение поддона ${palletId} на станок ${machineId} (участок ${segmentId})`);
 
     try {
       // Проверяем существование поддона
@@ -46,23 +50,49 @@ export class PalletOperationsService {
         );
       }
 
-      // Проверяем существование этапа процесса
-      const processStep = await this.prisma.processStep.findUnique({
-        where: { id: processStepId },
+      // Проверяем существование у��астка
+      const segment = await this.prisma.productionSegment.findUnique({
+        where: { id: segmentId },
       });
 
-      if (!processStep) {
+      if (!segment) {
+        throw new NotFoundException(`Участок с ID ${segmentId} не найден`);
+      }
+
+      // Ищем соответствующий этап обработки для данного участка
+      // Приоритет отдается этапу, отмеченному как основной (isPrimary = true)
+      const segmentProcessStep = await this.prisma.segmentProcessStep.findFirst({
+        where: {
+          segmentId: segmentId,
+          isPrimary: true
+        },
+        include: { processStep: true }
+      });
+
+      // Если основной этап не найден, берем любой связанный с участком этап
+      const anySegmentProcessStep = segmentProcessStep || await this.prisma.segmentProcessStep.findFirst({
+        where: { segmentId: segmentId },
+        include: { processStep: true }
+      });
+
+      if (!anySegmentProcessStep) {
         throw new NotFoundException(
-          `Этап процесса с ID ${processStepId} не найден`,
+          `Для участка с ID ${segmentId} не ��айдено связанных этапов обработки в таблице SegmentProcessStep`,
         );
       }
 
-      // Проверяем, есть ли существую��ая активная операция для данного поддона и этапа процесса
+      // Получаем ID этапа процесса из найденной связи
+      const processStepId = anySegmentProcessStep.processStepId;
+      const processStep = anySegmentProcessStep.processStep;
+
+      this.logger.log(`Для участка ${segmentId} выбран этап обработки: ${processStep.name} (ID: ${processStepId})`);
+
+      // Проверяем, есть ли существующая активная операция для данного поддона и этапа процесса
       const existingOperation = await this.prisma.detailOperation.findFirst({
         where: {
           productionPalletId: palletId,
           processStepId: processStepId,
-          status: OperationStatus.IN_PROGRESS,
+          status: OperationStatus.ON_MACHINE,
         },
       });
 
@@ -75,7 +105,6 @@ export class PalletOperationsService {
           data: {
             machineId: machineId,
             operatorId: operatorId || existingOperation.operatorId,
-            // Статус операции остается IN_PROGRESS
           },
           include: {
             machine: true,
@@ -97,11 +126,11 @@ export class PalletOperationsService {
         operation = await this.prisma.detailOperation.create({
           data: {
             productionPalletId: palletId,
-            processStepId: processStepId,
+            processStepId: processStepId, // Используем найденный ID этапа процесса
             machineId: machineId,
             operatorId: operatorId || null,
-            status: OperationStatus.IN_PROGRESS,
-            completionStatus: 'IN_PROGRESS', // Новое поле для статуса выполнения
+            status: OperationStatus.ON_MACHINE,
+            completionStatus: 'ON_MACHINE', // Новое поле для статуса выполнения
             quantity: pallet.quantity,
           },
           include: {
@@ -117,7 +146,7 @@ export class PalletOperationsService {
         });
 
         this.logger.log(
-          `Создана новая операция ${operation.id} для поддона ${palletId} на станке ${machineId}`,
+          `Создана новая операция ${operation.id} для поддона ${palletId} на станке ${machineId}, этап обработки: ${processStep.name}`,
         );
       }
 
@@ -155,6 +184,8 @@ export class PalletOperationsService {
             },
             take: 1,
           },
+          // Добавляем информацию о текущей ячейке буфера (если есть)
+          bufferCell: true,
         },
       });
 
@@ -165,59 +196,124 @@ export class PalletOperationsService {
       // Проверяем существование ячейки буфера
       const bufferCell = await this.prisma.bufferCell.findUnique({
         where: { id: bufferCellId },
+        include: {
+          // Получаем список всех поддонов в этой ячейке для проверки вместимости
+          pallets: true,
+        },
       });
 
       if (!bufferCell) {
         throw new NotFoundException(
-          `Ячей��а буфера с ID ${bufferCellId} не найдена`,
+          `Ячейка буфера с ID ${bufferCellId} не найдена`,
         );
       }
 
-      // Проверяем, что ячейка буфера доступна
-      if (bufferCell.status !== 'AVAILABLE') {
+      // Проверяем, что ячейка буфера доступна или уже имеет поддоны, но еще не заполнена
+      if (
+        bufferCell.status !== 'AVAILABLE' &&
+        bufferCell.status !== 'OCCUPIED'
+      ) {
         throw new Error(
           `Ячейка буфера ${bufferCell.code} недоступна. Текущий статус: ${bufferCell.status}`,
         );
       }
 
-      // Перемещаем поддон в ячейку буфера
-      const updatedPallet = await this.prisma.productionPallets.update({
-        where: { id: palletId },
-        data: { bufferCellId: bufferCellId },
-        include: {
-          detailOperations: {
-            where: {
-              status: OperationStatus.IN_PROGRESS,
+      // Проверяем, не переполнена ли ячейка
+      // Учитываем, что если поддон уже находится в этой ячейке, его не нужно учитывать дважды
+      const isCurrentPalletInThisCell = pallet.bufferCellId === bufferCell.id;
+      const effectivePalletsCount = isCurrentPalletInThisCell
+        ? bufferCell.pallets.length
+        : bufferCell.pallets.length + 1;
+
+      if (effectivePalletsCount > bufferCell.capacity) {
+        throw new Error(
+          `Ячейка буфера ${bufferCell.code} уже заполнена до максимальной вместимости (${bufferCell.capacity})`,
+        );
+      }
+
+      // Используем транзакцию для атомарного выполнения всех операций
+      return await this.prisma.$transaction(async (prisma) => {
+        // Если поддон уже был в другой ячейке, обновляем статус той ячейки
+        if (pallet.bufferCellId && pallet.bufferCellId !== bufferCellId) {
+          const oldBufferCell = await prisma.bufferCell.findUnique({
+            where: { id: pallet.bufferCellId },
+            include: { pallets: true },
+          });
+
+          if (oldBufferCell) {
+            // После перемещения поддона в новую ячейку, в старой ячейке останется на 1 поддон меньше
+            const oldCellRemainingPallets = oldBufferCell.pallets.length - 1;
+
+            // Если после перемещения в старой ячейке не останется поддонов, меняем её статус на AVAILABLE
+            if (oldCellRemainingPallets <= 0) {
+              await prisma.bufferCell.update({
+                where: { id: pallet.bufferCellId },
+                data: { status: 'AVAILABLE' },
+              });
+              this.logger.log(
+                `Ячейка ${pallet.bufferCellId} освобождена и имеет статус AVAILABLE`,
+              );
+            }
+            // Иначе оставляем статус OCCUPIED
+            else {
+              this.logger.log(
+                `В ячейке ${pallet.bufferCellId} осталось ${oldCellRemainingPallets} поддонов`,
+              );
+            }
+          }
+        }
+
+        // Перемещаем поддон в новую ячейку буфера
+        const updatedPallet = await prisma.productionPallets.update({
+          where: { id: palletId },
+          data: { bufferCellId: bufferCellId },
+          include: {
+            detailOperations: {
+              where: {
+                status: OperationStatus.IN_PROGRESS,
+              },
+              include: {
+                processStep: true,
+              },
+              orderBy: {
+                startedAt: 'desc',
+              },
+              take: 1,
             },
-            include: {
-              processStep: true,
-            },
-            orderBy: {
-              startedAt: 'desc',
-            },
-            take: 1,
           },
-        },
+        });
+
+        // Определяем, нужно ли обновлять статус новой ячейки
+        // Если количество поддонов равно вместимости - ставим OCCUPIED
+        // Если меньше - оставляем AVAILABLE
+        const newStatus =
+          effectivePalletsCount >= bufferCell.capacity
+            ? 'OCCUPIED'
+            : 'AVAILABLE';
+
+        // Обновляем статус новой ячейки буфера
+        await prisma.bufferCell.update({
+          where: { id: bufferCellId },
+          data: { status: newStatus },
+        });
+
+        const statusMessage =
+          newStatus === 'OCCUPIED'
+            ? 'ячейка полностью заполнена'
+            : 'ячейка имеет свободное место';
+        this.logger.log(
+          `Поддон ${palletId} перемещен в ячейку буфера ${bufferCellId}, ${statusMessage}`,
+        );
+
+        return {
+          message: 'Поддон успешно перемещен в буфер',
+          pallet: updatedPallet,
+          operation: pallet.detailOperations[0] || null,
+        };
       });
-
-      // Обновляем статус ячейки буфера
-      await this.prisma.bufferCell.update({
-        where: { id: bufferCellId },
-        data: { status: 'OCCUPIED' },
-      });
-
-      this.logger.log(
-        `Поддон ${palletId} перемещен в ячейку буфера ${bufferCellId}`,
-      );
-
-      return {
-        message: 'Поддон успешно перемещен в буфер',
-        pallet: updatedPallet,
-        operation: pallet.detailOperations[0] || null,
-      };
     } catch (error) {
       this.logger.error(
-        `Ошибка при перемещении п��ддона в буфер: ${error.message}`,
+        `Ошибка при перемещении поддона в буфер: ${error.message}`,
       );
       throw error;
     }

@@ -1,3 +1,4 @@
+
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
@@ -7,7 +8,7 @@ async function main() {
   // 1. Модуль авторизации: Роли, Пользователи, Дополнительные данные
   // ======================================================
 
-  // Создаём ро��и
+  // Создаём роли
   const adminRole = await prisma.role.create({ data: { name: 'admin' } });
   const operatorRole = await prisma.role.create({ data: { name: 'operator' } });
   const masterRole = await prisma.role.create({ data: { name: 'master' } });
@@ -92,13 +93,25 @@ async function main() {
 
   // Создаём несколько станков с различными статусами
   const machine1 = await prisma.machine.create({
-    data: { name: 'Станок №1', status: 'ACTIVE' },
+    data: { 
+      name: 'Станок №1', 
+      status: 'ACTIVE',
+      recommendedLoad: 50
+    },
   });
   const machine2 = await prisma.machine.create({
-    data: { name: 'Станок №2', status: 'MAINTENANCE' },
+    data: { 
+      name: 'Станок №2', 
+      status: 'MAINTENANCE',
+      recommendedLoad: 40
+    },
   });
   const machine3 = await prisma.machine.create({
-    data: { name: 'Станок №3', status: 'INACTIVE' },
+    data: { 
+      name: 'Станок №3', 
+      status: 'INACTIVE',
+      recommendedLoad: 60
+    },
   });
 
   // ======================================================
@@ -282,6 +295,7 @@ async function main() {
       name: 'Поддон A1',
       quantity: 20,
       detail: { connect: { id: detailA1.id } },
+      currentStep: { connect: { id: processStepRaskroy.id } }, // Указываем текущий этап обработки
     },
   });
   const palletA2 = await prisma.productionPallets.create({
@@ -289,6 +303,7 @@ async function main() {
       name: 'Поддон A2',
       quantity: 25,
       detail: { connect: { id: detailA2.id } },
+      currentStep: { connect: { id: processStepPrisadka.id } }, // Указываем текущий этап обработки
     },
   });
   const palletB1 = await prisma.productionPallets.create({
@@ -296,6 +311,7 @@ async function main() {
       name: 'Поддон B1',
       quantity: 30,
       detail: { connect: { id: detailB1.id } },
+      currentStep: { connect: { id: processStepRaskroy.id } }, // Указываем текущий этап обработки
     },
   });
   const palletC1 = await prisma.productionPallets.create({
@@ -303,6 +319,7 @@ async function main() {
       name: 'Поддон C1',
       quantity: 15,
       detail: { connect: { id: detailC1.id } },
+      currentStep: { connect: { id: processStepRaskroy.id } }, // Указываем текущий этап обработки
     },
   });
   const palletD1 = await prisma.productionPallets.create({
@@ -310,6 +327,7 @@ async function main() {
       name: 'Поддон D1',
       quantity: 40,
       detail: { connect: { id: detailD1.id } },
+      currentStep: { connect: { id: processStepPokleyka.id } }, // Указываем текущий этап обработки
     },
   });
 
@@ -320,7 +338,7 @@ async function main() {
   // Создаём основной буфер с несколькими ячейками
   const bufferMain = await prisma.buffer.create({
     data: {
-      name: 'Осн��вной буфер',
+      name: 'Основной буфер',
       description: 'Основной буфер для поддонов',
       location: 'Цех 1',
       cells: {
@@ -393,15 +411,91 @@ async function main() {
             name: 'Участок №1',
             machines: {
               create: [
-                { name: 'Станок №4', status: 'ACTIVE' },
-                { name: 'Станок №5', status: 'INACTIVE' },
+                { 
+                  name: 'Станок №4', 
+                  status: 'ACTIVE',
+                  recommendedLoad: 45,
+                  // Создаем связь между станком и этапами обработки
+                  processSteps: {
+                    create: [
+                      {
+                        processStep: { connect: { id: processStepRaskroy.id } },
+                        isDefault: true
+                      },
+                      {
+                        processStep: { connect: { id: processStepPrisadka.id } },
+                        isDefault: false
+                      }
+                    ]
+                  }
+                },
+                { 
+                  name: 'Станок №5', 
+                  status: 'INACTIVE',
+                  recommendedLoad: 35,
+                  // Создаем связь между станком и этапами обработки
+                  processSteps: {
+                    create: [
+                      {
+                        processStep: { connect: { id: processStepPrisadka.id } },
+                        isDefault: true
+                      }
+                    ]
+                  }
+                },
               ],
             },
+            // Добавляем связь участка с этапами обработки
+            processSteps: {
+              create: [
+                {
+                  processStep: { connect: { id: processStepRaskroy.id } },
+                  isPrimary: true
+                },
+                {
+                  processStep: { connect: { id: processStepPrisadka.id } },
+                  isPrimary: false
+                }
+              ]
+            },
+            // Создаем статусы деталей для данного участка
+            detailStatuses: {
+              create: [
+                {
+                  detail: { connect: { id: detailA1.id } },
+                  isCompleted: false
+                },
+                {
+                  detail: { connect: { id: detailA2.id } },
+                  isCompleted: true,
+                  completedAt: new Date()
+                },
+                {
+                  detail: { connect: { id: detailB1.id } },
+                  isCompleted: false
+                }
+              ]
+            }
           },
           {
             name: 'Участок №2',
             machines: {
-              create: [{ name: 'Станок №6', status: 'MAINTENANCE' }],
+              create: [
+                { 
+                  name: 'Станок №6', 
+                  status: 'MAINTENANCE',
+                  recommendedLoad: 50,
+                  // Создаем связь между станком и этапами обработки
+                  processSteps: {
+                    create: [
+                      {
+                        processStep: { connect: { id: processStepPokleyka.id } },
+                        isDefault: true
+                      }
+                    ]
+                  }
+                }
+              ],
             },
             buffer: {
               create: {
@@ -416,6 +510,29 @@ async function main() {
                 },
               },
             },
+            // Добавляем связь участка с этапами обработки
+            processSteps: {
+              create: [
+                {
+                  processStep: { connect: { id: processStepPokleyka.id } },
+                  isPrimary: true
+                }
+              ]
+            },
+            // Создаем статусы деталей для данного участка
+            detailStatuses: {
+              create: [
+                {
+                  detail: { connect: { id: detailC1.id } },
+                  isCompleted: false
+                },
+                {
+                  detail: { connect: { id: detailD1.id } },
+                  isCompleted: true,
+                  completedAt: new Date()
+                }
+              ]
+            }
           },
         ],
       },
@@ -440,6 +557,8 @@ async function main() {
       startedAt: new Date(),
       completedAt: new Date(),
       quantity: 10,
+      isCompletedForDetail: true,
+      stepSequenceInRoute: 1
     },
   });
   await prisma.detailOperation.create({
@@ -452,6 +571,8 @@ async function main() {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       quantity: 15,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 2
     },
   });
   await prisma.detailOperation.create({
@@ -462,6 +583,8 @@ async function main() {
       status: 'BUFFERED',
       startedAt: new Date(),
       quantity: 0,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 3
     },
   });
 
@@ -476,6 +599,8 @@ async function main() {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       quantity: 5,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 1
     },
   });
   await prisma.detailOperation.create({
@@ -489,6 +614,8 @@ async function main() {
       startedAt: new Date(),
       completedAt: new Date(),
       quantity: 8,
+      isCompletedForDetail: true,
+      stepSequenceInRoute: 2
     },
   });
 
@@ -504,6 +631,8 @@ async function main() {
       startedAt: new Date(),
       completedAt: new Date(),
       quantity: 12,
+      isCompletedForDetail: true,
+      stepSequenceInRoute: 1
     },
   });
   await prisma.detailOperation.create({
@@ -516,6 +645,8 @@ async function main() {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       quantity: 15,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 2
     },
   });
 
@@ -530,6 +661,8 @@ async function main() {
       status: 'BUFFERED',
       startedAt: new Date(),
       quantity: 0,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 1
     },
   });
 
@@ -545,6 +678,8 @@ async function main() {
       startedAt: new Date(),
       completedAt: new Date(),
       quantity: 20,
+      isCompletedForDetail: true,
+      stepSequenceInRoute: 1
     },
   });
   await prisma.detailOperation.create({
@@ -558,6 +693,8 @@ async function main() {
       startedAt: new Date(),
       completedAt: new Date(),
       quantity: 15,
+      isCompletedForDetail: true,
+      stepSequenceInRoute: 2
     },
   });
   await prisma.detailOperation.create({
@@ -570,6 +707,8 @@ async function main() {
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       quantity: 5,
+      isCompletedForDetail: false,
+      stepSequenceInRoute: 3
     },
   });
 

@@ -1,3 +1,4 @@
+
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -109,6 +110,9 @@ model ProductionDetail {
   route       ProductionRoute?         @relation(fields: [routeId], references: [id])
   routeId     Int?
 
+  // Кэширование статусов детали для разных участков
+  segmentStatuses DetailSegmentStatus[] // Связь с моделью кэширования статусов по участкам
+
   // Общее количество готовых деталей для обработки на данном участке
   // вычисляется через агрегирующие запросы, суммируя quantity поддонов,
   // где соответствующая операция (DetailOperation) имеет нужный статус.
@@ -139,6 +143,10 @@ model ProductionPallets {
   // Связь с ячейкой буфера - показывает, в какой ячейке буфера находится поддон (если находится)
   bufferCell       BufferCell?              @relation(fields: [bufferCellId], references: [id])
   bufferCellId     Int?                     // Внешний ключ для связи с ячейкой буфера (null, если поддон не в буфере)
+
+  // Новое поле для хранения текущего этапа обработки поддона
+  currentStep      ProcessStep?             @relation("CurrentProcessStep", fields: [currentStepId], references: [id])
+  currentStepId    Int?                     // ID текущего этапа обработки (null, если не установлен)
 }
 
 // ======================================================
@@ -205,6 +213,15 @@ model ProcessStep {
   
   // Обратная связь с маршрутами (RouteStep)
   routeSteps     RouteStep[]         @relation("ProcessStepRouteSteps")
+  
+  // Новая обратная связь с участками через промежуточную таблицу
+  segments       SegmentProcessStep[] // Связь с участками, где выполняется этот этап
+  
+  // Обратная связь с MachineProcessStep
+  machineSteps   MachineProcessStep[] // Связь со станками, которые могут выполнять этот этап
+  
+  // Связь с поддонами, которые сейчас находятся на этом этапе
+  currentPallets ProductionPallets[] @relation("CurrentProcessStep")
 }
 
 model Machine {
@@ -213,6 +230,7 @@ model Machine {
   status           MachineStatus    // Текущий статус станка (активен, неактивен, на обслуживании)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+  recommendedLoad  Int              // Рекомендуемая загрузка станка (количество деталей)
 
   detailOperations DetailOperation[] // Связь с операциями, выполняемыми на данном станке
   
@@ -222,6 +240,22 @@ model Machine {
   
   // Новая связь с операторами, которые привязаны к этому станку
   assignedOperators User[]          @relation("UserAssignedToMachine")
+  
+  // Новая связь с этапами обработки через промежуточную таблицу
+  processSteps    MachineProcessStep[] // Этапы обработки, которые может выполнять этот станок
+}
+
+// Новая модель: связь между станком и этапами обработки, которые он может выполнять
+model MachineProcessStep {
+  id            Int          @id @default(autoincrement())
+  machine       Machine      @relation(fields: [machineId], references: [id])
+  machineId     Int
+  processStep   ProcessStep  @relation(fields: [processStepId], references: [id]) 
+  processStepId Int
+  isDefault     Boolean      @default(false)  // Является ли этап основным для этого станка
+  
+  // Уникальность связи станок-этап
+  @@unique([machineId, processStepId])
 }
 
 // Фиксирует операции обработки, привязанные к конкретному поддону
@@ -252,9 +286,16 @@ model DetailOperation {
   startedAt              DateTime              @default(now())  // Время начала операции
   completedAt            DateTime?             // Время завершения операции (null, если не завершена)
   quantity               Int                   // Количество деталей, обработанных в рамках операции
+  
+  // Новые поля для оптимизации запросов
+  stepSequenceInRoute    Int?                 // Номер шага в маршруте конкретной детали (кэшированное значение)
+  isCompletedForDetail   Boolean              @default(false)  // Флаг завершенности для конкретной детали
+  // Добавленное поле для приоритета задания (null - не задан приоритет)
+  priority               Int?                 // Приоритет задания для станка
 }
 
 enum OperationStatus {
+  ON_MACHINE  // Поддон записа в задание для станка но еще не обрабатываетсся
   IN_PROGRESS  // Операция выполняется
   COMPLETED    // Операция завершена
   BUFFERED     // Операция приостановлена, поддон помещен в буфер
@@ -264,6 +305,7 @@ enum MachineStatus {
   ACTIVE       // Станок активен и готов к работе
   INACTIVE     // Станок выключен или не используется
   MAINTENANCE  // Станок на обслуживании или ремонте
+  BROKEN  // Станок СЛОМАН
 }
 
 // ======================================================
@@ -322,8 +364,49 @@ model ProductionSegment {
   // Новая связь с мастерами, которые контролируют этот участок
   supervisors  User[]             @relation("UserSupervisesSegment")
   
+  // Новая связь с этапами обработки через промежуточную таблицу
+  processSteps SegmentProcessStep[] // Этапы обработки, выполняемые на данном участке
+  
+  // Обратная связь к статусам деталей для этого участка
+  detailStatuses DetailSegmentStatus[] // Статусы деталей на этом участке
+  
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+}
+
+// Новая модель: связь между участком и этапами обработки
+model SegmentProcessStep {
+  id              Int               @id @default(autoincrement())
+  segment         ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
+  segmentId       Int               // Внешний ключ для связи с участком
+  processStep     ProcessStep       @relation(fields: [processStepId], references: [id]) // Связь с этапом обработки
+  processStepId   Int               // Внешний ключ для связи с этапом обработки
+  isPrimary       Boolean           @default(false) // Является ли этот этап основным для данного участка
+  
+  // Уникальность связи участок-этап
+  @@unique([segmentId, processStepId])
+  
+  // Индексы для быстрого поиска
+  @@index([segmentId])
+  @@index([processStepId])
+}
+
+// Новая модель: кэширование статусов деталей для участков
+model DetailSegmentStatus {
+  id              Int               @id @default(autoincrement())
+  detail          ProductionDetail  @relation(fields: [detailId], references: [id]) // Связь с деталью
+  detailId        Int               // Внешний ключ для связи с деталью
+  segment         ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
+  segmentId       Int               // Внешний ключ для связи с участком
+  isCompleted     Boolean           @default(false) // Завершена ли обработка детали для данного участка
+  completedAt     DateTime?         // Когда был завершен этап (если завершен)
+  
+  // Уникальность связи деталь-участок
+  @@unique([detailId, segmentId])
+  
+  // Индексы для быстрого поиска
+  @@index([segmentId, isCompleted])
+  @@index([detailId])
 }
 
 enum ProductionLineType {

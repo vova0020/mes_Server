@@ -13,12 +13,15 @@ export class AssignPalletToMachineDto {
   @IsPositive()
   machineId: number;
 
-  @ApiProperty({ description: 'ID этапа процесса', example: 1 })
+  @ApiProperty({ description: 'ID производственного участка', example: 1 })
   @IsNumber()
   @IsPositive()
-  processStepId: number;
+  segmentId: number; // переименовано с processStepId для отражения реальной сущности
 
-  @ApiPropertyOptional({ description: 'ID оператора (опционально)', example: 1 })
+  @ApiPropertyOptional({
+    description: 'ID оператора (опционально)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
@@ -40,8 +43,8 @@ export class MovePalletToBufferDto {
 
 // Перечисление для новых статусов операций
 export enum OperationCompletionStatus {
-  COMPLETED = 'COMPLETED',           // Готово
-  IN_PROGRESS = 'IN_PROGRESS',       // В работе
+  COMPLETED = 'COMPLETED', // Готово
+  IN_PROGRESS = 'IN_PROGRESS', // В работе
   PARTIALLY_COMPLETED = 'PARTIALLY_COMPLETED', // Выполнено частично
 }
 
@@ -51,16 +54,19 @@ export class UpdateOperationStatusDto {
   @IsNumber()
   @IsPositive()
   operationId: number;
-  
-  @ApiProperty({ 
-    description: 'Новый статус операции', 
+
+  @ApiProperty({
+    description: 'Новый статус операции',
     enum: OperationCompletionStatus,
-    example: OperationCompletionStatus.COMPLETED 
+    example: OperationCompletionStatus.COMPLETED,
   })
   @IsEnum(OperationCompletionStatus)
   status: OperationCompletionStatus;
-  
-  @ApiPropertyOptional({ description: 'ID мастера, подтверждающего обновление (опционально)', example: 1 })
+
+  @ApiPropertyOptional({
+    description: 'ID мастера, подтверждающего обновление (опционально)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
@@ -69,12 +75,18 @@ export class UpdateOperationStatusDto {
 
 // DTO для завершения операции (устаревший, используйте UpdateOperationStatusDto)
 export class CompleteOperationDto {
-  @ApiProperty({ description: 'ID операции, которую нужно завершить', example: 1 })
+  @ApiProperty({
+    description: 'ID операции, которую нужно завершить',
+    example: 1,
+  })
   @IsNumber()
   @IsPositive()
   operationId: number;
-  
-  @ApiPropertyOptional({ description: 'ID мастера, подтверждающего завершение (опционально)', example: 1 })
+
+  @ApiPropertyOptional({
+    description: 'ID мастера, подтверждающего завершение (опционально)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
@@ -87,7 +99,7 @@ export class PalletOperationResponseDto {
   operation: {
     id: number;
     status: string;
-    completionStatus?: string;    // Добавлен новый статус завершения
+    completionStatus?: string; // Добавлен новый статус завершения
     startedAt: Date;
     completedAt?: Date;
     quantity: number;

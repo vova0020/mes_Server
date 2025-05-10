@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Get,
@@ -7,9 +8,16 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
+  Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger'; // Добавлен импорт ApiTags
-import { BuffersService } from '../services/buffer.service';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { BuffersService, FormattedBufferCell } from '../services/buffer.service';
 
 @ApiTags('buffer')
 @Controller('buffer')
@@ -20,11 +28,29 @@ export class BuffersController {
 
   // Получение списка ячеек буфера
   @Get('cells')
-  async getBufferCells() {
-    this.logger.log('Получен запрос на получение ячеек буфера');
+  @ApiOperation({ summary: 'Получить список ячеек буфера' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список ячеек буфера успешно получен',
+  })
+  @ApiResponse({ status: 404, description: 'Ячейки буфера не найдены' })
+  @ApiQuery({
+    name: 'segmentId',
+    required: false,
+    type: Number,
+    description: 'ID производственного участка для фильтрации ячеек буфера',
+  })
+  async getBufferCells(@Query('segmentId') segmentId?: string): Promise<FormattedBufferCell[]> {
+    this.logger.log(
+      `Получен запрос на получение ячеек буфера${segmentId ? ` для участка: ${segmentId}` : ''}`,
+    );
 
     try {
-      const bufferCells = await this.buffersService.getBufferCells();
+      // Преобразуем segmentId в числовой тип, если параметр был передан
+      const segmentIdNumber = segmentId ? parseInt(segmentId, 10) : undefined;
+
+      const bufferCells =
+        await this.buffersService.getBufferCells(segmentIdNumber);
 
       if (!bufferCells || bufferCells.length === 0) {
         this.logger.warn('Ячейки буфера не найдены');
@@ -47,6 +73,10 @@ export class BuffersController {
 
   // Получение конкретной ячейки буфера по ID
   @Get('cells/:id')
+  @ApiOperation({ summary: 'Получить ячейку буфера по ID' })
+  @ApiParam({ name: 'id', description: 'ID ячейки буфера' })
+  @ApiResponse({ status: 200, description: 'Ячейка буфера успешно получена' })
+  @ApiResponse({ status: 404, description: 'Ячейка буфера не найдена' })
   async getBufferCellById(@Param('id', ParseIntPipe) id: number) {
     this.logger.log(`Получен запрос на получение ячейки буфера с ID: ${id}`);
 
