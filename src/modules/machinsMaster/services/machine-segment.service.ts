@@ -1,3 +1,4 @@
+
 import {
   Injectable,
   Logger,
@@ -59,17 +60,50 @@ export class MachineSegmentService {
         return [];
       }
 
+      // Получаем все завершенные операции для станков на данном участке
+      const completedOperations = await this.prisma.detailOperation.findMany({
+        where: {
+          machine: {
+            segmentId: segmentId,
+          },
+          status: OperationStatus.COMPLETED, // Только завершенные операции
+        },
+        include: {
+          productionPallet: true, // Включаем информацию о поддоне для получения количества деталей
+          machine: true, // Включаем информацию о станке для группировки
+        },
+      });
+
+      // Формируем объект для быстрого доступа к количеству завершенных операций по ID станка
+      const completedQuantityByMachineId = completedOperations.reduce((acc, operation) => {
+        // Проверяем, что operation.machine не null
+        if (!operation.machine) {
+          return acc; // Пропускаем операции без указания станка
+        }
+        
+        const machineId = operation.machine.id;
+        
+        if (!acc[machineId]) {
+          acc[machineId] = 0;
+        }
+        
+        // Суммируем количеств�� деталей в завершенной операции
+        acc[machineId] += operation.quantity;
+        
+        return acc;
+      }, {});
+
       // Формируем ответ с дополнительными вычисляемыми полями
       const resultMachines = machines.map((machine) => {
-        // Расчет запланир��ванного количества - суммируем количество деталей по всем поддонам,
+        // Расчет запланированного количества - суммируем количество деталей по всем поддонам,
         // привязанным к станку через операции
         const plannedQuantity = machine.detailOperations.reduce(
           (total, operation) => total + operation.productionPallet.quantity,
           0,
         );
 
-        // Пока используем фиксированное значение 5 для выполненного количества
-        const completedQuantity = 5;
+        // Получаем выполненное количество из собранной статистики или возвращаем 0
+        const completedQuantity = completedQuantityByMachineId[machine.id] || 0;
 
         return {
           id: machine.id,
@@ -101,7 +135,7 @@ export class MachineSegmentService {
   async getMachineTasksById(
     machineId: number,
   ): Promise<MachineTaskResponseDto[]> {
-    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}`);
+    this.logger.log(`Получение сменног�� задания для станка с ID: ${machineId}`);
 
     try {
       // Проверяем существование станка
@@ -160,7 +194,7 @@ export class MachineSegmentService {
 
       // Формируем ответ с данными из связанных таблиц
       const tasks = operations.map((operation) => {
-        // Получаем первую запись связи детали с УПАК для полу��ения информации о заказе
+        // Получаем первую запись связи детали с УПАК для получения информации о заказе
         const ypakDetail = operation.productionPallet.detail.ypaks[0];
 
         return {

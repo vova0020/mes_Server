@@ -1,3 +1,4 @@
+
 # Документация API модуля станков без смен
 
 ## Базовый URL
@@ -81,9 +82,9 @@ Content-Type: application/json
 - `404 Not Found` - Станок с указанным ID не найден
 - `400 Bad Request` - Некорректный формат данных (например, неверный статус)
 
-### 3. Получение заказов и деталей для участка
+### 3. Получение заказов для участка
 
-**Описание:** Возвращает все заказы и детали, которые требуют обработки на конкретном производственном участке. Возвращаются только те детали, которые должны пройти участок (технологический этап), связанный с участком.
+**Описание:** Возвращает все заказы, которые требуют обработки на конкретном производственном участке.
 
 **URL:** `GET /machines-no-shifts/segment/orders`
 
@@ -106,18 +107,6 @@ GET /machines-no-shifts/segment/orders?segmentId=1
       "progress": 45.5
     },
     // ... другие заказы
-  ],
-  "details": [
-    {
-      "id": 1,
-      "article": "ART-123",
-      "name": "Столешница",
-      "material": "Дуб",
-      "size": "120x80x3",
-      "totalNumber": 10,
-      "isCompletedForSegment": false
-    },
-    // ... другие детали
   ]
 }
 ```
@@ -126,18 +115,58 @@ GET /machines-no-shifts/segment/orders?segmentId=1
 - `200 OK` - Запрос выполнен успешно
 - `404 Not Found` - Производственный участок с указанным ID не найден
 
-### 4. Получение поддонов для детали
+### 4. Получение деталей для конкретного заказа и участка
 
-**Описание:** Возвращает все поддоны, связанные с конкретной деталью.
+**Описание:** Возвращает все детали для выбранного заказа, которые требуют обработки на конкретном производственном участке.
+
+**URL:** `GET /machines-no-shifts/order/details`
+
+**Параметры запроса:**
+- `orderId` (query) - ID заказа (число)
+- `segmentId` (query) - ID производственного участка (число)
+
+**Пример запроса:**
+```
+GET /machines-no-shifts/order/details?orderId=1&segmentId=1
+```
+
+**Ответ:**
+```json
+{
+  "details": [
+    {
+      "id": 1,
+      "article": "ART-123",
+      "name": "Столешница",
+      "material": "Дуб",
+      "size": "120x80x3",
+      "totalNumber": 10,
+      "isCompletedForSegment": false,
+      "readyForProcessing": 5,
+      "completed": 2
+    },
+    // ... другие детали
+  ]
+}
+```
+
+**Коды ответов:**
+- `200 OK` - Запрос выполнен успешно
+- `404 Not Found` - Заказ или производственный участок с указанным ID не найден
+
+### 5. Получение поддонов для детали
+
+**Описание:** Возвращает все поддоны, связанные с конкретной деталью, включая информацию о маршруте обработки.
 
 **URL:** `GET /machines-no-shifts/detail/pallets`
 
 **Параметры запроса:**
 - `detailId` (query) - ID детали (число)
+- `segmentId` (query) - ID производственного участка (число)
 
 **Пример запроса:**
 ```
-GET /machines-no-shifts/detail/pallets?detailId=1
+GET /machines-no-shifts/detail/pallets?detailId=1&segmentId=1
 ```
 
 **Ответ:**
@@ -155,24 +184,63 @@ GET /machines-no-shifts/detail/pallets?detailId=1
         "material": "Дуб",
         "size": "120x80x3",
         "totalNumber": 10,
-        "isCompletedForSegment": false
+        "isCompletedForSegment": false,
+        "readyForProcessing": 5,
+        "completed": 2
       },
       "currentStepId": 2,
       "currentStepName": "Резка",
       "bufferCell": {
         "id": 1,
         "code": "A1",
+        "bufferId": 3,
         "bufferName": "Основной буфер"
+      },
+      "machine": {
+        "id": 1,
+        "name": "Станок №1",
+        "status": "ACTIVE"
+      },
+      "currentOperation": {
+        "id": 1,
+        "status": "IN_PROGRESS",
+        "completionStatus": null,
+        "startedAt": "2023-06-15T10:30:00Z",
+        "completedAt": null,
+        "processStep": {
+          "id": 2,
+          "name": "Резка",
+          "sequence": 1
+        },
+        "operator": {
+          "id": 5,
+          "username": "operator1",
+          "fullName": "Иванов Иван"
+        },
+        "master": null
+      },
+      "processingStatus": {
+        "isFirstSegmentInRoute": false,
+        "hasCompletedPreviousSegments": true,
+        "currentSegment": {
+          "id": 1,
+          "name": "Участок резки"
+        },
+        "nextSegment": {
+          "id": 2,
+          "name": "Участок кромки"
+        }
       }
     },
     // ... другие поддоны
-  ]
+  ],
+  "total": 2
 }
 ```
 
 **Коды ответов:**
 - `200 OK` - Запрос выполнен успешно
-- `404 Not Found` - Деталь с указанным ID не найдена
+- `404 Not Found` - Деталь или производственный участок с указанным ID не найден
 
 ## Описание полей ответов
 
@@ -190,7 +258,7 @@ GET /machines-no-shifts/detail/pallets?detailId=1
 ### Заказ (Order)
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | number | Уникальный и��ентификатор заказа |
+| id | number | Уникальный идентификатор заказа |
 | runNumber | string | Номер партии/прогона |
 | name | string | Название заказа |
 | progress | number | Процент выполнения заказа (0-100) |
@@ -205,6 +273,8 @@ GET /machines-no-shifts/detail/pallets?detailId=1
 | size | string | Размер детали |
 | totalNumber | number | Общее количество деталей |
 | isCompletedForSegment | boolean | Завершена ли обработка детали для данного участка |
+| readyForProcessing | number | Количество деталей, готовых к обработке на данном участке |
+| completed | number | Количество завершенных деталей на данном участке |
 
 ### Поддон (Pallet)
 | Поле | Тип | Описание |
@@ -216,10 +286,61 @@ GET /machines-no-shifts/detail/pallets?detailId=1
 | currentStepId | number | ID текущего этапа обработки (может быть null) |
 | currentStepName | string | Название текущего этапа обработки (может быть null) |
 | bufferCell | BufferCell | Информация о ячейке буфера, где находится поддон (может быть null) |
+| machine | MachineInfo | Информация о станке, на котором обрабатывается поддон (может быть null) |
+| currentOperation | OperationInfo | Информация о текущей операции над поддоном (может быть null) |
+| processingStatus | ProcessingStatus | Информация о прохождении поддоном маршрута обработки |
 
 ### Ячейка буфера (BufferCell)
 | Поле | Тип | Описание |
 |------|-----|----------|
 | id | number | Уникальный идентификатор ячейки |
 | code | string | Код ячейки буфера (например, A1) |
+| bufferId | number | ID буфера |
 | bufferName | string | Название буфера |
+
+### Информация о станке (MachineInfo)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | Уникальный идентификатор станка |
+| name | string | Название станка |
+| status | string | Текущий статус станка |
+
+### Информация об операции (OperationInfo)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | Уникальный идентификатор операции |
+| status | string | Статус операции (IN_PROGRESS, COMPLETED, ON_MACHINE, BUFFERED) |
+| completionStatus | string | Детальный статус выполнения (может быть null) |
+| startedAt | string (date) | Дата и время начала операции |
+| completedAt | string (date) | Дата и время завершения операции (может быть null) |
+| processStep | ProcessStepInfo | Информация об этапе обработки (может быть null) |
+| operator | UserInfo | Информация об операторе (может быть null) |
+| master | UserInfo | Информация о мастере (может быть null) |
+
+### Информация об этапе процесса (ProcessStepInfo)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | Уникальный идентификатор этапа процесса |
+| name | string | Название этапа процесса |
+| sequence | number | Порядковый номер этапа |
+
+### Информация о пользователе (UserInfo)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | Уникальный идентификатор пользователя |
+| username | string | Имя пользователя |
+| fullName | string | Полное имя пользователя (может быть null) |
+
+### Информация о прохождении маршрута (ProcessingStatus)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| isFirstSegmentInRoute | boolean | Является ли текущий участок первым в маршруте |
+| hasCompletedPreviousSegments | boolean | Прошел ли поддон все предыдущие участки |
+| currentSegment | SegmentInfo | Информация о текущем участке |
+| nextSegment | SegmentInfo | Информация о следующем участке (может быть null) |
+
+### Информация об участке (SegmentInfo)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | Уникальный идентификатор участка |
+| name | string | Название участка |

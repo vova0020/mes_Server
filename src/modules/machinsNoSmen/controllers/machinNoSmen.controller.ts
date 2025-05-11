@@ -5,7 +5,6 @@ import {
   Param,
   ParseIntPipe,
   Patch,
-  Post,
   Query,
 } from '@nestjs/common';
 import {
@@ -19,6 +18,7 @@ import {
 import { MachinNoSmenService } from '../services/machinNoSmen.service';
 import {
   MachineResponseDto,
+  OrderDetailsResponseDto,
   PalletsResponseDto,
   SegmentOrdersResponseDto,
   UpdateMachineStatusDto,
@@ -27,7 +27,7 @@ import {
 @ApiTags('Станки без смен')
 @Controller('machines-no-shifts')
 export class MachinNoSmenController {
-  constructor(private readonly machinNoSmenService: MachinNoSmenService) {}
+  constructor(private readonly machinNoSmenService: MachinNoSmenService) { }
 
   @Get(':id')
   @ApiOperation({ summary: 'Получить информацию о станке по ID' })
@@ -74,44 +74,71 @@ export class MachinNoSmenController {
 
   @Get('segment/orders')
   @ApiOperation({
-    summary:
-      'Получить все заказы и детали для конкретного производственного участка',
+    summary: 'Получить все заказы для конкретного производственного участка',
   })
   @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
   @ApiResponse({
     status: 200,
     description:
-      'Возвращает все заказы и детали, которые требуют обработки на этом участке',
+      'Возвращает все заказы, которые требуют обработки на этом участке',
     type: SegmentOrdersResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Участок не найден' })
   async getSegmentOrders(
     @Query('segmentId', ParseIntPipe) segmentId: number,
   ): Promise<SegmentOrdersResponseDto> {
-    console.log(`Получен запрос на данные для участка с ID: ${segmentId}`);
+    console.log(`Получен запрос на заказы для участка с ID: ${segmentId}`);
     const result = await this.machinNoSmenService.getSegmentOrders(segmentId);
+    console.log(`Найдено заказов: ${result.orders.length}`);
+    return result;
+  }
+
+  @Get('order/details')
+  @ApiOperation({
+    summary: 'Получить все детали для конкретного заказа и участка',
+  })
+  @ApiQuery({ name: 'orderId', description: 'ID заказа' })
+  @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Возвращает все детали заказа, которые требуют обработки на этом участке',
+    type: OrderDetailsResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Заказ или участок не найден' })
+  async getOrderDetails(
+    @Query('orderId', ParseIntPipe) orderId: number,
+    @Query('segmentId', ParseIntPipe) segmentId: number,
+  ): Promise<OrderDetailsResponseDto> {
     console.log(
-      `Найдено заказов: ${result.orders.length}, деталей: ${result.details.length}`,
+      `Получен запрос на детали для заказа с ID: ${orderId} и участка с ID: ${segmentId}`,
     );
+    const result = await this.machinNoSmenService.getOrderDetails(
+      orderId,
+      segmentId,
+    );
+    console.log(`Найдено деталей: ${result.details.length}`);
     return result;
   }
 
   @Get('detail/pallets')
   @ApiOperation({ summary: 'Получить все поддоны для конкретной детали' })
   @ApiQuery({ name: 'detailId', description: 'ID детали' })
+  @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
   @ApiResponse({
     status: 200,
     description: 'Возвращает все поддоны, связанные с указанной деталью',
     type: PalletsResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Деталь не найдена' })
+  @ApiResponse({ status: 404, description: 'Деталь или участок не найдены' })
   async getPalletsByDetailId(
     @Query('detailId', ParseIntPipe) detailId: number,
+    @Query('segmentId', ParseIntPipe) segmentId: number,
   ): Promise<PalletsResponseDto> {
-    console.log(`Получен запрос на поддоны для детали с ID: ${detailId}`);
-    const result =
-      await this.machinNoSmenService.getPalletsByDetailId(detailId);
+    console.log(`Получен запрос на поддоны для детали с ID: ${detailId} и участка с ID: ${segmentId}`);
+    const result = await this.machinNoSmenService.getPalletsByDetailId(detailId, segmentId);
     console.log(`Найдено поддонов: ${result.pallets.length}`);
     return result;
   }
+
 }

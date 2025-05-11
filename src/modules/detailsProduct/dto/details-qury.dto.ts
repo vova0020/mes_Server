@@ -12,6 +12,16 @@ export class DetailsQueryDto {
   orderId: number;
 
   @ApiProperty({
+    description: 'ID участка производства (если не указан, используется участок мастера)',
+    required: false,
+    example: 2
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  segmentId?: number;
+
+  @ApiProperty({
     description: 'Максимальное количество записей для возврата',
     required: false,
     example: 10
