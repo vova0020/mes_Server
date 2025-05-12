@@ -8,7 +8,8 @@ import { DetailsModule } from './modules/detailsProduct/details.module';
 import { PalletsModule } from './modules/palletsProduct/pallets.module';
 import { BuffersModule } from './modules/buffer/buffer.module';
 import { MachinsMasterModule } from './modules/machinsMaster/machin.module';
-import { MachinModule } from './modules/machinsNoSmen/machin.module';
+import { MachinNoSmenModule } from './modules/machinsNoSmen/machin.module';
+import { MachinModule } from './modules/machinsSmen/machin.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MachinModule } from './modules/machinsNoSmen/machin.module';
     PalletsModule,
     BuffersModule,
     MachinsMasterModule,
+    MachinNoSmenModule,
     MachinModule,
   ],
 })

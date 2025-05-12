@@ -11,4 +11,4 @@ import { PalletService } from './services/pallet.service';
   providers: [MachinNoSmenService, PalletService],
   exports: [MachinNoSmenService, PalletService],
 })
-export class MachinModule {}
+export class MachinNoSmenModule {}

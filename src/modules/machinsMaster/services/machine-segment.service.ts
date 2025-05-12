@@ -135,7 +135,7 @@ export class MachineSegmentService {
   async getMachineTasksById(
     machineId: number,
   ): Promise<MachineTaskResponseDto[]> {
-    this.logger.log(`Получение сменног�� задания для станка с ID: ${machineId}`);
+    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}`);
 
     try {
       // Проверяем существование станка
@@ -153,7 +153,12 @@ export class MachineSegmentService {
           machineId,
           // Только актуальные операции, исключая завершенные
           status: {
-            in: [OperationStatus.ON_MACHINE, OperationStatus.IN_PROGRESS],
+            in: [
+              OperationStatus.ON_MACHINE,
+              OperationStatus.IN_PROGRESS,
+              OperationStatus.COMPLETED,
+              OperationStatus.BUFFERED,
+            ],
           },
         },
         include: {
