@@ -5,18 +5,19 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
   // Включаем CORS для веб-приложения
   app.enableCors({
-    origin: 'http://localhost:3000', // Разрешаем запросы только с этого источника
+    origin: 'http://localhost:3000', // Или IP/домен твоего фронтенда
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    credentials: true, // Разрешаем передачу куки и заголовков авторизации
+    credentials: true,
   });
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // удаляет свойства, отсутствующие в DTO
-      forbidNonWhitelisted: true, // выбрасывает исключение, если присутствуют лишние свойства
-      transform: true, // преобразует входящие данные в экземпляры классов DTO
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
@@ -25,11 +26,15 @@ async function bootstrap() {
     .setTitle('MES API')
     .setDescription('API для системы управления производством')
     .setVersion('1.0')
-    .addBearerAuth() // Если у вас есть авторизация через JWT
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(5000);
+  const PORT = 5000;
+  // Привязываем к 0.0.0.0, чтобы слушать и IPv4, и IPv6
+  await app.listen(PORT, '0.0.0.0');
+  console.log(`🚀 Server listening on http://0.0.0.0:${PORT}`);
 }
+
 bootstrap();
