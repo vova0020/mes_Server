@@ -89,6 +89,7 @@ model ProductionOrder {
 
 model ProductionYpak {
   id       Int                    @id @default(autoincrement())
+  article  String?                   // Артикул упаковки
   name     String                 // Название УПАКа
   progress Float?                 // Процент выполнения УПАКа (0-100)
   order    ProductionOrder        @relation(fields: [orderId], references: [id])  // Связь с заказом

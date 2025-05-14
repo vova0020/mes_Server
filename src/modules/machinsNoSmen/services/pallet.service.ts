@@ -64,7 +64,23 @@ export class PalletService {
     }
 
     // Проверяем, что поддон имеет текущий этап обработки
-    const currentStepId = pallet.currentStepId;
+    let currentStepId = pallet.currentStepId;
+    
+    // Если текущий этап не указан, но есть маршрут, пытаемся определить первый этап
+    if (!currentStepId && pallet.detail.route && pallet.detail.route.steps.length > 0) {
+      // Берем первый этап из маршрута
+      const firstRouteStep = pallet.detail.route.steps[0];
+      currentStepId = firstRouteStep.processStepId;
+      
+      this.logger.log(`Для поддона ${palletId} автоматически установлен первый этап обработки: ${currentStepId}`);
+      
+      // Обновляем поддон с первым этапом обработки
+      await this.prisma.productionPallets.update({
+        where: { id: palletId },
+        data: { currentStepId },
+      });
+    }
+    
     if (!currentStepId) {
       const errorMsg = `У поддона ${palletId} не указан текущий этап обработки. Невозможно начать обработку`;
       this.logger.error(errorMsg);
@@ -291,6 +307,45 @@ export class PalletService {
 
       if (nextRouteStep) {
         nextStepId = nextRouteStep.processStepId;
+        this.logger.debug(`Найден следующий этап обработки по маршруту: ${nextStepId}`);
+      } else {
+        this.logger.debug(`Следующий этап в маршруте не найден, обработка завершена`);
+      }
+    } else {
+      // Если у детали нет маршрута или stepSequenceInRoute не установлен,
+      // пытаемся найти любой подходящий этап обработки
+      this.logger.debug(`Маршрут не определен, поиск подходящего следующего этапа`);
+      
+      // Получаем все этапы, которые может обрабатывать сегмент станка
+      if (machine.segmentId) {
+        const segment = await this.prisma.productionSegment.findUnique({
+          where: { id: machine.segmentId },
+          include: {
+            processSteps: {
+              include: {
+                processStep: true
+              },
+              orderBy: {
+                processStep: {
+                  sequence: 'asc'
+                }
+              }
+            }
+          }
+        });
+        
+        if (segment && segment.processSteps.length > 0) {
+          // Находим текущий этап в списке
+          const currentStepIndex = segment.processSteps.findIndex(
+            (segmentStep) => segmentStep.processStepId === currentStepId
+          );
+          
+          // Если текущий этап найден и есть следующий, устанавливаем его
+          if (currentStepIndex >= 0 && currentStepIndex < segment.processSteps.length - 1) {
+            nextStepId = segment.processSteps[currentStepIndex + 1].processStepId;
+            this.logger.debug(`Найден следующий этап по сегменту: ${nextStepId}`);
+          }
+        }
       }
     }
 

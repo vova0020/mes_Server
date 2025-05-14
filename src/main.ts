@@ -10,14 +10,14 @@ async function bootstrap() {
   app.enableCors({
     origin: 'http://localhost:3000', // Или IP/домен твоего фронтенда
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    credentials: true,
+    credentials: true,   // Разрешаем передачу куки и заголовков авторизации
   });
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      whitelist: true, // удаляет свойства, отсутствующие в DTO
+      forbidNonWhitelisted: true, // выбрасывает исключение, если присутствуют лишние свойства
+      transform: true, // преобразует входящие данные в экземпляры классов DTO
     }),
   );
 
@@ -26,7 +26,7 @@ async function bootstrap() {
     .setTitle('MES API')
     .setDescription('API для системы управления производством')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth() // Если у вас есть авторизация через JWT
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);

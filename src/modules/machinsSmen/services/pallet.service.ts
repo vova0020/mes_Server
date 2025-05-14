@@ -5,8 +5,7 @@ import { OperationStatus } from '@prisma/client';
 @Injectable()
 export class PalletService {
   private readonly logger = new Logger(PalletService.name);
-  constructor(private prisma: PrismaService) { }
-
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Начать обработку поддона на станке
@@ -65,7 +64,29 @@ export class PalletService {
     }
 
     // Проверяем, что поддон имеет текущий этап обработки
-    const currentStepId = pallet.currentStepId;
+    let currentStepId = pallet.currentStepId;
+
+    // Если текущий этап не указан, но есть маршрут, пытаемся определить первый этап
+    if (
+      !currentStepId &&
+      pallet.detail.route &&
+      pallet.detail.route.steps.length > 0
+    ) {
+      // Берем первый этап из маршрута
+      const firstRouteStep = pallet.detail.route.steps[0];
+      currentStepId = firstRouteStep.processStepId;
+
+      this.logger.log(
+        `Для поддона ${palletId} автоматически установлен первый этап обработки: ${currentStepId}`,
+      );
+
+      // Обновляем поддон с первым этапом обработки
+      await this.prisma.productionPallets.update({
+        where: { id: palletId },
+        data: { currentStepId },
+      });
+    }
+
     if (!currentStepId) {
       const errorMsg = `У поддона ${palletId} не указан текущий этап обработки. Невозможно начать обработку`;
       this.logger.error(errorMsg);
@@ -93,19 +114,61 @@ export class PalletService {
       throw new Error(errorMsg);
     }
 
-    // Проверяем, что поддон еще не находится в обработке где-либо
-    const inProgressOperation = await this.prisma.detailOperation.findFirst({
+    // ИСПРАВЛЕНО: Проверяем, что поддон еще не находится в обработке на ДРУГОМ станке
+    const existingOperation = await this.prisma.detailOperation.findFirst({
       where: {
         productionPalletId: palletId,
         processStepId: currentStepId,
-        status: { in: ['IN_PROGRESS'] },
+        status: { in: ['ON_MACHINE', 'IN_PROGRESS'] },
+        // Добавляем проверку, что операция НЕ на текущем станке
+        machineId: { not: machineId },
       },
     });
 
-    if (inProgressOperation) {
-      const errorMsg = `Поддон ${palletId} уже находится в обработке на другом станке`;
+    if (existingOperation) {
+      const errorMsg = `Поддон ${palletId} уже находится в обработке на станке ${existingOperation.machineId}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
+    }
+
+    // Проверяем, есть ли уже операция на этом же станке
+    const operationOnCurrentMachine =
+      await this.prisma.detailOperation.findFirst({
+        where: {
+          productionPalletId: palletId,
+          processStepId: currentStepId,
+          status: { in: ['ON_MACHINE', 'IN_PROGRESS'] },
+          machineId: machineId,
+        },
+      });
+
+    // Если есть операция на текущем станке, обновляем её статус
+    if (operationOnCurrentMachine) {
+      this.logger.log(
+        `Поддон ${palletId} уже находится в обработке на текущем станке ${machineId}, обновляем операцию`,
+      );
+
+      return this.prisma.detailOperation.update({
+        where: { id: operationOnCurrentMachine.id },
+        data: {
+          status: 'IN_PROGRESS',
+          operatorId: operatorId || operationOnCurrentMachine.operatorId,
+        },
+        include: {
+          productionPallet: {
+            include: {
+              detail: true,
+            },
+          },
+          processStep: true,
+          machine: true,
+          operator: {
+            include: {
+              details: true,
+            },
+          },
+        },
+      });
     }
 
     // Определяем номер шага в маршруте
@@ -122,78 +185,34 @@ export class PalletService {
       }
     }
 
-    // Ищем существующую запись о поддоне для данного станка в статусе ON_MACHINE
-    const existingOperation = await this.prisma.detailOperation.findFirst({
-      where: {
+    // Создаем новую запись об операции
+    return this.prisma.detailOperation.create({
+      data: {
         productionPalletId: palletId,
         processStepId: currentStepId,
         machineId: machineId,
-        status: 'ON_MACHINE',
+        operatorId: operatorId || undefined,
+        status: 'IN_PROGRESS',
+        quantity: pallet.quantity,
+        stepSequenceInRoute: stepSequenceInRoute,
+        startedAt: new Date(),
+      },
+      include: {
+        productionPallet: {
+          include: {
+            detail: true,
+          },
+        },
+        processStep: true,
+        machine: true,
+        operator: {
+          include: {
+            details: true,
+          },
+        },
       },
     });
-
-    if (existingOperation) {
-      // Если запись существует, обновляем её статус
-      this.logger.log(`Обновляем существующую запись операции ID: ${existingOperation.id}`);
-
-      return this.prisma.detailOperation.update({
-        where: { id: existingOperation.id },
-        data: {
-          status: 'IN_PROGRESS',
-          completionStatus: 'IN_PROGRESS',
-          operatorId: operatorId || existingOperation.operatorId,
-          startedAt: new Date(),
-          // Остальные поля не изменяем, так как они уже должны быть установлены
-        },
-        include: {
-          productionPallet: {
-            include: {
-              detail: true,
-            },
-          },
-          processStep: true,
-          machine: true,
-          operator: {
-            include: {
-              details: true,
-            },
-          },
-        },
-      });
-    } else {
-      // Если записи не существует, создаем новую
-      this.logger.log(`Создаем новую запись операции для поддона: ${palletId}, станка: ${machineId}`);
-
-      return this.prisma.detailOperation.create({
-        data: {
-          productionPalletId: palletId,
-          processStepId: currentStepId,
-          machineId: machineId,
-          operatorId: operatorId || undefined,
-          status: 'IN_PROGRESS',
-          completionStatus: 'IN_PROGRESS',
-          quantity: pallet.quantity,
-          stepSequenceInRoute: stepSequenceInRoute,
-          startedAt: new Date(),
-        },
-        include: {
-          productionPallet: {
-            include: {
-              detail: true,
-            },
-          },
-          processStep: true,
-          machine: true,
-          operator: {
-            include: {
-              details: true,
-            },
-          },
-        },
-      });
-    }
   }
-
 
   /**
    * Завершить обработку поддона на станке
@@ -236,7 +255,7 @@ export class PalletService {
       throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
     }
 
-    // Проверяем существование станка
+    // Проверяем существование ста��ка
     const machine = await this.prisma.machine.findUnique({
       where: { id: machineId },
       include: {
@@ -266,7 +285,7 @@ export class PalletService {
     const currentStepId = pallet.currentStepId;
     if (!currentStepId) {
       throw new Error(
-        `У поддона ${palletId} не указан текущий этап обработки. Невозможно завершить о��работку`,
+        `У поддона ${palletId} не указан текущий этап обработки. Невозможно завершить обработку`,
       );
     }
 
@@ -324,19 +343,145 @@ export class PalletService {
     }
 
     // Определяем следующий этап обработки, если есть маршрут
-    let nextStepId: number | null = null;
     const detail = pallet.detail;
     const route = detail.route;
 
-    if (route && operation.stepSequenceInRoute !== null) {
-      // Ищем следующий шаг в маршруте
+    // По умолчанию устанавливаем nextStepId в null - это означает, что следующего этапа нет
+    let nextStepId: number | null = null;
+
+    // Логгирование для отладки исходных данных
+    this.logger.debug(`Определение следующего этапа для поддона ${palletId}:`);
+    this.logger.debug(`- Текущий этап: ${currentStepId}`);
+    this.logger.debug(
+      `- StepSequenceInRoute: ${operation.stepSequenceInRoute}`,
+    );
+
+    // Случай 1: Есть маршрут и известен порядковый номер в маршруте
+    if (
+      route &&
+      operation.stepSequenceInRoute !== null &&
+      operation.stepSequenceInRoute !== undefined
+    ) {
+      this.logger.debug(
+        `Поиск по маршруту, текущая последовательность: ${operation.stepSequenceInRoute}`,
+      );
+
+      // Вычисляем следующий порядковый номер в маршруте
+      const nextSequence = operation.stepSequenceInRoute + 1;
+
+      // Ищем шаг с этим порядковым номером
       const nextRouteStep = route.steps.find(
-        (step) => step.sequence === (operation.stepSequenceInRoute || 0) + 1,
+        (step) => step.sequence === nextSequence,
       );
 
       if (nextRouteStep) {
         nextStepId = nextRouteStep.processStepId;
+        this.logger.log(
+          `Найден следующий этап ${nextStepId} (последовательность ${nextSequence}) в маршруте`,
+        );
+      } else {
+        this.logger.log(
+          `Следующий этап (последовательность ${nextSequence}) в маршруте не найден, это последний этап`,
+        );
+        nextStepId = null; // Явно указываем, что этапов больше нет
       }
+    }
+    // Случай 2: Есть маршрут, но не установлен порядковый номер - пытаемся найти текущий шаг в маршруте
+    else if (route && route.steps.length > 0) {
+      this.logger.debug(`Поиск по маршруту без известной последовательности`);
+
+      // Находим текущий шаг в маршруте
+      const currentRouteStep = route.steps.find(
+        (step) => step.processStepId === currentStepId,
+      );
+
+      if (currentRouteStep) {
+        // Нашли текущий шаг, ищем следующий по последовательности
+        const currentSequence = currentRouteStep.sequence;
+        const nextRouteStep = route.steps.find(
+          (step) => step.sequence === currentSequence + 1,
+        );
+
+        if (nextRouteStep) {
+          nextStepId = nextRouteStep.processStepId;
+          this.logger.log(
+            `Найден следующий этап ${nextStepId} (последовательность ${currentSequence + 1}) в маршруте`,
+          );
+        } else {
+          this.logger.log(
+            `Следующий этап после ${currentSequence} в маршруте не найден, это последний этап`,
+          );
+          nextStepId = null;
+        }
+      } else {
+        this.logger.warn(
+          `Текущий этап ${currentStepId} не найден в маршруте детали, невозможно определить следующий`,
+        );
+      }
+    }
+    // Случай 3: Нет маршрута, пытаемся найти этап в последовательности сегмента
+    else if (machine.segmentId) {
+      this.logger.debug(`Поиск через сегмент станка ${machine.segmentId}`);
+
+      const segment = await this.prisma.productionSegment.findUnique({
+        where: { id: machine.segmentId },
+        include: {
+          processSteps: {
+            include: {
+              processStep: true,
+            },
+            orderBy: {
+              processStep: {
+                sequence: 'asc',
+              },
+            },
+          },
+        },
+      });
+
+      if (segment && segment.processSteps.length > 0) {
+        // Находим текущий этап в списке этапов сегмента
+        const currentStepIndex = segment.processSteps.findIndex(
+          (segmentStep) => segmentStep.processStepId === currentStepId,
+        );
+
+        this.logger.debug(
+          `Индекс текущего этапа в сегменте: ${currentStepIndex}, всего этапов: ${segment.processSteps.length}`,
+        );
+
+        // Если текущий этап найден и есть следующий, устанавливаем его
+        if (
+          currentStepIndex >= 0 &&
+          currentStepIndex < segment.processSteps.length - 1
+        ) {
+          nextStepId = segment.processSteps[currentStepIndex + 1].processStepId;
+          this.logger.log(`Найден следующий этап ${nextStepId} по сегменту`);
+        } else if (currentStepIndex >= 0) {
+          this.logger.log(`Это последний этап в сегменте`);
+          nextStepId = null;
+        } else {
+          this.logger.warn(
+            `Текущий этап ${currentStepId} не найден в сегменте ${machine.segmentId}`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          `Сегмент ${machine.segmentId} не найден или не имеет этапов обработки`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Нет ни маршрута, ни сегмента - невозможно определить следующий этап`,
+      );
+    }
+
+    // Проверяем, изменился ли следующий этап по сравнению с текущим
+    const isNextStepSameAsCurrent = nextStepId === currentStepId;
+    if (isNextStepSameAsCurrent && nextStepId !== null) {
+      this.logger.warn(
+        `Внимание: Следующий этап (${nextStepId}) совпадает с текущим. ` +
+          `Возможно, неправильно настроен маршрут или последовательность этапов.`,
+      );
     }
 
     // Транзакция для атомарного обновления
@@ -357,6 +502,7 @@ export class PalletService {
       const updatedPallet = await prisma.productionPallets.update({
         where: { id: pallet.id },
         data: {
+          // Если nextStepId null, значит это был последний этап, поэтому устанавливаем null
           currentStepId: nextStepId,
         },
         include: {
@@ -404,12 +550,15 @@ export class PalletService {
         }
       }
 
+      let nextStepMessage = 'Обработка полностью завершена';
+      if (nextStepId !== null) {
+        nextStepMessage = `Установлен следующий этап обработки: ${nextStepId}`;
+      }
+
       return {
         operation: updatedOperation,
         pallet: updatedPallet,
-        nextStep: nextStepId
-          ? 'Установлен следующий этап обработки'
-          : 'Обработка завершена',
+        nextStep: nextStepMessage,
       };
     });
   }

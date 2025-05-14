@@ -71,6 +71,8 @@ export class AuthService {
 
     switch (roleName.toLowerCase()) {
       case 'operator':
+      case 'ypakoperator':
+      case 'nosmen':
         // Для операторов получаем привязанные станки
         const machines = await this.prisma.machine.findMany({
           where: {
@@ -95,6 +97,7 @@ export class AuthService {
         break;
 
       case 'master':
+      case 'ypakmaster':
         // Для мастеров получаем контролируемые участки
         const segments = await this.prisma.productionSegment.findMany({
           where: {
@@ -118,6 +121,7 @@ export class AuthService {
         break;
 
       case 'admin':
+      case 'complect':
         // Для администраторов можно вернуть полный доступ или специфичную информацию
         // В данном случае оставляем пустым, так как админы имеют доступ ко всему
         break;

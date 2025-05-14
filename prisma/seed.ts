@@ -1,4 +1,3 @@
-
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
@@ -12,7 +11,6 @@ async function main() {
   const adminRole = await prisma.role.create({ data: { name: 'admin' } });
   const operatorRole = await prisma.role.create({ data: { name: 'operator' } });
   const masterRole = await prisma.role.create({ data: { name: 'master' } });
-
 
   // Создаём пользователей с дополнительными данными
   const adminUser = await prisma.user.create({
@@ -57,6 +55,15 @@ async function main() {
       name: 'Присадка',
       sequence: 3,
       description: 'Сверление отверстий в мебельных деталях',
+    },
+  });
+
+  // Добавляем новый этап обработки - Упаковка
+  const processStepPackaging = await prisma.processStep.create({
+    data: {
+      name: 'Упаковка',
+      sequence: 4,
+      description: 'Упаковка готовых деталей в транспортировочную тару',
     },
   });
 
@@ -128,6 +135,21 @@ async function main() {
     },
   });
 
+  // Создаем буфер для участка упаковки
+  const packagingBuffer = await prisma.buffer.create({
+    data: {
+      name: 'Буфер участка упаковки',
+      description: 'Буфер для участка упаковки',
+      location: 'Цех упаковки',
+      cells: {
+        create: [
+          { code: 'U1', capacity: 2, status: 'AVAILABLE' },
+          { code: 'U2', capacity: 2, status: 'AVAILABLE' },
+        ],
+      },
+    },
+  });
+
   // ======================================================
   // 4. Модуль производственных линий и участков
   // ======================================================
@@ -186,6 +208,23 @@ async function main() {
         create: [
           {
             processStep: { connect: { id: processStepPrisadka.id } },
+            isPrimary: true,
+          },
+        ],
+      },
+    },
+  });
+
+  // 4. Создаем Участок упаковки
+  const packagingSegment = await prisma.productionSegment.create({
+    data: {
+      name: 'Участок упаковки',
+      line: { connect: { id: furnitureLine.id } },
+      buffer: { connect: { id: packagingBuffer.id } },
+      processSteps: {
+        create: [
+          {
+            processStep: { connect: { id: processStepPackaging.id } },
             isPrimary: true,
           },
         ],
@@ -295,6 +334,24 @@ async function main() {
         create: [
           {
             processStep: { connect: { id: processStepPrisadka.id } },
+            isDefault: true,
+          },
+        ],
+      },
+    },
+  });
+
+  // Создаем станок для участка упаковки
+  const packagingMachine = await prisma.machine.create({
+    data: {
+      name: 'Упаковочная машина Minipack FM-76',
+      status: 'ACTIVE',
+      recommendedLoad: 60,
+      segment: { connect: { id: packagingSegment.id } },
+      processSteps: {
+        create: [
+          {
+            processStep: { connect: { id: processStepPackaging.id } },
             isDefault: true,
           },
         ],
@@ -481,6 +538,65 @@ async function main() {
     },
   });
 
+  // Создаем пользователей для участка упаковки
+  // 1. Мастер упаковки
+  const packagingMaster = await prisma.user.create({
+    data: {
+      username: 'packaging_master',
+      password: bcrypt.hashSync('12345', 10),
+      role: { connect: { id: masterRole.id } },
+      details: {
+        create: {
+          fullName: 'Васильев Сергей Александрович',
+          phone: '9053334455',
+          position: 'Мастер участка упаковки',
+          salary: 83000,
+        },
+      },
+      supervisedSegments: {
+        connect: [{ id: packagingSegment.id }],
+      },
+    },
+  });
+
+  // 2. Комплектовщик
+  const packagingAssembler = await prisma.user.create({
+    data: {
+      username: 'packaging_assembler',
+      password: bcrypt.hashSync('12345', 10),
+      role: { connect: { id: operatorRole.id } },
+      details: {
+        create: {
+          fullName: 'Андреева Мария Викторовна',
+          phone: '9057778899',
+          position: 'Комплектовщик участка упаковки',
+          salary: 58000,
+        },
+      },
+      // Комплектовщик не привязан к конкретному станку
+    },
+  });
+
+  // 3. Оператор упаковочной машины
+  const packagingOperator = await prisma.user.create({
+    data: {
+      username: 'packaging_operator',
+      password: bcrypt.hashSync('12345', 10),
+      role: { connect: { id: operatorRole.id } },
+      details: {
+        create: {
+          fullName: 'Григорьев Павел Игоревич',
+          phone: '9051112233',
+          position: 'Оператор упаковочной машины',
+          salary: 62000,
+        },
+      },
+      assignedMachines: {
+        connect: [{ id: packagingMachine.id }],
+      },
+    },
+  });
+
   // ======================================================
   // 7. Создаём маршруты обработки
   // ======================================================
@@ -502,6 +618,10 @@ async function main() {
           {
             processStep: { connect: { id: processStepPrisadka.id } },
             sequence: 3,
+          },
+          {
+            processStep: { connect: { id: processStepPackaging.id } },
+            sequence: 4,
           },
         ],
       },
@@ -526,6 +646,10 @@ async function main() {
             processStep: { connect: { id: processStepPokleyka.id } },
             sequence: 3,
           },
+          {
+            processStep: { connect: { id: processStepPackaging.id } },
+            sequence: 4,
+          },
         ],
       },
     },
@@ -549,6 +673,7 @@ async function main() {
   // УПАК 1-1: Корпусы шкафов
   const ypak1_1 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-001',
       name: 'Корпусы шкафов',
       progress: 30,
       order: { connect: { id: order1.id } },
@@ -558,6 +683,7 @@ async function main() {
   // УПАК 1-2: Фасады
   const ypak1_2 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-002',
       name: 'Фасады',
       progress: 50,
       order: { connect: { id: order1.id } },
@@ -637,6 +763,7 @@ async function main() {
   // УПАК 2-1: Корпус шкафа-купе
   const ypak2_1 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-003',
       name: 'Корпус шкафа-купе',
       progress: 70,
       order: { connect: { id: order2.id } },
@@ -646,6 +773,7 @@ async function main() {
   // УПАК 2-2: Двери шкафа-купе
   const ypak2_2 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-004',
       name: 'Двери шкафа-купе',
       progress: 50,
       order: { connect: { id: order2.id } },
@@ -725,6 +853,7 @@ async function main() {
   // УПАК 3-1: Столы
   const ypak3_1 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-005',
       name: 'Столы',
       progress: 30,
       order: { connect: { id: order3.id } },
@@ -734,6 +863,7 @@ async function main() {
   // УПАК 3-2: Тумбы
   const ypak3_2 = await prisma.productionYpak.create({
     data: {
+      article: 'YPAK-006',
       name: 'Тумбы',
       progress: 10,
       order: { connect: { id: order3.id } },
@@ -799,139 +929,72 @@ async function main() {
     },
   });
 
-  // ======================================================
-  // 9. Создаём статусы деталей для участков
-  // ======================================================
-
-  // Статусы для участка раскроя
-  await prisma.detailSegmentStatus.create({
+  // ----- Заказ 4: Офисные перегородки -----
+  const order4 = await prisma.productionOrder.create({
     data: {
-      detail: { connect: { id: detail1.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail2.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail3.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail4.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail5.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail6.id } },
-      segment: { connect: { id: raskroySegment.id } },
-      isCompleted: false,
+      runNumber: 'ORD-2023-004',
+      name: 'Офисные перегородки "Оптима"',
+      progress: 15,
+      allowedToRun: true,
+      completed: false,
     },
   });
 
-  // Статусы для участка поклейки
-  await prisma.detailSegmentStatus.create({
+  // УПАК 4-1: Перегородки
+  const ypak4_1 = await prisma.productionYpak.create({
     data: {
-      detail: { connect: { id: detail1.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail2.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail3.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail4.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail5.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail6.id } },
-      segment: { connect: { id: pokleykaSegment.id } },
-      isCompleted: false,
+      article: 'YPAK-007',
+      name: 'Перегородки офисные',
+      progress: 15,
+      order: { connect: { id: order4.id } },
     },
   });
 
-  // Статусы для участка присадки
-  await prisma.detailSegmentStatus.create({
+  // Деталь для заказа 4
+  const detail7 = await prisma.productionDetail.create({
     data: {
-      detail: { connect: { id: detail1.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
+      article: 'PEREG-1800',
+      name: 'Панель перегородки 1800 мм',
+      material: 'ЛДСП 16 мм серый',
+      size: '1800x1200x16',
+      totalNumber: 6,
+      route: { connect: { id: standardRoute.id } },
     },
   });
-  await prisma.detailSegmentStatus.create({
+
+  // Связываем детали с УПАКами
+  await prisma.productionYpakDetail.create({
     data: {
-      detail: { connect: { id: detail2.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
+      ypak: { connect: { id: ypak4_1.id } },
+      detail: { connect: { id: detail7.id } },
+      quantity: 6,
     },
   });
-  await prisma.detailSegmentStatus.create({
+
+  // Создаем поддон для деталей
+  const pallet7 = await prisma.productionPallets.create({
     data: {
-      detail: { connect: { id: detail3.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
+      name: 'Поддон PEREG-1800-1',
+      quantity: 6,
+      detail: { connect: { id: detail7.id } },
+      currentStep: { connect: { id: processStepRaskroy.id } },
     },
   });
-  await prisma.detailSegmentStatus.create({
+
+  // Создаем операции для поддонов на этапе упаковки
+  // Это поможет тестировать функционал мастера упаковки
+  const packagingOperation1 = await prisma.detailOperation.create({
     data: {
-      detail: { connect: { id: detail4.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail5.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
-    },
-  });
-  await prisma.detailSegmentStatus.create({
-    data: {
-      detail: { connect: { id: detail6.id } },
-      segment: { connect: { id: prisadkaSegment.id } },
-      isCompleted: false,
+      productionPallet: { connect: { id: pallet3.id } },
+      processStep: { connect: { id: processStepPackaging.id } },
+      machine: { connect: { id: packagingMachine.id } },
+      operator: { connect: { id: packagingOperator.id } },
+      master: { connect: { id: packagingMaster.id } },
+      status: 'IN_PROGRESS',
+      completionStatus: 'IN_PROGRESS',
+      quantity: 4,
+      stepSequenceInRoute: 4,
+      isCompletedForDetail: false,
     },
   });
 
