@@ -8,7 +8,8 @@ async function bootstrap() {
 
   // Включаем CORS для веб-приложения
   app.enableCors({
-    origin: 'http://localhost:3000', // Или IP/домен твоего фронтенда
+    // origin: 'http://localhost:3000', // Или IP/домен твоего фронтенда
+    origin: 'http://91.222.236.176:3000', // Или IP/домен твоего фронтенда
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,   // Разрешаем передачу куки и заголовков авторизации
   });
