@@ -7,10 +7,14 @@ import {
   PalletsResponseDto,
   SegmentOrdersResponseDto,
 } from '../dto/machineNoSmen.dto';
+import { EventsGateway } from 'src/modules/websocket/events.gateway';
 
 @Injectable()
 export class MachinNoSmenService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   /**
    * Получить подробную информацию о станке по его ID
@@ -62,6 +66,15 @@ export class MachinNoSmenService {
         segment: true,
       },
     });
+
+    // Отправляем событие всем клиентам из комнаты 'machines'
+    const Machine = {
+      id: updatedMachine.id,
+      name: updatedMachine.name,
+      status: updatedMachine.status,
+      // …другие нужные поля
+    };
+    this.eventsGateway.server.to('machines').emit('updateStatus', Machine);
 
     return {
       id: updatedMachine.id,

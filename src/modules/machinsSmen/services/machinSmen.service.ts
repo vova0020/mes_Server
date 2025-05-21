@@ -63,6 +63,7 @@ export class MachinSmenService {
       },
     });
 
+
     return {
       id: updatedMachine.id,
       name: updatedMachine.name,

@@ -11,6 +11,7 @@ import { MachinsMasterModule } from './modules/machinsMaster/machin.module';
 import { MachinNoSmenModule } from './modules/machinsNoSmen/machin.module';
 import { MachinModule } from './modules/machinsSmen/machin.module';
 import { YpakModule } from './modules/ypakBlok/ypak.module';
+import { WebsocketModule } from './modules/websocket/websocket.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { YpakModule } from './modules/ypakBlok/ypak.module';
     MachinNoSmenModule,
     MachinModule,
     YpakModule,
+    WebsocketModule,
   ],
 })
 export class AppModule {}

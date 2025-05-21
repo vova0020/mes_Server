@@ -1,11 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { OperationStatus } from '@prisma/client';
+import { EventsGateway } from 'src/modules/websocket/events.gateway';
 
 @Injectable()
 export class PalletService {
   private readonly logger = new Logger(PalletService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   /**
    * Начать обработку поддона на станке
@@ -148,7 +152,7 @@ export class PalletService {
         `Поддон ${palletId} уже находится в обработке на текущем станке ${machineId}, обновляем операцию`,
       );
 
-      return this.prisma.detailOperation.update({
+      const upadePalets = await this.prisma.detailOperation.update({
         where: { id: operationOnCurrentMachine.id },
         data: {
           status: 'IN_PROGRESS',
@@ -169,6 +173,10 @@ export class PalletService {
           },
         },
       });
+      // Отправляем событие всем клиентам из комнаты 'palets'
+      this.eventsGateway.server.to('palets').emit('startWork', upadePalets);
+
+      return upadePalets;
     }
 
     // Определяем номер шага в маршруте
@@ -186,7 +194,7 @@ export class PalletService {
     }
 
     // Создаем новую запись об операции
-    return this.prisma.detailOperation.create({
+    const newPalets = await this.prisma.detailOperation.create({
       data: {
         productionPalletId: palletId,
         processStepId: currentStepId,
@@ -212,6 +220,10 @@ export class PalletService {
         },
       },
     });
+    // Отправляем событие всем клиентам из комнаты 'palets'
+    this.eventsGateway.server.to('palets').emit('startWork', newPalets);
+
+    return newPalets;
   }
 
   /**

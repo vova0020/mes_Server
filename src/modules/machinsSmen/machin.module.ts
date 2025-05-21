@@ -7,9 +7,10 @@ import { TaskDetailController } from './controllers/taskDetail.controller';
 import { TaskDetailService } from './services/taskDetail.service';
 import { MachinSmenController } from './controllers/machinSmen.controller';
 import { MachinSmenService } from './services/machinSmen.service';
+import { WebsocketModule } from '../websocket/websocket.module';
 
 @Module({
-  imports: [SharedModule],
+  imports: [SharedModule, WebsocketModule],
   controllers: [PalletController, TaskDetailController, MachinSmenController],
   providers: [PalletService, TaskDetailService, MachinSmenService],
   exports: [PalletService, TaskDetailService, MachinSmenService],
