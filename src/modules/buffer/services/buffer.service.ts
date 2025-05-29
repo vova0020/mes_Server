@@ -153,47 +153,4 @@ export class BuffersService {
   }
 
   // Получение детальной информации о конкретной ячейке буфера по ID
-  async getBufferCellById(id: number) {
-    this.logger.log(`Запрос на получение ячейки буфера с ID: ${id}`);
-
-    try {
-      const bufferCell = await this.prisma.bufferCell.findUnique({
-        where: { id },
-        include: {
-          buffer: true,
-          pallets: {
-            include: {
-              detail: true,
-              detailOperations: {
-                include: {
-                  processStep: true,
-                  machine: true,
-                  operator: {
-                    select: {
-                      id: true,
-                      username: true,
-                      details: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!bufferCell) {
-        this.logger.warn(`Ячейка буфера с ID ${id} не най��ена`);
-        return null;
-      }
-
-      this.logger.log(`Получена ячейка буфера с ID: ${id}`);
-      return bufferCell;
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении ячейки буфера с ID ${id}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
 }

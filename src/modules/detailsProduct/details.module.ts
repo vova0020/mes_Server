@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
-import { DetailsController } from './controllers/details.controller';
-import { DetailsService } from './services/details.service';
+import { DetailsMasterController } from './controllers/detailsMaster.controller';
+import { DetailsMasterService } from './services/detailsMaster.service';
 import { SharedModule } from '../../shared/shared.module';
+import { DetailsMachinsController } from './controllers/dateilsMachins.controller';
+import { DetailsMachinNoSmenService } from './services/detailsMachinNoSmen.service';
 
 @Module({
   imports: [SharedModule],
-  controllers: [DetailsController],
-  providers: [DetailsService],
-  exports: [DetailsService],
+  controllers: [DetailsMasterController, DetailsMachinsController],
+  providers: [DetailsMasterService, DetailsMachinNoSmenService],
+  exports: [DetailsMasterService, DetailsMachinNoSmenService],
 })
 export class DetailsModule {}

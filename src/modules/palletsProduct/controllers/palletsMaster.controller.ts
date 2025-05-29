@@ -1,38 +1,56 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
-  Controller,
-  Post,
-  Get,
+  BadRequestException,
   Body,
+  Controller,
+  Get,
+  InternalServerErrorException,
+  NotFoundException,
   Param,
   ParseIntPipe,
-  NotFoundException,
-  BadRequestException,
-  InternalServerErrorException,
-  Logger,
+  Post,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiParam,
+  ApiResponse,
   ApiBody,
 } from '@nestjs/swagger';
-import { PalletOperationsService } from '../services/pallet-operations.service';
+import { PalletsMasterService } from '../services/pallets-Master.service';
 import {
   AssignPalletToMachineDto,
   MovePalletToBufferDto,
-  UpdateOperationStatusDto,
   PalletOperationResponseDto,
-} from '../dto/pallet-operations.dto';
+  PalletsResponseDto,
+  UpdateOperationStatusDto,
+} from '../dto/pallet-master.dto';
 
-@ApiTags('pallet-operations')
-@Controller('pallet-operations')
-export class PalletOperationsController {
-  private readonly logger = new Logger(PalletOperationsController.name);
+@ApiTags('master pallets')
+@Controller('master')
+export class PalletsMasterController {
+  logger: any;
+  palletOperationsService: any;
+  constructor(private readonly palletsService: PalletsMasterService) {}
 
-  constructor(
-    private readonly palletOperationsService: PalletOperationsService,
-  ) {}
+  @Get('pallets/:detailId')
+  @ApiOperation({
+    summary: 'Получить поддоны по ID детали для страницы мастера',
+  })
+  @ApiParam({ name: 'detailId', description: 'ID детали', type: Number })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Список поддонов с информацией о буфере и станке для страницы мастера',
+    type: PalletsResponseDto,
+  })
+  async getPalletsByDetailId(
+    @Param('detailId', ParseIntPipe) detailId: number,
+  ): Promise<PalletsResponseDto> {
+    return this.palletsService.getPalletsByDetailId(detailId);
+  }
 
   @Post('assign-to-machine')
   @ApiOperation({ summary: 'Назначить поддон на станок' })
@@ -108,9 +126,10 @@ export class PalletOperationsController {
       );
     }
   }
-
   @Post('update-status')
-  @ApiOperation({ summary: 'Обновить статус операции (гот��во/в работе/выполнено частично)' })
+  @ApiOperation({
+    summary: 'Обновить статус операции (готово/в работе/выполнено частично)',
+  })
   @ApiBody({ type: UpdateOperationStatusDto })
   @ApiResponse({
     status: 200,
@@ -137,81 +156,11 @@ export class PalletOperationsController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(`Ошибка при обновлении статуса операции: ${error.message}`);
+      this.logger.error(
+        `Ошибка при обновлении статуса операции: ${error.message}`,
+      );
       throw new InternalServerErrorException(
         'Произошла ошибка при обновлении статуса операции',
-      );
-    }
-  }
-
-  @Get('active')
-  @ApiOperation({ summary: 'Получить список активных операций' })
-  @ApiResponse({
-    status: 200,
-    description: 'Список активных операций успешно получен',
-  })
-  async getActiveOperations() {
-    this.logger.log('Получен запрос на получение активных операций');
-
-    try {
-      return await this.palletOperationsService.getActiveOperations();
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении активных операций: ${error.message}`,
-      );
-      throw new InternalServerErrorException(
-        'Произошла ошибка при получении активных операций',
-      );
-    }
-  }
-
-  @Get('buffered')
-  @ApiOperation({ summary: 'Получить список поддонов в буфере' })
-  @ApiResponse({
-    status: 200,
-    description: 'Список поддонов в буфере успешно получен',
-  })
-  async getBufferedOperations() {
-    this.logger.log('Получен запрос на получение поддонов в буфере');
-
-    try {
-      return await this.palletOperationsService.getBufferedOperations();
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении поддонов в бу��ере: ${error.message}`,
-      );
-      throw new InternalServerErrorException(
-        'Произошла ошибка при получении поддонов в буфере',
-      );
-    }
-  }
-
-  @Get('history/:palletId')
-  @ApiOperation({ summary: 'Получить историю операций для поддона' })
-  @ApiParam({ name: 'palletId', description: 'ID поддона' })
-  @ApiResponse({
-    status: 200,
-    description: 'История операций успешно получена',
-  })
-  async getPalletOperationHistory(
-    @Param('palletId', ParseIntPipe) palletId: number,
-  ) {
-    this.logger.log(`Получен запрос на историю операций поддона ${palletId}`);
-
-    try {
-      return await this.palletOperationsService.getPalletOperationHistory(
-        palletId,
-      );
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      this.logger.error(
-        `Ошибка при получении истории операций поддона: ${error.message}`,
-      );
-      throw new InternalServerErrorException(
-        'Произошла ошибка при получении истории операций поддона',
       );
     }
   }

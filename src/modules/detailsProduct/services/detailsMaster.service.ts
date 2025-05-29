@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 
 @Injectable()
-export class DetailsService {
+export class DetailsMasterService {
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -245,32 +245,5 @@ export class DetailsService {
 
     // Преобразуем Map в массив для ответа
     return Array.from(detailsMap.values());
-  }
-
-  /**
-   * Получение списка деталей для указанного заказа и учетной записи мастера
-   * @param orderId - ID производственного заказа
-   * @param userId - ID пользователя (мастера)
-   */
-  async getDetailsByOrderIdForMaster(orderId: number, userId: number) {
-    // Находим участок, к которому привязан мастер
-    const userSegment = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        supervisedSegments: {
-          select: { id: true },
-          take: 1,
-        },
-      },
-    });
-
-    if (!userSegment || userSegment.supervisedSegments.length === 0) {
-      throw new NotFoundException(
-        `Пользователь с ID ${userId} не является мастером или не привязан к участку`,
-      );
-    }
-
-    const segmentId = userSegment.supervisedSegments[0].id;
-    return this.getDetailsByOrderId(orderId, segmentId);
   }
 }

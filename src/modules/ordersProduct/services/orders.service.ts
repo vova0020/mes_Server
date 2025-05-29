@@ -4,11 +4,11 @@ import { OrderQueryDto } from '../dto/order-query.dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  // Получение списка заказов с фильтрами и пагинацией
+  // Получение списка заказов с фильтрами (без пагинации)
   async getOrders(query: OrderQueryDto) {
-    const { active, page = 1, limit = 10, showAll = false } = query;
+    const { active, showAll = false } = query;
 
     // Определяем условие фильтрации
     let whereClause = {};
@@ -25,8 +25,6 @@ export class OrdersService {
 
     return this.prisma.productionOrder.findMany({
       where: whereClause,
-      skip: (page - 1) * limit,
-      take: limit,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

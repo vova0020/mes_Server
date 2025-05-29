@@ -1,13 +1,103 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
+import {
+  OperationCompletionStatus,
+  PalletDto,
+  PalletsResponseDto,
+} from '../dto/pallet-master.dto';
 import { OperationStatus } from '@prisma/client';
-import { OperationCompletionStatus } from '../dto/pallet-operations.dto';
 
 @Injectable()
-export class PalletOperationsService {
-  private readonly logger = new Logger(PalletOperationsService.name);
+export class PalletsMasterService {
+  private readonly logger = new Logger(PalletsMasterService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * Получить все поддоны по ID детали
+   * @param detailId ID детали
+   * @returns Список поддонов с информацией о буфере, станке и текущей операции
+   */
+  async getPalletsByDetailId(detailId: number): Promise<PalletsResponseDto> {
+    // Получаем все поддоны для указанной детали
+    const pallets = await this.prisma.productionPallets.findMany({
+      where: {
+        detailId,
+      },
+      include: {
+        // Включаем данные о ячейке буфера (если поддон находится в буфере)
+        bufferCell: {
+          include: {
+            buffer: true, // Включаем данные о буфере для получения его имени
+          },
+        },
+        // Включаем данные о текущей операции для получения информации о станке и статусе
+        detailOperations: {
+          include: {
+            machine: true, // Включаем данные о станке
+            processStep: true, // Включаем данные о шаге процесса
+          },
+          orderBy: {
+            startedAt: 'desc', // Сортируем по дате начала, чтобы получить самую последнюю операцию
+          },
+          take: 1, // Берём только последнюю операцию
+        },
+      },
+    });
+
+    // Преобразуем данные в формат DTO
+    const palletDtos: PalletDto[] = pallets.map((pallet) => {
+      // Получаем текущую операцию и связанный с ней станок (если есть)
+      const currentOperation = pallet.detailOperations[0];
+      const machine = currentOperation?.machine || null;
+
+      return {
+        id: pallet.id,
+        name: pallet.name,
+        quantity: pallet.quantity,
+        detailId: pallet.detailId,
+        // Форматируем данные о ячейке буфера (если есть)
+        bufferCell: pallet.bufferCell
+          ? {
+              id: pallet.bufferCell.id,
+              code: pallet.bufferCell.code,
+              bufferId: pallet.bufferCell.bufferId,
+              bufferName: pallet.bufferCell.buffer?.name,
+            }
+          : null,
+        // Форматируем данные о станке (если есть)
+        machine: machine
+          ? {
+              id: machine.id,
+              name: machine.name,
+              status: machine.status,
+            }
+          : null,
+        // Добавляем информацию о текущей операции
+        currentOperation: currentOperation
+          ? {
+              id: currentOperation.id,
+              status: currentOperation.status,
+              completionStatus: currentOperation.completionStatus || undefined,
+              startedAt: currentOperation.startedAt,
+              completedAt: currentOperation.completedAt || undefined,
+              processStep: currentOperation.processStep
+                ? {
+                    id: currentOperation.processStep.id,
+                    name: currentOperation.processStep.name,
+                    sequence: currentOperation.processStep.sequence,
+                  }
+                : undefined,
+            }
+          : null,
+      };
+    });
+
+    return {
+      pallets: palletDtos,
+      total: palletDtos.length,
+    };
+  }
 
   /**
    * Назначить поддон на станок
@@ -22,7 +112,9 @@ export class PalletOperationsService {
     segmentId: number, // переименовано для ясности - фактически это ID участка
     operatorId?: number,
   ) {
-    this.logger.log(`Назначение поддона ${palletId} на станок ${machineId} (участок ${segmentId})`);
+    this.logger.log(
+      `Назначение поддона ${palletId} на станок ${machineId} (участок ${segmentId})`,
+    );
 
     try {
       // Проверяем существование поддона
@@ -61,19 +153,23 @@ export class PalletOperationsService {
 
       // Ищем соответствующий этап обработки для данного участка
       // Приоритет отдается этапу, отмеченному как основной (isPrimary = true)
-      const segmentProcessStep = await this.prisma.segmentProcessStep.findFirst({
-        where: {
-          segmentId: segmentId,
-          isPrimary: true
+      const segmentProcessStep = await this.prisma.segmentProcessStep.findFirst(
+        {
+          where: {
+            segmentId: segmentId,
+            isPrimary: true,
+          },
+          include: { processStep: true },
         },
-        include: { processStep: true }
-      });
+      );
 
       // Если основной этап не найден, берем любой связанный с участком этап
-      const anySegmentProcessStep = segmentProcessStep || await this.prisma.segmentProcessStep.findFirst({
-        where: { segmentId: segmentId },
-        include: { processStep: true }
-      });
+      const anySegmentProcessStep =
+        segmentProcessStep ||
+        (await this.prisma.segmentProcessStep.findFirst({
+          where: { segmentId: segmentId },
+          include: { processStep: true },
+        }));
 
       if (!anySegmentProcessStep) {
         throw new NotFoundException(
@@ -85,7 +181,9 @@ export class PalletOperationsService {
       const processStepId = anySegmentProcessStep.processStepId;
       const processStep = anySegmentProcessStep.processStep;
 
-      this.logger.log(`Для участка ${segmentId} выбран этап обработки: ${processStep.name} (ID: ${processStepId})`);
+      this.logger.log(
+        `Для участка ${segmentId} выбран этап обработки: ${processStep.name} (ID: ${processStepId})`,
+      );
 
       // Проверяем, есть ли существующая активная операция для данного поддона и этапа процесса
       const existingOperation = await this.prisma.detailOperation.findFirst({
@@ -401,146 +499,6 @@ export class PalletOperationsService {
     } catch (error) {
       this.logger.error(
         `Ошибка при обновлении статуса операции: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Получить активные операции
-   */
-  async getActiveOperations() {
-    this.logger.log('Получение списка активных операций');
-
-    try {
-      const activeOperations = await this.prisma.detailOperation.findMany({
-        where: {
-          status: OperationStatus.IN_PROGRESS,
-        },
-        include: {
-          machine: true,
-          processStep: true,
-          productionPallet: {
-            include: {
-              detail: true,
-              bufferCell: {
-                include: {
-                  buffer: true,
-                },
-              },
-            },
-          },
-          operator: {
-            include: {
-              details: true,
-            },
-          },
-        },
-        orderBy: {
-          startedAt: 'desc',
-        },
-      });
-
-      return activeOperations;
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении активных операций: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Получить операции в буфере
-   */
-  async getBufferedOperations() {
-    this.logger.log('Получение списка операций связанных с поддонами в буфере');
-
-    try {
-      // Получаем список поддонов, находящихся в буфере
-      const palletsInBuffer = await this.prisma.productionPallets.findMany({
-        where: {
-          bufferCellId: { not: null }, // Поддоны, которые находятся в каких-либо ячейках буфера
-        },
-        include: {
-          detail: true,
-          bufferCell: {
-            include: {
-              buffer: true,
-            },
-          },
-          detailOperations: {
-            where: {
-              status: OperationStatus.IN_PROGRESS, // Только активные операции
-            },
-            include: {
-              processStep: true,
-              machine: true,
-            },
-            orderBy: {
-              startedAt: 'desc',
-            },
-          },
-        },
-      });
-
-      return palletsInBuffer;
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении поддонов в буфере: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Получить историю операций для конкретного поддона
-   */
-  async getPalletOperationHistory(palletId: number) {
-    this.logger.log(`Получение истории операций для поддона ${palletId}`);
-
-    try {
-      // Проверяем существование поддона
-      const pallet = await this.prisma.productionPallets.findUnique({
-        where: { id: palletId },
-      });
-
-      if (!pallet) {
-        throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
-      }
-
-      const operations = await this.prisma.detailOperation.findMany({
-        where: {
-          productionPalletId: palletId,
-        },
-        include: {
-          machine: true,
-          processStep: true,
-          operator: {
-            include: {
-              details: true,
-            },
-          },
-          master: {
-            include: {
-              details: true,
-            },
-          },
-        },
-        orderBy: {
-          startedAt: 'desc',
-        },
-      });
-
-      return {
-        palletId,
-        palletName: pallet.name,
-        detailId: pallet.detailId,
-        operations,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Ошибка при получении истории операций поддона: ${error.message}`,
       );
       throw error;
     }

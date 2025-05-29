@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { SharedModule } from '../../shared/shared.module';
-import { PalletsController } from './controllers/pallets.controller';
-import { PalletsService } from './services/pallets.service';
-import { PalletOperationsController } from './controllers/pallet-operations.controller';
-import { PalletOperationsService } from './services/pallet-operations.service';
+import { PalletsMasterController } from './controllers/palletsMaster.controller';
+import { PalletsMasterService } from './services/pallets-Master.service';
+import { PalletMachinController } from './controllers/palletsMachin.controller';
+import { PalletMachineService } from './services/pallets-Machine.service';
+import { TaskDetailService } from './services/taskDetail.service';
 
 @Module({
   imports: [SharedModule],
-  controllers: [PalletsController, PalletOperationsController],
-  providers: [PalletsService, PalletOperationsService],
-  exports: [PalletsService, PalletOperationsService],
+  controllers: [PalletsMasterController, PalletMachinController],
+  providers: [PalletsMasterService, PalletMachineService, TaskDetailService],
+  exports: [PalletsMasterService, PalletMachineService, TaskDetailService],
 })
 export class PalletsModule {}

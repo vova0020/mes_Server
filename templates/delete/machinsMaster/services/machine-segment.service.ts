@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   Logger,
@@ -6,19 +5,19 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
-import { MachineSegmentResponseDto } from '../dto/machine-segment.dto';
+import { MachineSegmentResponseDto } from '../../machins/dto/machine-segment.dto';
 import {
   MachineTaskResponseDto,
   UpdateTaskPriorityDto,
   MoveTaskDto,
-} from '../dto/machine-task.dto';
+} from '../../machins/dto/machine-task.dto';
 import { OperationStatus } from '@prisma/client';
 
 @Injectable()
 export class MachineSegmentService {
   private readonly logger = new Logger(MachineSegmentService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Получить все станки по ID участка с дополнительной информацией
@@ -75,23 +74,26 @@ export class MachineSegmentService {
       });
 
       // Формируем объект для быстрого доступа к количеству завершенных операций по ID станка
-      const completedQuantityByMachineId = completedOperations.reduce((acc, operation) => {
-        // Проверяем, что operation.machine не null
-        if (!operation.machine) {
-          return acc; // Пропускаем операции без указания станка
-        }
-        
-        const machineId = operation.machine.id;
-        
-        if (!acc[machineId]) {
-          acc[machineId] = 0;
-        }
-        
-        // Суммируем количеств�� деталей в завершенной операции
-        acc[machineId] += operation.quantity;
-        
-        return acc;
-      }, {});
+      const completedQuantityByMachineId = completedOperations.reduce(
+        (acc, operation) => {
+          // Проверяем, что operation.machine не null
+          if (!operation.machine) {
+            return acc; // Пропускаем операции без указания станка
+          }
+
+          const machineId = operation.machine.id;
+
+          if (!acc[machineId]) {
+            acc[machineId] = 0;
+          }
+
+          // Суммируем количеств�� деталей в завершенной операции
+          acc[machineId] += operation.quantity;
+
+          return acc;
+        },
+        {},
+      );
 
       // Формируем ответ с дополнительными вычисляемыми полями
       const resultMachines = machines.map((machine) => {
