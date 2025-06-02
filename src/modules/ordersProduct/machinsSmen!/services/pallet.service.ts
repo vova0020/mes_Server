@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../../shared/prisma.service';
+import { PrismaService } from '../../../../shared/prisma.service';
 import { OperationStatus } from '@prisma/client';
 import { EventsGateway } from 'src/modules/websocket/events.gateway';
 

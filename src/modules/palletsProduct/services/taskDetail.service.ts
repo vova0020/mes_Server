@@ -79,9 +79,6 @@ export class TaskDetailService {
           },
         },
       },
-      orderBy: {
-        priority: { sort: 'asc', nulls: 'last' }, // Сначала задания с приоритетом
-      },
     });
 
     // Группируем операции по деталям, чтобы избежать дублирования запросов
@@ -111,7 +108,6 @@ export class TaskDetailService {
           operationId: operation.id,
           processStepId: operation.processStep.id,
           processStepName: operation.processStep.name,
-          priority: operation.priority,
           quantity: operation.quantity,
           // Добавляем статус операции, чтобы на фронтенде можно было отобразить,
           // находится ли деталь в обработке или только назначена
@@ -148,7 +144,6 @@ export class TaskDetailService {
             operationId: operation.id,
             processStepId: existingItem.processStepId,
             processStepName: existingItem.processStepName,
-            priority: existingItem.priority,
             quantity: existingItem.quantity,
             status: operation.status,
             readyForProcessing: existingItem.readyForProcessing,

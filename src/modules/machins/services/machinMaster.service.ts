@@ -231,7 +231,6 @@ export class MachinMasterService {
         },
         // Сортировка по приоритету (сначала задания с приоритетом, затем - без)
         orderBy: [
-          { priority: 'asc' }, // Сначала сортируем по приоритету (меньшее значение - выше приоритет)
           { startedAt: 'asc' }, // Затем по времени начала операции
         ],
       });
@@ -250,7 +249,6 @@ export class MachinMasterService {
 
         return {
           operationId: operation.id,
-          priority: operation.priority,
           orderId: ypakDetail.ypak.order.id,
           orderName: ypakDetail.ypak.order.name,
           detailArticle: operation.productionPallet.detail.article,

@@ -55,9 +55,6 @@ export class TaskItemDto {
   @ApiProperty({ description: 'Название этапа обработки', example: 'Присадка' })
   processStepName: string;
 
-  @ApiProperty({ description: 'Приоритет задания', example: 1, nullable: true })
-  priority: number | null;
-
   @ApiProperty({ description: 'Количество деталей для обработки', example: 10 })
   quantity: number;
 

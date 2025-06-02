@@ -10,15 +10,15 @@ import { DetailsMasterService } from '../services/detailsMaster.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { PrismaService } from '../../../shared/prisma.service';
 
-@ApiTags('details')
-@Controller('details')
+@ApiTags('details/master')
+@Controller('details/master')
 export class DetailsMasterController {
   constructor(
     private readonly detailsService: DetailsMasterService,
     private readonly prisma: PrismaService,
   ) {}
 
-  @Get('master/:orderId/segment/:segmentId')
+  @Get(':orderId/segment/:segmentId')
   @ApiOperation({
     summary: 'Получить список деталей для заказа по конкретному участку',
   })

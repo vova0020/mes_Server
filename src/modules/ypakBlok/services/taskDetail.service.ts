@@ -76,9 +76,6 @@ export class TaskDetailService {
           },
         },
       },
-      orderBy: {
-        priority: { sort: 'asc', nulls: 'last' }, // Сортировка по приоритету
-      },
     });
 
     // Группируем операции по упаковкам, чтобы избежать дублирования
@@ -105,7 +102,6 @@ export class TaskDetailService {
           operationId: operation.id,
           processStepId: operation.processStep.id,
           processStepName: operation.processStep.name,
-          priority: operation.priority,
           quantity: operation.quantity,
           status: operation.status,
           totalQuantity: 0, // Будет обновлено позже

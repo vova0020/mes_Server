@@ -72,7 +72,6 @@ export class MachineTaskResponseDto {
     example: 1,
     nullable: true,
   })
-  priority: number | null;
 
   @ApiProperty({
     description: 'ID заказа',

@@ -11,6 +11,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,9 +32,12 @@ import {
 @ApiTags('master pallets')
 @Controller('master')
 export class PalletsMasterController {
-  logger: any;
-  palletOperationsService: any;
-  constructor(private readonly palletsService: PalletsMasterService) {}
+  // создаём собственный логгер с именем контроллера
+  private readonly logger = new Logger(PalletsMasterController.name);
+
+  // инжектим PalletsMasterService, но называем параметр palletOperationsService,
+  // чтобы он совпадал с тем, как вы его используете в методах ниже
+  constructor(private readonly palletOperationsService: PalletsMasterService) {}
 
   @Get('pallets/:detailId')
   @ApiOperation({
@@ -49,7 +53,7 @@ export class PalletsMasterController {
   async getPalletsByDetailId(
     @Param('detailId', ParseIntPipe) detailId: number,
   ): Promise<PalletsResponseDto> {
-    return this.palletsService.getPalletsByDetailId(detailId);
+    return this.palletOperationsService.getPalletsByDetailId(detailId);
   }
 
   @Post('assign-to-machine')
@@ -61,6 +65,7 @@ export class PalletsMasterController {
     type: PalletOperationResponseDto,
   })
   async assignPalletToMachine(@Body() assignDto: AssignPalletToMachineDto) {
+    // Теперь this.logger — не undefined
     this.logger.log(
       `Получен запрос на назначение поддона ${assignDto.palletId} на станок ${assignDto.machineId}`,
     );
@@ -126,6 +131,7 @@ export class PalletsMasterController {
       );
     }
   }
+
   @Post('update-status')
   @ApiOperation({
     summary: 'Обновить статус операции (готово/в работе/выполнено частично)',
