@@ -6,6 +6,7 @@ import {
   PalletsResponseDto,
 } from '../dto/pallet-master.dto';
 import { OperationStatus } from '@prisma/client';
+import { MachineTaskMasterResponseDto } from '../dto/machine-taskDetail.dto';
 
 @Injectable()
 export class PalletsMasterService {
@@ -499,6 +500,107 @@ export class PalletsMasterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при обновлении статуса операции: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Получить сменное задание для станка по его ID
+   * @param machineId ID станка
+   * @returns Массив заданий для станка со всеми необходимыми данными
+   */
+  async getMachineTasksById(
+    machineId: number,
+  ): Promise<MachineTaskMasterResponseDto[]> {
+    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}`);
+
+    try {
+      // Проверяем существование станка
+      const machine = await this.prisma.machine.findUnique({
+        where: { id: machineId },
+      });
+
+      if (!machine) {
+        throw new NotFoundException(`Станок с ID ${machineId} не найден`);
+      }
+
+      // Получаем операции (задания) для данного станка
+      const operations = await this.prisma.detailOperation.findMany({
+        where: {
+          machineId,
+          // Только актуальные операции, исключая завершенные
+          status: {
+            in: [
+              OperationStatus.ON_MACHINE,
+              OperationStatus.IN_PROGRESS,
+              OperationStatus.COMPLETED,
+              OperationStatus.BUFFERED,
+            ],
+          },
+        },
+        include: {
+          // Включаем информацию о поддоне
+          productionPallet: {
+            include: {
+              // Включаем информацию о детали
+              detail: {
+                include: {
+                  // Включаем информацию о заказе через связь с УПАК
+                  ypaks: {
+                    include: {
+                      ypak: {
+                        include: {
+                          order: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Сортировка по приоритету (сначала задания с приоритетом, затем - без)
+        orderBy: [
+          { startedAt: 'asc' }, // Затем по времени начала операции
+        ],
+      });
+
+      if (operations.length === 0) {
+        this.logger.warn(
+          `Для станка с ID ${machineId} не найдено активных заданий`,
+        );
+        return [];
+      }
+
+      // Формируем ответ с данными из связанных таблиц
+      const tasks = operations.map((operation) => {
+        // Получаем первую запись связи детали с УПАК для получения информации о заказе
+        const ypakDetail = operation.productionPallet.detail.ypaks[0];
+
+        return {
+          operationId: operation.id,
+          orderId: ypakDetail.ypak.order.id,
+          orderName: ypakDetail.ypak.order.name,
+          detailArticle: operation.productionPallet.detail.article,
+          detailName: operation.productionPallet.detail.name,
+          detailMaterial: operation.productionPallet.detail.material,
+          detailSize: operation.productionPallet.detail.size,
+          palletName: operation.productionPallet.name,
+          quantity: operation.quantity,
+          status: operation.status,
+          completionStatus: operation.completionStatus,
+        };
+      });
+
+      this.logger.log(
+        `Успешно получено ${tasks.length} заданий для станка с ID ${machineId}`,
+      );
+      return tasks;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при получении заданий для станка с ID ${machineId}: ${error.message}`,
       );
       throw error;
     }

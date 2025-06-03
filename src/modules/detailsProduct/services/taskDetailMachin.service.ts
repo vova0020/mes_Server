@@ -4,7 +4,7 @@ import { PrismaService } from '../../../shared/prisma.service';
 import {
   MachineTaskResponseDto,
   TaskItemDto,
-} from '../dto/machine-taskDetail.dto';
+} from '../../palletsProduct/dto/machine-taskDetail.dto';
 import { OperationStatus } from '@prisma/client';
 
 @Injectable()

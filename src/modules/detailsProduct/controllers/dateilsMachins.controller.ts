@@ -1,34 +1,42 @@
-import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 
 // import { MachineTaskResponseDto } from '../dto/machine-taskDetail.dto';
 import { OrderDetailsResponseDto } from '../dto/machineNoSmen.dto';
 import { DetailsMachinNoSmenService } from '../services/detailsMachinNoSmen.service';
+import { MachineTaskResponseDto } from '../dto/machine-taskDetail.dto';
+import { TaskDetailService } from '../services/taskDetailMachin.service';
 
 @ApiTags('machine-tasks')
 @Controller('machines')
 export class DetailsMachinsController {
   constructor(
     private readonly detailsMachinNoSmenService: DetailsMachinNoSmenService,
+    private readonly taskService: TaskDetailService,
   ) {}
 
   // ======================= Эндпоинты для станка со сменным заданием задания =====================
 
-  // Поучение сменного задания для станка
-  // @Get('/smen/details/:machineId')
-  // @ApiOperation({ summary: 'Получить сменное задание для станка' })
-  // @ApiParam({ name: 'machineId', description: 'ID станка', example: 1 })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Сменное задание успешно получено',
-  //   type: MachineTaskResponseDto,
-  // })
-  // @ApiResponse({ status: 404, description: 'Станок не найден' })
-  // async getMachineTask(
-  //   @Param('machineId', ParseIntPipe) machineId: number,
-  // ): Promise<MachineTaskResponseDto> {
-  //   return this.detailsMachinNoSmenService.getMachineTask(machineId);
-  // }
+  @Get(':machineId/task')
+  @ApiOperation({ summary: 'Получить сменное задание для станка' })
+  @ApiParam({ name: 'machineId', description: 'ID станка', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'Сменное задание успешно получено',
+    type: MachineTaskResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Станок не найден' })
+  async getMachineTask(
+    @Param('machineId', ParseIntPipe) machineId: number,
+  ): Promise<MachineTaskResponseDto> {
+    return this.taskService.getMachineTask(machineId);
+  }
 
   // =================   Эндпоинты для станка без сменного задания  =================================
   // Поучение сменного задания для станка

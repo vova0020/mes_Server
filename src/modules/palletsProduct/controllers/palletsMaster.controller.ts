@@ -12,6 +12,7 @@ import {
   ParseIntPipe,
   Post,
   Logger,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,10 @@ import {
   PalletsResponseDto,
   UpdateOperationStatusDto,
 } from '../dto/pallet-master.dto';
+import {
+  MachineTaskMasterResponseDto,
+  MachineTaskQueryDto,
+} from '../dto/machine-taskDetail.dto';
 
 @ApiTags('master pallets')
 @Controller('master')
@@ -169,5 +174,25 @@ export class PalletsMasterController {
         'Произошла ошибка при обновлении статуса операции',
       );
     }
+  }
+
+  @Get('machine-tasks')
+  @ApiOperation({ summary: 'Получить сменное задание для станка' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список заданий для станка',
+    type: [MachineTaskMasterResponseDto],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Станок не найден',
+  })
+  async getMachineTasks(
+    @Query() query: MachineTaskQueryDto,
+  ): Promise<MachineTaskMasterResponseDto[]> {
+    this.logger.log(
+      `Запрос на получение заданий для станка с ID: ${query.machineId}`,
+    );
+    return this.palletOperationsService.getMachineTasksById(query.machineId);
   }
 }

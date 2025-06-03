@@ -7,23 +7,31 @@ import {
   ParseIntPipe,
   HttpException,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { PalletMachineService } from '../services/pallets-Machine.service';
 import {
   StartPalletProcessingDto,
   CompletePalletProcessingDto,
   MovePalletToBufferDto,
 } from '../dto/pallet.dto';
-import { MachineTaskResponseDto } from '../dto/machine-taskDetail.dto';
-import { TaskDetailService } from '../services/taskDetail.service';
+
+import { PalletsResponseDto } from '../dto/pallet-machin.dto';
+import { PalletsMachineTaskService } from '../services/pallets-Machine-task.service';
 
 @ApiTags('Операции с поддонами на станке')
 @Controller('machins/pallets')
 export class PalletMachinController {
   constructor(
     private readonly palletService: PalletMachineService,
-    private readonly taskService: TaskDetailService,
+    private readonly palletsMachineTaskService: PalletsMachineTaskService,
   ) {}
 
   @ApiOperation({ summary: 'Начать обработку поддона на станке' })
@@ -146,19 +154,28 @@ export class PalletMachinController {
       );
     }
   }
-
-  @Get(':machineId/task')
-  @ApiOperation({ summary: 'Получить сменное задание для станка' })
-  @ApiParam({ name: 'machineId', description: 'ID станка', example: 1 })
+  @Get('detail/pallets')
+  @ApiOperation({ summary: 'Получить все поддоны для конкретной детали' })
+  @ApiQuery({ name: 'detailId', description: 'ID детали' })
+  @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
   @ApiResponse({
     status: 200,
-    description: 'Сменное задание успешно получено',
-    type: MachineTaskResponseDto,
+    description: 'Возвращает все поддоны, связанные с указанной деталью',
+    type: PalletsResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Станок не найден' })
-  async getMachineTask(
-    @Param('machineId', ParseIntPipe) machineId: number,
-  ): Promise<MachineTaskResponseDto> {
-    return this.taskService.getMachineTask(machineId);
+  @ApiResponse({ status: 404, description: 'Деталь или участок не найдены' })
+  async getPalletsByDetailId(
+    @Query('detailId', ParseIntPipe) detailId: number,
+    @Query('segmentId', ParseIntPipe) segmentId: number,
+  ): Promise<PalletsResponseDto> {
+    console.log(
+      `Получен запрос на поддоны для детали с ID: ${detailId} и участка с ID: ${segmentId}`,
+    );
+    const result = await this.palletsMachineTaskService.getPalletsByDetailId(
+      detailId,
+      segmentId,
+    );
+    console.log(`Найдено поддонов: ${result.pallets.length}`);
+    return result;
   }
 }
