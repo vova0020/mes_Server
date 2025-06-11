@@ -1,3 +1,4 @@
+
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -13,502 +14,579 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ======================================================
-// Модуль авторизации
-// Содержит модели для управления пользователями, ролями,
-// деталями пользователей и логами входа в систему
-// ======================================================
+// ========================================
+// 1. Модуль пользователей
+// ========================================
 
 model User {
-  id                 Int               @id @default(autoincrement())
-  username           String            @unique // Уникальное имя пользователя для входа
-  password           String // Хэшированный пароль пользователя
-  role               Role              @relation(fields: [roleId], references: [id]) // Связь с ролью пользователя
-  roleId             Int // Внешний ключ для связи с ролью
-  details            UserDetail? // Связь с дополнительными данными пользователя (один-к-одному)
-  loginLogs          LoginLog[] // История входов пользователя в систему (один-ко-многим)
-  operatorOperations DetailOperation[] @relation("OperatorOperations") // Операции, где пользователь выступает оператором
-  masterOperations   DetailOperation[] @relation("MasterOperations") // Операции, где пользователь выступает мастером
+  userId    Int      @id @default(autoincrement()) @map("user_id")
+  login     String   @unique
+  password  String   // Зашифрованный пароль
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Новые связи для прямого закрепления пользователей за станками и участками
-  assignedMachines   Machine[]           @relation("UserAssignedToMachine") // Станки, к которым привязан пользователь (для операторов)
-  supervisedSegments ProductionSegment[] @relation("UserSupervisesSegment") // Участки, которые контролирует пользователь (для мастеров)
+  // Связи
+  userDetail   UserDetail?
+  userRoles    UserRole[]
+  loginLogs    LoginLog[]
+  pickers      Picker[]
+  packingTasks PackingTask[] @relation("AssignedUser")
 
-  createdAt DateTime @default(now()) // Дата создания пользователя
-  updatedAt DateTime @updatedAt // Дата последнего обновления пользователя
-  kitOperations      KitOperation[]  @relation("KitOperatorOperations") 
-  // (можно дать отдельный relation name, но переиспользуем тот же, 
-  // чтобы KitOperation.operator маппилось автоматически)
-}
-
-model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique // Уникальное название роли (например, "admin", "operator", "master")
-  users     User[] // Обратная связь с пользователями, имеющими данную роль
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("users")
 }
 
 model UserDetail {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id]) // Связь с пользователем
-  userId    Int      @unique // Внешний ключ с ограничением уникальности (один-к-одному)
-  fullName  String // Полное имя пользователя
-  phone     String? // Телефон (опционально)
-  position  String? // Должность (опционально)
-  salary    Float? // Заработная плата (опционально)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  detailId  Int     @id @default(autoincrement()) @map("detail_id")
+  userId    Int     @unique @map("user_id")
+  firstName String  @map("first_name")
+  lastName  String  @map("last_name")
+  phone     String?
+  position  String?
+  salary    Decimal?
+
+  // Связи
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_details")
+}
+
+model Role {
+  roleId   Int    @id @default(autoincrement()) @map("role_id")
+  roleName String @map("role_name")
+
+  // Связи
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userRoleId Int @id @default(autoincrement()) @map("user_role_id")
+  userId     Int @map("user_id")
+  roleId     Int @map("role_id")
+
+  // Связи
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade)
+
+  @@map("user_roles")
 }
 
 model LoginLog {
-  id        Int      @id @default(autoincrement())
-  user      User?    @relation(fields: [userId], references: [id]) // Связь с пользователем (может быть null при неудачном входе)
-  userId    Int? // Внешний ключ (может быть null)
-  loginAt   DateTime @default(now()) // Время попытки входа
-  ip        String? // IP-адрес, с которого выполнялся вход
-  userAgent String? // Информация о браузере/устройстве
-  success   Boolean // Успешность входа (true - успешно, false - неудачно)
+  logId       Int       @id @default(autoincrement()) @map("log_id")
+  userId      Int?      @map("user_id")
+  ipAddress   String    @map("ip_address")
+  deviceInfo  String?   @map("device_info")
+  attemptTime DateTime  @map("attempt_time")
+  success     Boolean
+
+  // Связи
+  user User? @relation(fields: [userId], references: [userId])
+
+  @@map("login_logs")
 }
 
-// ======================================================
-// Блок заказов и производства
-// Модели для управления производственными заказами,
-// упаковками (УПАК), деталями и поддонами
-// ======================================================
+// ========================================
+// 2. Модуль производства
+// ========================================
 
-model ProductionOrder {
-  id           Int              @id @default(autoincrement())
-  runNumber    String // Номер партии/прогона
-  name         String // Название заказа
-  progress     Float? // Процент выполнения заказа (0-100)
-  createdAt    DateTime         @default(now()) // Дата создания заказа
-  finishedAt   DateTime? // Дата завершения заказа (null, если не завершен)
-  allowedToRun Boolean // Разрешение на запуск (true - разрешено, false - запрещено)
-  completed    Boolean // Статус завершенности (true - завершен, false - в процессе)
-  ypaks        ProductionYpak[]  // Связь с УПАКами, входящими в заказ
+model Order {
+  orderId              Int      @id @default(autoincrement()) @map("order_id")
+  batchNumber          String   @map("batch_number")
+  orderName            String   @map("order_name")
+  completionPercentage Decimal  @map("completion_percentage")
+  createdAt            DateTime @default(now()) @map("created_at")
+  completedAt          DateTime? @map("completed_at")
+  launchPermission     Boolean  @map("launch_permission")
+  isCompleted          Boolean  @map("is_completed")
+
+  // Связи
+  packages Package[]
+
+  @@map("orders")
 }
 
-model ProductionYpak {
-  id       Int                    @id @default(autoincrement())
-  article  String? // Артикул упаковки
-  name     String // Название УПАКа
-  progress Float? // Процент выполнения УПАКа (0-100)
-  order    ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade) // Связь с заказом
-  orderId  Int // Внешний ключ для связи с заказом
-  details  ProductionYpakDetail[] // Связь с деталями, входящими в УПАК
-  packagingTasks PackagingTask[]   // ← все задания на упаковку этого УПАКа
-  packagingPriorities PackagingPriority[] // все PackagingPriority для данного УПАК
+model Package {
+  packageId            Int      @id @default(autoincrement()) @map("package_id")
+  orderId              Int      @map("order_id")
+  packageCode          String   @map("package_code")
+  packageName          String   @map("package_name")
+  completionPercentage Decimal  @map("completion_percentage")
+
+  // Связи
+  order                   Order                     @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  productionPackageParts  ProductionPackagePart[]
+
+  @@map("packages")
 }
 
-model ProductionDetail {
-  id             Int                    @id @default(autoincrement())
-  article        String // Артикул детали
-  name           String // Название детали
-  material       String // Материал изготовления
-  size           String // Размер детали
-  totalNumber    Int // Общее количество деталей в производстве
-  ypaks          ProductionYpakDetail[] // Связь с УПАКами, в которые входит деталь
-  pallets        ProductionPallets[] // Связь с поддонами, на которых размещается деталь
-  detailPriority DetailPriority[] // Связь с приоритетом, выполняемыми на данном станке
-  // Связь с маршрутом обработки, позволяющая задавать индивидуальную последовательность этапов
-  route          ProductionRoute?       @relation(fields: [routeId], references: [id])
-  routeId        Int?
+model ProductionPackagePart {
+  pppId     Int     @id @default(autoincrement()) @map("ppp_id")
+  packageId Int     @map("package_id")
+  partId    Int     @map("part_id")
+  quantity  Decimal
 
-  // Кэширование статусов детали для разных участков
-  segmentStatuses DetailSegmentStatus[] // Связь с моделью кэширования статусов по участкам
+  // Связи
+  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+  part    Part    @relation(fields: [partId], references: [partId], onDelete: Cascade)
 
-  // Общее количество готовых деталей для обработки на данном участке
-  // вычисляется через агрегирующие запросы, суммируя quantity поддонов,
-  // где соответствующая операция (DetailOperation) имеет нужный статус.
+  @@map("production_package_parts")
 }
 
-model ProductionYpakDetail {
-  id       Int              @id @default(autoincrement())
-  ypak     ProductionYpak   @relation(fields: [ypakId], references: [id]) // Связь с УПАКом
-  ypakId   Int // Внешний ключ для связи с УПАКом
-  detail   ProductionDetail @relation(fields: [detailId], references: [id]) // Связь с деталью
-  detailId Int // Внешний ключ для связи с деталью
-  quantity Int // Количество деталей данного типа в УПАКе
-
-  // Гарантирует, что комбинация УПАК+деталь уникальна (деталь может входить в УПАК только один раз)
-  @@unique([ypakId, detailId])
-}
-
-model ProductionPallets {
-  id       Int              @id @default(autoincrement())
-  name     String // Название/номер поддона
-  quantity Int // Количество деталей, размещенных на поддоне
-  detail   ProductionDetail @relation(fields: [detailId], references: [id]) // Связь с типом детали на поддоне
-  detailId Int // Внешний ключ для связи с деталью
-
-  // Обратная связь с операциями, выполняемыми на поддоне
-  detailOperations DetailOperation[] // Операции, выполняемые с данным поддоном
-
-  // Связь с ячейкой буфера - показывает, в какой ячейке буфера находится поддон (если находится)
-  bufferCell   BufferCell? @relation(fields: [bufferCellId], references: [id])
-  bufferCellId Int? // Внешний ключ для связи с ячейкой буфера (null, если поддон не в буфере)
-
-  // Новое поле для хранения текущего этапа обработки поддона
-  currentStep   ProcessStep? @relation("CurrentProcessStep", fields: [currentStepId], references: [id])
-  currentStepId Int? // ID текущего этапа обработки (null, если не установлен)
-  kitOperations    KitOperation[]     // ← все операции комплектовщика по этому поддону
-}
-
-// ======================================================
-// Модуль буферной системы
-// Содержит модели для управления буферами и ячейками буферов,
-// которые используются для временного хранения поддонов
-// между производственными операциями
-// ======================================================
-
-model Buffer {
-  id          Int          @id @default(autoincrement())
-  name        String // Название буфера (например, "Основной буфер", "Буфер цеха №2")
-  description String? // Подробное описание назначения и особенностей буфера
-  location    String? // Физическое местоположение буфера (цех, участок, координаты)
-  cells       BufferCell[] // Связь с ячейками, входящими в состав буфера (один-ко-многим)
-
-  // Обратная связь для ProductionLine (буфер по умолчанию)
-  defaultForLines ProductionLine[] @relation("DefaultBufferForLine")
-
-  // Обратная связь для ProductionSegment (буфер, назначенный участку)
-  segments ProductionSegment[] @relation("BufferForSegment")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model BufferCell {
-  id        Int                 @id @default(autoincrement())
-  code      String // Код/номер ячейки для идентификации (например, "A1", "B2", "C3")
-  buffer    Buffer              @relation(fields: [bufferId], references: [id]) // Связь с буфером, которому принадлежит ячейка
-  bufferId  Int // Внешний ключ для связи с буфером
-  status    BufferCellStatus    @default(AVAILABLE) // Текущий статус ячейки (доступна, занята, etc.)
-  capacity  Int                 @default(1) // Вместимость ячейки (сколько поддонов может вместить)
-  pallets   ProductionPallets[] // Связь с поддонами, размещенными в ячейке (один-ко-многим)
-  createdAt DateTime            @default(now()) // Дата создания записи о ячейке
-  updatedAt DateTime            @updatedAt // Дата последнего обновления записи о ячейке
-
-  // Гарантирует уникальность кода ячейки в пределах одного буфера
-  @@unique([bufferId, code])
-}
-
-enum BufferCellStatus {
-  AVAILABLE // Ячейка доступна для размещения поддонов
-  OCCUPIED // Ячейка занята (содержит поддоны в количестве равном или меньшем capacity)
-  RESERVED // Ячейка зарезервирована для будущего размещения (но физически пока пуста)
-  MAINTENANCE // Ячейка на обслуживании (недоступна для использования)
-}
-
-// ======================================================
-// Модуль производственных процессов
-// Модели для управления этапами производственного процесса,
-// станками и операциями над поддонами с деталями
-// ======================================================
-
-model ProcessStep {
-  id         Int            @id @default(autoincrement())
-  name       String
-  sequence   Int
-  description String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-
-  // вместо одного parentId — два массива связей:
-  parents    StepRelation[] @relation("ChildToParent")  // все «родители» данного шага
-  children   StepRelation[] @relation("ParentToChild")  // все «дочерние» шаги
-
-  // остальное без изменений:
-  detailOperations DetailOperation[]
-  routeSteps       RouteStep[]  @relation("ProcessStepRouteSteps")
-  segments         SegmentProcessStep[]
-  machineSteps     MachineProcessStep[]
-  currentPallets   ProductionPallets[] @relation("CurrentProcessStep")
-}
-
-
-/// промежуточная таблица «родитель ↔ потомок»
-model StepRelation {
-  parent     ProcessStep @relation("ParentToChild", fields: [parentId], references: [id])
-  parentId   Int
-  child      ProcessStep @relation("ChildToParent", fields: [childId], references: [id])
-  childId    Int
-
-  @@id([parentId, childId])     // составной PK, чтобы не дублировать
-  @@index([childId])             // для быстрого поиска всех родителей
-  @@index([parentId])            // для быстрого поиска всех потомков
-}
-
-
-model Machine {
-  id                Int           @id @default(autoincrement())
-  name              String // Название/номер станка
-  status            MachineStatus // Текущий статус станка (активен, неактивен, на обслуживании)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  recommendedLoad   Int // Рекомендуемая загрузка станка (количество деталей)
-  noShiftAssignment Boolean       @default(false) //Станок со сменным заданием или нет
-
-  detailOperations DetailOperation[] // Связь с операциями, выполняемыми на данном станке
-  detailPriority   DetailPriority[] // Связь с приоритетом, выполняемыми на данном станке
-
-  // Связь с участком производства, к которому привязан станок
-  segment   ProductionSegment? @relation(fields: [segmentId], references: [id])
-  segmentId Int?
-
-  // Новая связь с операторами, которые привязаны к этому станку
-  assignedOperators User[] @relation("UserAssignedToMachine")
-
-  // Новая связь с этапами обработки через промежуточную таблицу
-  processSteps MachineProcessStep[] // Этапы обработки, которые может выполнять этот станок
-  packagingTasks    PackagingTask[]   // ← задачи упаковки, назначенные на этот станок
-  packagingPriorities PackagingPriority[] // все PackagingPriority для этого станка
-}
-
-// Новая модель: связь между станком и этапами обработки, которые он может выполнять
-model MachineProcessStep {
-  id            Int         @id @default(autoincrement())
-  machine       Machine     @relation(fields: [machineId], references: [id])
-  machineId     Int
-  processStep   ProcessStep @relation(fields: [processStepId], references: [id])
-  processStepId Int
-  isDefault     Boolean     @default(false) // Является ли этап основным для этого станка
-
-  // Уникальность связи станок-этап
-  @@unique([machineId, processStepId])
-}
-
-// Фиксирует операции обработки, привязанные к конкретному поддону
-model DetailOperation {
-  id                 Int               @id @default(autoincrement())
-  // Связь с поддоном, над которым выполняется операция
-  productionPallet   ProductionPallets @relation(fields: [productionPalletId], references: [id])
-  productionPalletId Int // Внешний ключ для связи с поддоном
-
-  // Связь с этапом производственного процесса
-  processStep   ProcessStep @relation(fields: [processStepId], references: [id])
-  processStepId Int // Внешний ключ для связи с этапом процесса
-
-  // Связь со станком, на котором выполняется операция (может быть null)
-  machine   Machine? @relation(fields: [machineId], references: [id])
-  machineId Int? // Внешний ключ для связи со станком (null, если станок не задействован)
-
-  // Связь с оператором, выполняющим операцию (может быть null)
-  operator   User? @relation("OperatorOperations", fields: [operatorId], references: [id])
-  operatorId Int? // Внешний ключ для связи с оператором (null, если оператор не назначен)
-
-  // Связь с мастером, контролирующим операцию (может быть null)
-  master   User? @relation("MasterOperations", fields: [masterId], references: [id])
-  masterId Int? // Внешний ключ для связи с мастером (null, если мастер не назначен)
-
-  status           OperationStatus // Текущий статус операции (в процессе, завершена, в буфере)
-  completionStatus String? // Статус выполнения: "COMPLETED", "IN_PROGRESS", "PARTIALLY_COMPLETED"
-  startedAt        DateTime        @default(now()) // Время начала операции
-  completedAt      DateTime? // Время завершения операции (null, если не завершена)
-  quantity         Int // Количество деталей, обработанных в рамках операции
-
-  // Новые поля для оптимизации запросов
-  stepSequenceInRoute  Int? // Номер шага в маршруте конкретной детали (кэшированное значение)
-  isCompletedForDetail Boolean @default(false) // Флаг завершенности для конкретной детали
-  // Добавленное поле для приоритета задания (null - не задан приоритет)
-}
-
-/// Добавляем новую модель для хранения приоритета на уровне «станок + деталь»:
-model DetailPriority {
-  id                   Int              @id @default(autoincrement())
-  machine              Machine          @relation(fields: [machineId], references: [id])
-  machineId            Int
-  detail               ProductionDetail @relation(fields: [detailId], references: [id])
-  detailId             Int
-  priority             Int // Чем больше — тем выше приоритет
-  isCompletedForDetail Boolean          @default(false) // Флаг завершенности для конкретной детали
-
-  /// Гарантирует, что на каждую пару (machine, detail) — ровно одна запись
-  @@unique([machineId, detailId])
-}
-
-enum OperationStatus {
-  ON_MACHINE // Поддон записа в задание для станка но еще не обрабатываетсся
-  IN_PROGRESS // Операция выполняется
-  COMPLETED // Операция завершена
-  BUFFERED // Операция приостановлена, поддон помещен в буфер
-}
-
-enum MachineStatus {
-  ACTIVE // Станок активен и готов к работе
-  INACTIVE // Станок выключен или не используется
-  MAINTENANCE // Станок на обслуживании или ремонте
-  BROKEN // Станок СЛОМАН
-}
-
-// ======================================================
-// Модуль маршрутов обработки
-// Модели для определения технологических карт (маршрутов)
-// для деталей с разной последовательностью обработки
-// ======================================================
-
-model ProductionRoute {
-  id      Int                @id @default(autoincrement())
-  name    String // Название маршрута (например, "Кромка-присадка")
-  steps   RouteStep[] // Список этапов маршрута с порядковыми номерами
-  details ProductionDetail[] // Детали, для которых применяется данный маршрут
-}
-
-model RouteStep {
-  id            Int             @id @default(autoincrement())
-  route         ProductionRoute @relation(fields: [routeId], references: [id])
-  routeId       Int
-  processStep   ProcessStep     @relation("ProcessStepRouteSteps", fields: [processStepId], references: [id])
-  processStepId Int
-  sequence      Int // Порядковый номер этапа в маршруте
-}
-
-// ======================================================
-// Модуль производственных линий и участков
-// Модели для управления линиями (производственными участками)
-// и привязки к ним станков и буферов
-// ======================================================
-
-model ProductionLine {
-  id       Int                 @id @default(autoincrement())
-  name     String // Название линии
-  type     ProductionLineType // Тип линии (основная, второстепенная)
-  segments ProductionSegment[] // Участки, входящие в линию
-
-  // Буфер по умолчанию для линии (опционально)
-  defaultBuffer   Buffer? @relation("DefaultBufferForLine", fields: [defaultBufferId], references: [id])
-  defaultBufferId Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ProductionSegment {
-  id       Int            @id @default(autoincrement())
-  name     String // Название участка
-  line     ProductionLine @relation(fields: [lineId], references: [id])
-  lineId   Int // Внешний ключ к линии
-  machines Machine[] // Станки, привязанные к участку
-
-  // Связь с буфером. Один буфер может быть привязан к нескольким участкам (из разных линий)
-  buffer   Buffer? @relation("BufferForSegment", fields: [bufferId], references: [id])
-  bufferId Int? // Внешний ключ для связи с буфером (опционально)
-
-  // Новая связь с мастерами, которые контролируют этот участок
-  supervisors User[] @relation("UserSupervisesSegment")
-
-  // Новая связь с этапами обработки через промежуточную таблицу
-  processSteps SegmentProcessStep[] // Этапы обработки, выполняемые на данном участке
-
-  // Обратная связь к статусам деталей для этого участка
-  detailStatuses DetailSegmentStatus[] // Статусы деталей на этом участке
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// Новая модель: связь между участком и этапами обработки
-model SegmentProcessStep {
-  id            Int               @id @default(autoincrement())
-  segment       ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
-  segmentId     Int // Внешний ключ для связи с участком
-  processStep   ProcessStep       @relation(fields: [processStepId], references: [id]) // Связь с этапом обработки
-  processStepId Int // Внешний ключ для связи с этапом обработки
-  isPrimary     Boolean           @default(false) // Является ли этот этап основным для данного участка
-
-  // Уникальность связи участок-этап
-  @@unique([segmentId, processStepId])
-  // Индексы для быстрого поиска
-  @@index([segmentId])
-  @@index([processStepId])
-}
-
-// Новая модель: кэширование статусов деталей для участков
-model DetailSegmentStatus {
-  id          Int               @id @default(autoincrement())
-  detail      ProductionDetail  @relation(fields: [detailId], references: [id]) // Связь с деталью
-  detailId    Int // Внешний ключ для связи с деталью
-  segment     ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
-  segmentId   Int // Внешний ключ для связи с участком
-  isCompleted Boolean           @default(false) // Завершена ли обработка детали для данного участка
-  completedAt DateTime? // Когда был завершен этап (если завершен)
-
-  // Уникальность связи деталь-участок
-  @@unique([detailId, segmentId])
-  // Индексы для быстрого поиска
-  @@index([segmentId, isCompleted])
-  @@index([detailId])
-}
-
-enum ProductionLineType {
-  PRIMARY // Основная линия
-  SECONDARY // Второстепенная линия
-}
-
-
-
-// Блок упаковки
-
-/// Статусы для задач упаковки
-enum TaskStatus {
+enum PartStatus {
   PENDING
-  READY_TO_PACK
   IN_PROGRESS
   COMPLETED
 }
 
-/// Задание на упаковку одного УПАКа на одном станке
-model PackagingTask {
-  id           Int             @id @default(autoincrement())
-  ypakId       Int
-  ypak         ProductionYpak  @relation(fields: [ypakId], references: [id])
+model Part {
+  partId             Int         @id @default(autoincrement()) @map("part_id")
+  partCode           String      @map("part_code")
+  partName           String      @map("part_name")
+  materialId         Int         @map("material_id")
+  size               String
+  totalQuantity      Decimal     @map("total_quantity")
+  status             PartStatus
+  isSubassembly      Boolean     @default(false) @map("is_subassembly")
+  routeId            Int         @map("route_id")
+  readyForMainFlow   Boolean     @default(false) @map("ready_for_main_flow")
+  returnStageId      Int?        @map("return_stage_id")
 
-  machineId    Int
-  machine      Machine         @relation(fields: [machineId], references: [id])
+  // Связи
+  material                  Material                    @relation(fields: [materialId], references: [materialId])
+  route                     Route                       @relation(fields: [routeId], references: [routeId])
+  returnStage               RouteStage?                 @relation("ReturnStage", fields: [returnStageId], references: [routeStageId])
+  pallets                   Pallet[]
+  pickerTasks               PickerTask[]
+  partRouteProgress         PartRouteProgress[]
+  productionPackageParts    ProductionPackagePart[]
+  packageParts              PackagePart[]
+  parentBillOfMaterials     BillOfMaterial[]            @relation("ParentPart")
+  childBillOfMaterials      BillOfMaterial[]            @relation("ChildPart")
+  subassemblyProgress       SubassemblyProgress[]
 
-  status       TaskStatus      @default(PENDING)
-  createdAt    DateTime        @default(now())
-  startedAt    DateTime?
-  completedAt  DateTime?
-
-  deliveredQty Int             @default(0)
-  requiredQty  Int
-
-  kitOps       KitOperation[]
-
-  /// Сначала даём имя связи, указываем поля и на что они ссылаются
-  priorityId   Int?
-  priority     PackagingPriority? @relation("PackagingPriorityTasks", fields: [priorityId], references: [id])
+  @@map("parts")
 }
 
-/// Операция комплектовщика: он встречает задание, привозит N поддонов и отмечает их
-model KitOperation {
-  id               Int            @id @default(autoincrement())
-  task             PackagingTask  @relation(fields: [taskId], references: [id])
-  taskId           Int
-  pallet           ProductionPallets @relation(fields: [palletId], references: [id])
-  palletId         Int
-  quantityDelivered Int           // обычно = pallet.quantity, но можно разбивать
-  operator         User?          @relation("KitOperatorOperations", fields: [operatorId], references: [id])
-  operatorId       Int?
-  deliveredAt      DateTime       @default(now())
+model BillOfMaterial {
+  bomId        Int     @id @default(autoincrement()) @map("bom_id")
+  parentPartId Int     @map("parent_part_id")
+  childPartId  Int     @map("child_part_id")
+  quantity     Decimal
+
+  // Связи
+  parentPart Part @relation("ParentPart", fields: [parentPartId], references: [partId], onDelete: Cascade)
+  childPart  Part @relation("ChildPart", fields: [childPartId], references: [partId], onDelete: Cascade)
+
+  @@map("bill_of_materials")
 }
 
-/// Приоритет упаковки «УПАК + станок»
-model PackagingPriority {
-  id         Int             @id @default(autoincrement())
+model Pallet {
+  palletId   Int    @id @default(autoincrement()) @map("pallet_id")
+  partId     Int    @map("part_id")
+  palletName String @map("pallet_name")
 
-  ypakId     Int
-  ypak       ProductionYpak  @relation(fields: [ypakId], references: [id])
+  // Связи
+  part                Part                  @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  palletBufferCells   PalletBufferCell[]
+  machineAssignments  MachineAssignment[]
+  palletStageProgress PalletStageProgress[]
 
-  machineId  Int
-  machine    Machine         @relation(fields: [machineId], references: [id])
+  @@map("pallets")
+}
 
-  priority   Int
+// ========================================
+// 3. Модуль буферов
+// ========================================
 
-  /// Обратное поле для связи с PackagingTask
-  tasks      PackagingTask[] @relation("PackagingPriorityTasks")
+model Buffer {
+  bufferId    Int    @id @default(autoincrement()) @map("buffer_id")
+  bufferName  String @map("buffer_name")
+  description String?
+  location    String
 
-  @@unique([ypakId, machineId])
+  // Связи
+  bufferCells BufferCell[]
+
+  @@map("buffers")
+}
+
+enum CellStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+}
+
+model BufferCell {
+  cellId      Int        @id @default(autoincrement()) @map("cell_id")
+  bufferId    Int        @map("buffer_id")
+  cellCode    String     @map("cell_code")
+  status      CellStatus
+  capacity    Decimal
+  currentLoad Decimal    @map("current_load")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Связи
+  buffer              Buffer             @relation(fields: [bufferId], references: [bufferId], onDelete: Cascade)
+  palletBufferCells   PalletBufferCell[]
+  pickerTasksFrom     PickerTask[]       @relation("FromCell")
+  pickerTasksTo       PickerTask[]       @relation("ToCell")
+
+  @@map("buffer_cells")
+}
+
+model PalletBufferCell {
+  palletCellId Int       @id @default(autoincrement()) @map("pallet_cell_id")
+  palletId     Int       @map("pallet_id")
+  cellId       Int       @map("cell_id")
+  placedAt     DateTime  @map("placed_at")
+  removedAt    DateTime? @map("removed_at")
+
+  // Связи
+  pallet Pallet     @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+  cell   BufferCell @relation(fields: [cellId], references: [cellId], onDelete: Cascade)
+
+  @@map("pallets_buffer_cells")
+}
+
+// ========================================
+// 4. Модуль производственных процессов
+// ========================================
+
+model ProductionLine {
+  lineId   Int    @id @default(autoincrement()) @map("line_id")
+  lineName String @map("line_name")
+  lineType String @map("line_type")
+
+  // Связи
+  linesStages LineStage[]
+
+  @@map("production_lines")
+}
+
+model ProductionStageLevel1 {
+  stageId     Int      @id @default(autoincrement()) @map("stage_id")
+  stageName   String   @map("stage_name")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  productionStagesLevel2 ProductionStageLevel2[]
+  linesStages            LineStage[]
+  machinesStages         MachineStage[]
+  routeStages            RouteStage[]
+
+  @@map("production_stages_level_1")
+}
+
+model ProductionStageLevel2 {
+  substageId      Int     @id @default(autoincrement()) @map("substage_id")
+  stageId         Int     @map("stage_id")
+  substageName    String  @map("substage_name")
+  description     String?
+  allowance       Decimal
+
+  // Связи
+  stage       ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
+  routeStages RouteStage[]
+
+  @@map("production_stages_level_2")
+}
+
+model LineStage {
+  lineStageId Int @id @default(autoincrement()) @map("line_stage_id")
+  lineId      Int @map("line_id")
+  stageId     Int @map("stage_id")
+
+  // Связи
+  line  ProductionLine        @relation(fields: [lineId], references: [lineId], onDelete: Cascade)
+  stage ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
+
+  @@map("lines_stages")
+}
+
+// ========================================
+// 5. Модуль станков
+// ========================================
+
+enum MachineStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model Machine {
+  machineId          Int           @id @default(autoincrement()) @map("machine_id")
+  machineName        String        @map("machine_name")
+  status             MachineStatus
+  recommendedLoad    Decimal       @map("recommended_load")
+  loadUnit           String        @map("load_unit")
+  isTaskChangeable   Boolean       @map("is_task_changeable")
+
+  // Связи
+  machinesStages     MachineStage[]
+  pickerTasks        PickerTask[]
+  packingTasks       PackingTask[]
+  machineAssignments MachineAssignment[]
+
+  @@map("machines")
+}
+
+model MachineStage {
+  machineStageId Int @id @default(autoincrement()) @map("machine_stage_id")
+  machineId      Int @map("machine_id")
+  stageId        Int @map("stage_id")
+
+  // Связи
+  machine Machine               @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  stage   ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
+
+  @@map("machines_stages")
+}
+
+// ========================================
+// 6. Модуль маршрутизации
+// ========================================
+
+model Route {
+  routeId   Int    @id @default(autoincrement()) @map("route_id")
+  routeName String @map("route_name")
+
+  // Связи
+  routeStages RouteStage[]
+  parts       Part[]
+
+  @@map("routes")
+}
+
+model RouteStage {
+  routeStageId   Int @id @default(autoincrement()) @map("route_stage_id")
+  routeId        Int @map("route_id")
+  stageId        Int @map("stage_id")
+  substageId     Int? @map("substage_id")
+  sequenceNumber Decimal @map("sequence_number")
+
+  // Связи
+  route                 Route                    @relation(fields: [routeId], references: [routeId], onDelete: Cascade)
+  stage                 ProductionStageLevel1    @relation(fields: [stageId], references: [stageId])
+  substage              ProductionStageLevel2?   @relation(fields: [substageId], references: [substageId])
+  partRouteProgress     PartRouteProgress[]
+  palletStageProgress   PalletStageProgress[]
+  subassemblyProgress   SubassemblyProgress[]
+  returnStageParts      Part[]                   @relation("ReturnStage")
+
+  @@map("route_stages")
+}
+
+// ========================================
+// 7. Модуль материалов
+// ========================================
+
+model MaterialGroup {
+  groupId   Int    @id @default(autoincrement()) @map("group_id")
+  groupName String @map("group_name")
+
+  // Связи
+  groupsMaterials GroupMaterial[]
+
+  @@map("material_groups")
+}
+
+model Material {
+  materialId   Int    @id @default(autoincrement()) @map("material_id")
+  materialName String @map("material_name")
+  unit         String
+
+  // Связи
+  groupsMaterials GroupMaterial[]
+  parts           Part[]
+
+  @@map("materials")
+}
+
+model GroupMaterial {
+  groupMaterialId Int @id @default(autoincrement()) @map("group_material_id")
+  groupId         Int @map("group_id")
+  materialId      Int @map("material_id")
+
+  // Связи
+  group    MaterialGroup @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
+  material Material      @relation(fields: [materialId], references: [materialId], onDelete: Cascade)
+
+  @@map("groups_materials")
+}
+
+// ========================================
+// 8. Модуль комплектовщиков
+// ========================================
+
+model Picker {
+  pickerId Int  @id @default(autoincrement()) @map("picker_id")
+  userId   Int? @map("user_id")
+
+  // Связи
+  user        User?         @relation(fields: [userId], references: [userId])
+  pickerTasks PickerTask[]
+
+  @@map("pickers")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model PickerTask {
+  taskId      Int        @id @default(autoincrement()) @map("task_id")
+  pickerId    Int?       @map("picker_id")
+  partId      Int        @map("part_id")
+  fromCellId  Int?       @map("from_cell_id")
+  toCellId    Int?       @map("to_cell_id")
+  toMachineId Int?       @map("to_machine_id")
+  status      TaskStatus
+  assignedAt  DateTime   @map("assigned_at")
+  completedAt DateTime?  @map("completed_at")
+
+  // Связи
+  picker    Picker?     @relation(fields: [pickerId], references: [pickerId])
+  part      Part        @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  fromCell  BufferCell? @relation("FromCell", fields: [fromCellId], references: [cellId])
+  toCell    BufferCell? @relation("ToCell", fields: [toCellId], references: [cellId])
+  toMachine Machine?    @relation(fields: [toMachineId], references: [machineId])
+
+  @@map("picker_tasks")
+}
+
+// ========================================
+// 9. Модуль упаковки
+// ========================================
+
+enum PackageStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model PackingPackage {
+  packageId   Int           @id @default(autoincrement()) @map("package_id")
+  packageName String        @map("package_name")
+  status      PackageStatus
+  createdAt   DateTime      @default(now()) @map("created_at")
+  completedAt DateTime?     @map("completed_at")
+
+  // Связи
+  packingTasks PackingTask[]
+  packageParts PackagePart[]
+
+  @@map("packing_packages")
+}
+
+model PackagePart {
+  packagePartId Int @id @default(autoincrement()) @map("package_part_id")
+  packageId     Int @map("package_id")
+  partId        Int @map("part_id")
+
+  // Связи
+  package PackingPackage @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+  part    Part           @relation(fields: [partId], references: [partId], onDelete: Cascade)
+
+  @@map("package_parts")
+}
+
+enum PackingTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  PARTIALLY_COMPLETED
+}
+
+model PackingTask {
+  taskId      Int               @id @default(autoincrement()) @map("task_id")
+  packageId   Int               @map("package_id")
+  machineId   Int               @map("machine_id")
+  assignedTo  Int?              @map("assigned_to")
+  status      PackingTaskStatus
+  priority    Decimal
+  assignedAt  DateTime          @map("assigned_at")
+  completedAt DateTime?         @map("completed_at")
+
+  // Связи
+  package     PackingPackage @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+  machine     Machine        @relation(fields: [machineId], references: [machineId])
+  assignedUser User?         @relation("AssignedUser", fields: [assignedTo], references: [userId])
+
+  @@map("packing_tasks")
+}
+
+// ========================================
+// 10. Модуль сборки из полуфабрикатов
+// ========================================
+
+enum SubassemblyStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model SubassemblyProgress {
+  sapId        Int               @id @default(autoincrement()) @map("sap_id")
+  parentPartId Int               @map("parent_part_id")
+  routeStageId Int               @map("route_stage_id")
+  status       SubassemblyStatus
+  completedAt  DateTime?         @map("completed_at")
+
+  // Связи
+  parentPart Part       @relation(fields: [parentPartId], references: [partId], onDelete: Cascade)
+  routeStage RouteStage @relation(fields: [routeStageId], references: [routeStageId])
+
+  @@map("subassembly_progress")
+}
+
+// ========================================
+// Дополнительные модели для отслеживания прогресса
+// ========================================
+
+model PartRouteProgress {
+  prpId        Int        @id @default(autoincrement()) @map("prp_id")
+  partId       Int        @map("part_id")
+  routeStageId Int        @map("route_stage_id")
+  status       TaskStatus
+  completedAt  DateTime?  @map("completed_at")
+
+  // Связи
+  part       Part       @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  routeStage RouteStage @relation(fields: [routeStageId], references: [routeStageId])
+
+  @@map("part_route_progress")
+}
+
+model PalletStageProgress {
+  pspId        Int        @id @default(autoincrement()) @map("psp_id")
+  palletId     Int        @map("pallet_id")
+  routeStageId Int        @map("route_stage_id")
+  status       TaskStatus
+  completedAt  DateTime?  @map("completed_at")
+
+  // Связи
+  pallet     Pallet     @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+  routeStage RouteStage @relation(fields: [routeStageId], references: [routeStageId])
+
+  @@map("pallet_stage_progress")
+}
+
+model MachineAssignment {
+  assignmentId Int       @id @default(autoincrement()) @map("assignment_id")
+  machineId    Int       @map("machine_id")
+  palletId     Int       @map("pallet_id")
+  assignedAt   DateTime  @map("assigned_at")
+  completedAt  DateTime? @map("completed_at")
+
+  // Связи
+  machine Machine @relation(fields: [machineId], references: [machineId])
+  pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+
+  @@map("machine_assignments")
 }

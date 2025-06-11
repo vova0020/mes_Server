@@ -1,0 +1,514 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======================================================
+// Модуль авторизации
+// Содержит модели для управления пользователями, ролями,
+// деталями пользователей и логами входа в систему
+// ======================================================
+
+model User {
+  id                 Int               @id @default(autoincrement())
+  username           String            @unique // Уникальное имя пользователя для входа
+  password           String // Хэшированный пароль пользователя
+  role               Role              @relation(fields: [roleId], references: [id]) // Связь с ролью пользователя
+  roleId             Int // Внешний ключ для связи с ролью
+  details            UserDetail? // Связь с дополнительными данными пользователя (один-к-одному)
+  loginLogs          LoginLog[] // История входов пользователя в систему (один-ко-многим)
+  operatorOperations DetailOperation[] @relation("OperatorOperations") // Операции, где пользователь выступает оператором
+  masterOperations   DetailOperation[] @relation("MasterOperations") // Операции, где пользователь выступает мастером
+
+  // Новые связи для прямого закрепления пользователей за станками и участками
+  assignedMachines   Machine[]           @relation("UserAssignedToMachine") // Станки, к которым привязан пользователь (для операторов)
+  supervisedSegments ProductionSegment[] @relation("UserSupervisesSegment") // Участки, которые контролирует пользователь (для мастеров)
+
+  createdAt DateTime @default(now()) // Дата создания пользователя
+  updatedAt DateTime @updatedAt // Дата последнего обновления пользователя
+  kitOperations      KitOperation[]  @relation("KitOperatorOperations") 
+  // (можно дать отдельный relation name, но переиспользуем тот же, 
+  // чтобы KitOperation.operator маппилось автоматически)
+}
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // Уникальное название роли (например, "admin", "operator", "master")
+  users     User[] // Обратная связь с пользователями, имеющими данную роль
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserDetail {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id]) // Связь с пользователем
+  userId    Int      @unique // Внешний ключ с ограничением уникальности (один-к-одному)
+  fullName  String // Полное имя пользователя
+  phone     String? // Телефон (опционально)
+  position  String? // Должность (опционально)
+  salary    Float? // Заработная плата (опционально)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  user      User?    @relation(fields: [userId], references: [id]) // Связь с пользователем (может быть null при неудачном входе)
+  userId    Int? // Внешний ключ (может быть null)
+  loginAt   DateTime @default(now()) // Время попытки входа
+  ip        String? // IP-адрес, с которого выполнялся вход
+  userAgent String? // Информация о браузере/устройстве
+  success   Boolean // Успешность входа (true - успешно, false - неудачно)
+}
+
+// ======================================================
+// Блок заказов и производства
+// Модели для управления производственными заказами,
+// упаковками (УПАК), деталями и поддонами
+// ======================================================
+
+model ProductionOrder {
+  id           Int              @id @default(autoincrement())
+  runNumber    String // Номер партии/прогона
+  name         String // Название заказа
+  progress     Float? // Процент выполнения заказа (0-100)
+  createdAt    DateTime         @default(now()) // Дата создания заказа
+  finishedAt   DateTime? // Дата завершения заказа (null, если не завершен)
+  allowedToRun Boolean // Разрешение на запуск (true - разрешено, false - запрещено)
+  completed    Boolean // Статус завершенности (true - завершен, false - в процессе)
+  ypaks        ProductionYpak[]  // Связь с УПАКами, входящими в заказ
+}
+
+model ProductionYpak {
+  id       Int                    @id @default(autoincrement())
+  article  String? // Артикул упаковки
+  name     String // Название УПАКа
+  progress Float? // Процент выполнения УПАКа (0-100)
+  order    ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade) // Связь с заказом
+  orderId  Int // Внешний ключ для связи с заказом
+  details  ProductionYpakDetail[] // Связь с деталями, входящими в УПАК
+  packagingTasks PackagingTask[]   // ← все задания на упаковку этого УПАКа
+  packagingPriorities PackagingPriority[] // все PackagingPriority для данного УПАК
+}
+
+model ProductionDetail {
+  id             Int                    @id @default(autoincrement())
+  article        String // Артикул детали
+  name           String // Название детали
+  material       String // Материал изготовления
+  size           String // Размер детали
+  totalNumber    Int // Общее количество деталей в производстве
+  ypaks          ProductionYpakDetail[] // Связь с УПАКами, в которые входит деталь
+  pallets        ProductionPallets[] // Связь с поддонами, на которых размещается деталь
+  detailPriority DetailPriority[] // Связь с приоритетом, выполняемыми на данном станке
+  // Связь с маршрутом обработки, позволяющая задавать индивидуальную последовательность этапов
+  route          ProductionRoute?       @relation(fields: [routeId], references: [id])
+  routeId        Int?
+
+  // Кэширование статусов детали для разных участков
+  segmentStatuses DetailSegmentStatus[] // Связь с моделью кэширования статусов по участкам
+
+  // Общее количество готовых деталей для обработки на данном участке
+  // вычисляется через агрегирующие запросы, суммируя quantity поддонов,
+  // где соответствующая операция (DetailOperation) имеет нужный статус.
+}
+
+model ProductionYpakDetail {
+  id       Int              @id @default(autoincrement())
+  ypak     ProductionYpak   @relation(fields: [ypakId], references: [id]) // Связь с УПАКом
+  ypakId   Int // Внешний ключ для связи с УПАКом
+  detail   ProductionDetail @relation(fields: [detailId], references: [id]) // Связь с деталью
+  detailId Int // Внешний ключ для связи с деталью
+  quantity Int // Количество деталей данного типа в УПАКе
+
+  // Гарантирует, что комбинация УПАК+деталь уникальна (деталь может входить в УПАК только один раз)
+  @@unique([ypakId, detailId])
+}
+
+model ProductionPallets {
+  id       Int              @id @default(autoincrement())
+  name     String // Название/номер поддона
+  quantity Int // Количество деталей, размещенных на поддоне
+  detail   ProductionDetail @relation(fields: [detailId], references: [id]) // Связь с типом детали на поддоне
+  detailId Int // Внешний ключ для связи с деталью
+
+  // Обратная связь с операциями, выполняемыми на поддоне
+  detailOperations DetailOperation[] // Операции, выполняемые с данным поддоном
+
+  // Связь с ячейкой буфера - показывает, в какой ячейке буфера находится поддон (если находится)
+  bufferCell   BufferCell? @relation(fields: [bufferCellId], references: [id])
+  bufferCellId Int? // Внешний ключ для связи с ячейкой буфера (null, если поддон не в буфере)
+
+  // Новое поле для хранения текущего этапа обработки поддона
+  currentStep   ProcessStep? @relation("CurrentProcessStep", fields: [currentStepId], references: [id])
+  currentStepId Int? // ID текущего этапа обработки (null, если не установлен)
+  kitOperations    KitOperation[]     // ← все операции комплектовщика по этому поддону
+}
+
+// ======================================================
+// Модуль буферной системы
+// Содержит модели для управления буферами и ячейками буферов,
+// которые используются для временного хранения поддонов
+// между производственными операциями
+// ======================================================
+
+model Buffer {
+  id          Int          @id @default(autoincrement())
+  name        String // Название буфера (например, "Основной буфер", "Буфер цеха №2")
+  description String? // Подробное описание назначения и особенностей буфера
+  location    String? // Физическое местоположение буфера (цех, участок, координаты)
+  cells       BufferCell[] // Связь с ячейками, входящими в состав буфера (один-ко-многим)
+
+  // Обратная связь для ProductionLine (буфер по умолчанию)
+  defaultForLines ProductionLine[] @relation("DefaultBufferForLine")
+
+  // Обратная связь для ProductionSegment (буфер, назначенный участку)
+  segments ProductionSegment[] @relation("BufferForSegment")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BufferCell {
+  id        Int                 @id @default(autoincrement())
+  code      String // Код/номер ячейки для идентификации (например, "A1", "B2", "C3")
+  buffer    Buffer              @relation(fields: [bufferId], references: [id]) // Связь с буфером, которому принадлежит ячейка
+  bufferId  Int // Внешний ключ для связи с буфером
+  status    BufferCellStatus    @default(AVAILABLE) // Текущий статус ячейки (доступна, занята, etc.)
+  capacity  Int                 @default(1) // Вместимость ячейки (сколько поддонов может вместить)
+  pallets   ProductionPallets[] // Связь с поддонами, размещенными в ячейке (один-ко-многим)
+  createdAt DateTime            @default(now()) // Дата создания записи о ячейке
+  updatedAt DateTime            @updatedAt // Дата последнего обновления записи о ячейке
+
+  // Гарантирует уникальность кода ячейки в пределах одного буфера
+  @@unique([bufferId, code])
+}
+
+enum BufferCellStatus {
+  AVAILABLE // Ячейка доступна для размещения поддонов
+  OCCUPIED // Ячейка занята (содержит поддоны в количестве равном или меньшем capacity)
+  RESERVED // Ячейка зарезервирована для будущего размещения (но физически пока пуста)
+  MAINTENANCE // Ячейка на обслуживании (недоступна для использования)
+}
+
+// ======================================================
+// Модуль производственных процессов
+// Модели для управления этапами производственного процесса,
+// станками и операциями над поддонами с деталями
+// ======================================================
+
+model ProcessStep {
+  id         Int            @id @default(autoincrement())
+  name       String
+  sequence   Int
+  description String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  // вместо одного parentId — два массива связей:
+  parents    StepRelation[] @relation("ChildToParent")  // все «родители» данного шага
+  children   StepRelation[] @relation("ParentToChild")  // все «дочерние» шаги
+
+  // остальное без изменений:
+  detailOperations DetailOperation[]
+  routeSteps       RouteStep[]  @relation("ProcessStepRouteSteps")
+  segments         SegmentProcessStep[]
+  machineSteps     MachineProcessStep[]
+  currentPallets   ProductionPallets[] @relation("CurrentProcessStep")
+}
+
+
+/// промежуточная таблица «родитель ↔ потомок»
+model StepRelation {
+  parent     ProcessStep @relation("ParentToChild", fields: [parentId], references: [id])
+  parentId   Int
+  child      ProcessStep @relation("ChildToParent", fields: [childId], references: [id])
+  childId    Int
+
+  @@id([parentId, childId])     // составной PK, чтобы не дублировать
+  @@index([childId])             // для быстрого поиска всех родителей
+  @@index([parentId])            // для быстрого поиска всех потомков
+}
+
+
+model Machine {
+  id                Int           @id @default(autoincrement())
+  name              String // Название/номер станка
+  status            MachineStatus // Текущий статус станка (активен, неактивен, на обслуживании)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  recommendedLoad   Int // Рекомендуемая загрузка станка (количество деталей)
+  noShiftAssignment Boolean       @default(false) //Станок со сменным заданием или нет
+
+  detailOperations DetailOperation[] // Связь с операциями, выполняемыми на данном станке
+  detailPriority   DetailPriority[] // Связь с приоритетом, выполняемыми на данном станке
+
+  // Связь с участком производства, к которому привязан станок
+  segment   ProductionSegment? @relation(fields: [segmentId], references: [id])
+  segmentId Int?
+
+  // Новая связь с операторами, которые привязаны к этому станку
+  assignedOperators User[] @relation("UserAssignedToMachine")
+
+  // Новая связь с этапами обработки через промежуточную таблицу
+  processSteps MachineProcessStep[] // Этапы обработки, которые может выполнять этот станок
+  packagingTasks    PackagingTask[]   // ← задачи упаковки, назначенные на этот станок
+  packagingPriorities PackagingPriority[] // все PackagingPriority для этого станка
+}
+
+// Новая модель: связь между станком и этапами обработки, которые он может выполнять
+model MachineProcessStep {
+  id            Int         @id @default(autoincrement())
+  machine       Machine     @relation(fields: [machineId], references: [id])
+  machineId     Int
+  processStep   ProcessStep @relation(fields: [processStepId], references: [id])
+  processStepId Int
+  isDefault     Boolean     @default(false) // Является ли этап основным для этого станка
+
+  // Уникальность связи станок-этап
+  @@unique([machineId, processStepId])
+}
+
+// Фиксирует операции обработки, привязанные к конкретному поддону
+model DetailOperation {
+  id                 Int               @id @default(autoincrement())
+  // Связь с поддоном, над которым выполняется операция
+  productionPallet   ProductionPallets @relation(fields: [productionPalletId], references: [id])
+  productionPalletId Int // Внешний ключ для связи с поддоном
+
+  // Связь с этапом производственного процесса
+  processStep   ProcessStep @relation(fields: [processStepId], references: [id])
+  processStepId Int // Внешний ключ для связи с этапом процесса
+
+  // Связь со станком, на котором выполняется операция (может быть null)
+  machine   Machine? @relation(fields: [machineId], references: [id])
+  machineId Int? // Внешний ключ для связи со станком (null, если станок не задействован)
+
+  // Связь с оператором, выполняющим операцию (может быть null)
+  operator   User? @relation("OperatorOperations", fields: [operatorId], references: [id])
+  operatorId Int? // Внешний ключ для связи с оператором (null, если оператор не назначен)
+
+  // Связь с мастером, контролирующим операцию (может быть null)
+  master   User? @relation("MasterOperations", fields: [masterId], references: [id])
+  masterId Int? // Внешний ключ для связи с мастером (null, если мастер не назначен)
+
+  status           OperationStatus // Текущий статус операции (в процессе, завершена, в буфере)
+  completionStatus String? // Статус выполнения: "COMPLETED", "IN_PROGRESS", "PARTIALLY_COMPLETED"
+  startedAt        DateTime        @default(now()) // Время начала операции
+  completedAt      DateTime? // Время завершения операции (null, если не завершена)
+  quantity         Int // Количество деталей, обработанных в рамках операции
+
+  // Новые поля для оптимизации запросов
+  stepSequenceInRoute  Int? // Номер шага в маршруте конкретной детали (кэшированное значение)
+  isCompletedForDetail Boolean @default(false) // Флаг завершенности для конкретной детали
+  // Добавленное поле для приоритета задания (null - не задан приоритет)
+}
+
+/// Добавляем новую модель для хранения приоритета на уровне «станок + деталь»:
+model DetailPriority {
+  id                   Int              @id @default(autoincrement())
+  machine              Machine          @relation(fields: [machineId], references: [id])
+  machineId            Int
+  detail               ProductionDetail @relation(fields: [detailId], references: [id])
+  detailId             Int
+  priority             Int // Чем больше — тем выше приоритет
+  isCompletedForDetail Boolean          @default(false) // Флаг завершенности для конкретной детали
+
+  /// Гарантирует, что на каждую пару (machine, detail) — ровно одна запись
+  @@unique([machineId, detailId])
+}
+
+enum OperationStatus {
+  ON_MACHINE // Поддон записа в задание для станка но еще не обрабатываетсся
+  IN_PROGRESS // Операция выполняется
+  COMPLETED // Операция завершена
+  BUFFERED // Операция приостановлена, поддон помещен в буфер
+}
+
+enum MachineStatus {
+  ACTIVE // Станок активен и готов к работе
+  INACTIVE // Станок выключен или не используется
+  MAINTENANCE // Станок на обслуживании или ремонте
+  BROKEN // Станок СЛОМАН
+}
+
+// ======================================================
+// Модуль маршрутов обработки
+// Модели для определения технологических карт (маршрутов)
+// для деталей с разной последовательностью обработки
+// ======================================================
+
+model ProductionRoute {
+  id      Int                @id @default(autoincrement())
+  name    String // Название маршрута (например, "Кромка-присадка")
+  steps   RouteStep[] // Список этапов маршрута с порядковыми номерами
+  details ProductionDetail[] // Детали, для которых применяется данный маршрут
+}
+
+model RouteStep {
+  id            Int             @id @default(autoincrement())
+  route         ProductionRoute @relation(fields: [routeId], references: [id])
+  routeId       Int
+  processStep   ProcessStep     @relation("ProcessStepRouteSteps", fields: [processStepId], references: [id])
+  processStepId Int
+  sequence      Int // Порядковый номер этапа в маршруте
+}
+
+// ======================================================
+// Модуль производственных линий и участков
+// Модели для управления линиями (производственными участками)
+// и привязки к ним станков и буферов
+// ======================================================
+
+model ProductionLine {
+  id       Int                 @id @default(autoincrement())
+  name     String // Название линии
+  type     ProductionLineType // Тип линии (основная, второстепенная)
+  segments ProductionSegment[] // Участки, входящие в линию
+
+  // Буфер по умолчанию для линии (опционально)
+  defaultBuffer   Buffer? @relation("DefaultBufferForLine", fields: [defaultBufferId], references: [id])
+  defaultBufferId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductionSegment {
+  id       Int            @id @default(autoincrement())
+  name     String // Название участка
+  line     ProductionLine @relation(fields: [lineId], references: [id])
+  lineId   Int // Внешний ключ к линии
+  machines Machine[] // Станки, привязанные к участку
+
+  // Связь с буфером. Один буфер может быть привязан к нескольким участкам (из разных линий)
+  buffer   Buffer? @relation("BufferForSegment", fields: [bufferId], references: [id])
+  bufferId Int? // Внешний ключ для связи с буфером (опционально)
+
+  // Новая связь с мастерами, которые контролируют этот участок
+  supervisors User[] @relation("UserSupervisesSegment")
+
+  // Новая связь с этапами обработки через промежуточную таблицу
+  processSteps SegmentProcessStep[] // Этапы обработки, выполняемые на данном участке
+
+  // Обратная связь к статусам деталей для этого участка
+  detailStatuses DetailSegmentStatus[] // Статусы деталей на этом участке
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Новая модель: связь между участком и этапами обработки
+model SegmentProcessStep {
+  id            Int               @id @default(autoincrement())
+  segment       ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
+  segmentId     Int // Внешний ключ для связи с участком
+  processStep   ProcessStep       @relation(fields: [processStepId], references: [id]) // Связь с этапом обработки
+  processStepId Int // Внешний ключ для связи с этапом обработки
+  isPrimary     Boolean           @default(false) // Является ли этот этап основным для данного участка
+
+  // Уникальность связи участок-этап
+  @@unique([segmentId, processStepId])
+  // Индексы для быстрого поиска
+  @@index([segmentId])
+  @@index([processStepId])
+}
+
+// Новая модель: кэширование статусов деталей для участков
+model DetailSegmentStatus {
+  id          Int               @id @default(autoincrement())
+  detail      ProductionDetail  @relation(fields: [detailId], references: [id]) // Связь с деталью
+  detailId    Int // Внешний ключ для связи с деталью
+  segment     ProductionSegment @relation(fields: [segmentId], references: [id]) // Связь с участком
+  segmentId   Int // Внешний ключ для связи с участком
+  isCompleted Boolean           @default(false) // Завершена ли обработка детали для данного участка
+  completedAt DateTime? // Когда был завершен этап (если завершен)
+
+  // Уникальность связи деталь-участок
+  @@unique([detailId, segmentId])
+  // Индексы для быстрого поиска
+  @@index([segmentId, isCompleted])
+  @@index([detailId])
+}
+
+enum ProductionLineType {
+  PRIMARY // Основная линия
+  SECONDARY // Второстепенная линия
+}
+
+
+
+// Блок упаковки
+
+/// Статусы для задач упаковки
+enum TaskStatus {
+  PENDING
+  READY_TO_PACK
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// Задание на упаковку одного УПАКа на одном станке
+model PackagingTask {
+  id           Int             @id @default(autoincrement())
+  ypakId       Int
+  ypak         ProductionYpak  @relation(fields: [ypakId], references: [id])
+
+  machineId    Int
+  machine      Machine         @relation(fields: [machineId], references: [id])
+
+  status       TaskStatus      @default(PENDING)
+  createdAt    DateTime        @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  deliveredQty Int             @default(0)
+  requiredQty  Int
+
+  kitOps       KitOperation[]
+
+  /// Сначала даём имя связи, указываем поля и на что они ссылаются
+  priorityId   Int?
+  priority     PackagingPriority? @relation("PackagingPriorityTasks", fields: [priorityId], references: [id])
+}
+
+/// Операция комплектовщика: он встречает задание, привозит N поддонов и отмечает их
+model KitOperation {
+  id               Int            @id @default(autoincrement())
+  task             PackagingTask  @relation(fields: [taskId], references: [id])
+  taskId           Int
+  pallet           ProductionPallets @relation(fields: [palletId], references: [id])
+  palletId         Int
+  quantityDelivered Int           // обычно = pallet.quantity, но можно разбивать
+  operator         User?          @relation("KitOperatorOperations", fields: [operatorId], references: [id])
+  operatorId       Int?
+  deliveredAt      DateTime       @default(now())
+}
+
+/// Приоритет упаковки «УПАК + станок»
+model PackagingPriority {
+  id         Int             @id @default(autoincrement())
+
+  ypakId     Int
+  ypak       ProductionYpak  @relation(fields: [ypakId], references: [id])
+
+  machineId  Int
+  machine    Machine         @relation(fields: [machineId], references: [id])
+
+  priority   Int
+
+  /// Обратное поле для связи с PackagingTask
+  tasks      PackagingTask[] @relation("PackagingPriorityTasks")
+
+  @@unique([ypakId, machineId])
+}

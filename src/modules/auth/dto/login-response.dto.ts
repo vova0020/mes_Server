@@ -6,28 +6,52 @@ export class LoginResponseDto {
   // Информация о пользователе
   user: {
     id: number;
-    username: string;
-    role: string;
+    login: string;
+    roles: string[]; // Массив ролей пользователя
+    primaryRole: string; // Основная роль
     fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    position?: string;
   };
   
-  // Привязки пользователя (заполняются в зависимости от роли)
+  // Привязки пользователя (заполняются в зависимости от ролей)
   assignments: {
-    // Для операторов - привязанные станки
+    // Технологические этапы (для операторов и мастеров)
+    stages?: {
+      id: number;
+      name: string;
+      description?: string;
+      substages: {
+        id: number;
+        name: string;
+        description?: string;
+        allowance: number;
+      }[];
+      lines: {
+        id: number;
+        name: string;
+        type: string;
+      }[];
+    }[];
+    
+    // Доступные станки (для операторов)
     machines?: {
       id: number;
       name: string;
       status: string;
-      segmentId?: number;
-      segmentName?: string;
+      recommendedLoad: number;
+      loadUnit: string;
+      stages: {
+        id: number;
+        name: string;
+      }[];
     }[];
-    
-    // Для мастеров - контролируемые участки
-    segments?: {
+
+    // Информация о комплектовщике (для ролей комплектовщика)
+    picker?: {
       id: number;
-      name: string;
-      lineId: number;
-      lineName: string;
-    }[];
+      userId: number;
+    };
   };
 }
