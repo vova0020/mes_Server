@@ -10,10 +10,14 @@ import {
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
 } from '../dto/material-group.dto';
+import { EventsService } from '../../websocket/services/events.service';
 
 @Injectable()
 export class MaterialGroupsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly eventsService: EventsService,
+  ) {}
 
   async create(
     createMaterialGroupDto: CreateMaterialGroupDto,
@@ -38,11 +42,19 @@ export class MaterialGroupsService {
       },
     });
 
-    return {
+    const newGroup = {
       groupId: group.groupId,
       groupName: group.groupName,
       materialsCount: group._count.groupsMaterials,
     };
+
+    // Отправляем событие о создании группы материалов
+    this.eventsService.emitToRoom('materialGroups', 'materialGroupCreated', {
+      group: newGroup,
+      timestamp: new Date().toISOString(),
+    });
+
+    return newGroup;
   }
 
   async findAll(): Promise<MaterialGroupResponseDto[]> {
@@ -126,11 +138,19 @@ export class MaterialGroupsService {
       },
     });
 
-    return {
+    const groupResponse = {
       groupId: updatedGroup.groupId,
       groupName: updatedGroup.groupName,
       materialsCount: updatedGroup._count.groupsMaterials,
     };
+
+    // Отправляем событие об обновлении группы материалов
+    this.eventsService.emitToRoom('materialGroups', 'materialGroupUpdated', {
+      group: groupResponse,
+      timestamp: new Date().toISOString(),
+    });
+
+    return groupResponse;
   }
 
   async remove(id: number): Promise<void> {
@@ -156,6 +176,13 @@ export class MaterialGroupsService {
 
     await this.prismaService.materialGroup.delete({
       where: { groupId: id },
+    });
+
+    // Отправляем событие об удалении группы материалов
+    this.eventsService.emitToRoom('materialGroups', 'materialGroupDeleted', {
+      groupId: id,
+      groupName: group.groupName,
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -197,6 +224,24 @@ export class MaterialGroupsService {
     await this.prismaService.groupMaterial.create({
       data: linkDto,
     });
+
+    // Отправляем событие о привязке материала к группе
+    this.eventsService.emitToRoom('materialGroups', 'materialLinkedToGroup', {
+      groupId: linkDto.groupId,
+      materialId: linkDto.materialId,
+      groupName: group.groupName,
+      materialName: material.materialName,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Также отправляем в комнату материалов
+    this.eventsService.emitToRoom('materials', 'materialLinkedToGroup', {
+      groupId: linkDto.groupId,
+      materialId: linkDto.materialId,
+      groupName: group.groupName,
+      materialName: material.materialName,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   async unlinkMaterialFromGroup(
@@ -215,8 +260,39 @@ export class MaterialGroupsService {
       );
     }
 
+    // Получаем информацию о группе и материале для события
+    const group = await this.prismaService.materialGroup.findUnique({
+      where: { groupId: linkDto.groupId },
+    });
+
+    const material = await this.prismaService.material.findUnique({
+      where: { materialId: linkDto.materialId },
+    });
+
     await this.prismaService.groupMaterial.delete({
       where: { groupMaterialId: existingLink.groupMaterialId },
+    });
+
+    // Отправляем событие об отвязке материала от группы
+    this.eventsService.emitToRoom(
+      'materialGroups',
+      'materialUnlinkedFromGroup',
+      {
+        groupId: linkDto.groupId,
+        materialId: linkDto.materialId,
+        groupName: group?.groupName,
+        materialName: material?.materialName,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    // Также отправляем в комнату материалов
+    this.eventsService.emitToRoom('materials', 'materialUnlinkedFromGroup', {
+      groupId: linkDto.groupId,
+      materialId: linkDto.materialId,
+      groupName: group?.groupName,
+      materialName: material?.materialName,
+      timestamp: new Date().toISOString(),
     });
   }
 

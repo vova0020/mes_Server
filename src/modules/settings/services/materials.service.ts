@@ -9,10 +9,14 @@ import {
   UpdateMaterialDto,
   MaterialResponseDto,
 } from '../dto/material.dto';
+import { EventsService } from '../../websocket/services/events.service';
 
 @Injectable()
 export class MaterialsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly eventsService: EventsService,
+  ) {}
 
   async create(
     createMaterialDto: CreateMaterialDto,
@@ -26,7 +30,7 @@ export class MaterialsService {
       throw new ConflictException('Материал с таким названием уже существует');
     }
 
-    // Если указаны группы, проверяем их существование
+    // Если указа��ы группы, проверяем их существование
     if (createMaterialDto.groupIds && createMaterialDto.groupIds.length > 0) {
       const existingGroups = await this.prismaService.materialGroup.findMany({
         where: { groupId: { in: createMaterialDto.groupIds } },
@@ -42,6 +46,7 @@ export class MaterialsService {
     const material = await this.prismaService.material.create({
       data: {
         materialName: createMaterialDto.materialName,
+        article: createMaterialDto.article,
         unit: createMaterialDto.unit,
       },
     });
@@ -56,7 +61,15 @@ export class MaterialsService {
       });
     }
 
-    return await this.findOne(material.materialId);
+    const newMaterial = await this.findOne(material.materialId);
+
+    // Отправляем событие о создании материала
+    this.eventsService.emitToRoom('materials', 'materialCreated', {
+      material: newMaterial,
+      timestamp: new Date().toISOString(),
+    });
+
+    return newMaterial;
   }
 
   async findAll(): Promise<MaterialResponseDto[]> {
@@ -74,6 +87,7 @@ export class MaterialsService {
     return materials.map((material) => ({
       materialId: material.materialId,
       materialName: material.materialName,
+      article: material.article,
       unit: material.unit,
       groups: material.groupsMaterials.map((gm) => ({
         groupId: gm.group.groupId,
@@ -101,6 +115,7 @@ export class MaterialsService {
     return {
       materialId: material.materialId,
       materialName: material.materialName,
+      article: material.article,
       unit: material.unit,
       groups: material.groupsMaterials.map((gm) => ({
         groupId: gm.group.groupId,
@@ -121,7 +136,7 @@ export class MaterialsService {
       throw new NotFoundException(`Материал с ID ${id} не найден`);
     }
 
-    // Проверяем уникальност�� нового названия (если оно изменяется)
+    // Проверяем уникальность нового названия (если оно изменяется)
     if (
       updateMaterialDto.materialName &&
       updateMaterialDto.materialName !== existingMaterial.materialName
@@ -158,6 +173,7 @@ export class MaterialsService {
       where: { materialId: id },
       data: {
         materialName: updateMaterialDto.materialName,
+        article: updateMaterialDto.article,
         unit: updateMaterialDto.unit,
       },
     });
@@ -180,7 +196,15 @@ export class MaterialsService {
       }
     }
 
-    return await this.findOne(id);
+    const updatedMaterial = await this.findOne(id);
+
+    // Отправляем событие об обновлении материала
+    this.eventsService.emitToRoom('materials', 'materialUpdated', {
+      material: updatedMaterial,
+      timestamp: new Date().toISOString(),
+    });
+
+    return updatedMaterial;
   }
 
   async remove(id: number): Promise<void> {
@@ -209,9 +233,16 @@ export class MaterialsService {
       where: { materialId: id },
     });
 
-    // Удаляем материал
+    // Удаляем мат��риал
     await this.prismaService.material.delete({
       where: { materialId: id },
+    });
+
+    // Отправляем событие об удалении материала
+    this.eventsService.emitToRoom('materials', 'materialDeleted', {
+      materialId: id,
+      materialName: material.materialName,
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -245,6 +276,7 @@ export class MaterialsService {
     return materials.map((material) => ({
       materialId: material.materialId,
       materialName: material.materialName,
+      article: material.article,
       unit: material.unit,
       groups: material.groupsMaterials.map((gm) => ({
         groupId: gm.group.groupId,

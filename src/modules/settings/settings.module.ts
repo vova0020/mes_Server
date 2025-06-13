@@ -5,11 +5,13 @@ import { MaterialGroupsController } from './controllers/material-groups.controll
 import { MaterialsController } from './controllers/materials.controller';
 import { MaterialGroupsService } from './services/material-groups.service';
 import { MaterialsService } from './services/materials.service';
+import { WebsocketModule } from '../websocket/websocket.module';
 
 @Module({
   imports: [
     ConfigModule,
     SharedModule, // Импортируем SharedModule для доступа к PrismaService
+    WebsocketModule,
   ],
   controllers: [MaterialGroupsController, MaterialsController],
   providers: [MaterialGroupsService, MaterialsService],

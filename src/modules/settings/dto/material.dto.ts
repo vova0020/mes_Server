@@ -17,6 +17,14 @@ export class CreateMaterialDto {
   materialName: string;
 
   @ApiProperty({
+    description: 'Артикул материала',
+    example: 'А-124',
+  })
+  @IsString()
+  @IsNotEmpty()
+  article: string;
+
+  @ApiProperty({
     description: 'Единица измерения',
     example: 'кг',
   })
@@ -45,6 +53,16 @@ export class UpdateMaterialDto {
   @IsOptional()
   @IsNotEmpty()
   materialName?: string;
+
+  @ApiProperty({
+    description: 'Артикул материала',
+    required: false,
+    example: 'А-1245',
+  })
+  @IsString()
+  @IsOptional()
+  @IsNotEmpty()
+  article?: string;
 
   @ApiProperty({
     description: 'Единица измерения',
@@ -79,6 +97,12 @@ export class MaterialResponseDto {
     example: 'Сталь нержавеющая',
   })
   materialName: string;
+
+  @ApiProperty({
+    description: 'Артикул материала',
+    example: 'А-123',
+  })
+  article: string;
 
   @ApiProperty({
     description: 'Единица измерения',
