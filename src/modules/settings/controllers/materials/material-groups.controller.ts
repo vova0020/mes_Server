@@ -11,13 +11,13 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { MaterialGroupsService } from '../services/material-groups.service';
+import { MaterialGroupsService } from '../../services/materials/material-groups.service';
 import {
   CreateMaterialGroupDto,
   UpdateMaterialGroupDto,
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
-} from '../dto/material-group.dto';
+} from '../../dto/material-group.dto';
 
 @ApiTags('Группы материалов')
 @Controller('settings/material-groups')

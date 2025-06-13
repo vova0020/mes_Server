@@ -18,12 +18,12 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { MaterialsService } from '../services/materials.service';
+import { MaterialsService } from '../../services/materials/materials.service';
 import {
   CreateMaterialDto,
   UpdateMaterialDto,
   MaterialResponseDto,
-} from '../dto/material.dto';
+} from '../../dto/material.dto';
 
 @ApiTags('Материалы')
 @Controller('settings/materials')

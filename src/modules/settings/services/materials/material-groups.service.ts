@@ -3,14 +3,14 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../shared/prisma.service';
+import { PrismaService } from '../../../../shared/prisma.service';
 import {
   CreateMaterialGroupDto,
   UpdateMaterialGroupDto,
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
-} from '../dto/material-group.dto';
-import { EventsService } from '../../websocket/services/events.service';
+} from '../../dto/material-group.dto';
+import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()
 export class MaterialGroupsService {

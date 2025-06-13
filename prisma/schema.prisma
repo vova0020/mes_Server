@@ -260,6 +260,7 @@ model ProductionLine {
 
   // Связи
   linesStages LineStage[]
+  materials   LineMaterial[]
 
   @@map("production_lines")
 }
@@ -402,6 +403,7 @@ model Material {
   // Связи
   groupsMaterials GroupMaterial[]
   parts           Part[]
+  lines          LineMaterial[]
 
   @@map("materials")
 }
@@ -416,6 +418,18 @@ model GroupMaterial {
   material Material      @relation(fields: [materialId], references: [materialId], onDelete: Cascade)
 
   @@map("groups_materials")
+}
+  
+model LineMaterial {
+  lineMaterialId Int             @id @default(autoincrement()) @map("line_material_id")
+  lineId         Int             @map("line_id")
+  materialId     Int             @map("material_id")
+
+  // связи
+  line     ProductionLine       @relation(fields: [lineId], references: [lineId], onDelete: Cascade)
+  material Material             @relation(fields: [materialId], references: [materialId], onDelete: Cascade)
+
+  @@map("lines_materials")
 }
 
 // ========================================

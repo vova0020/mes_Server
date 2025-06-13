@@ -3,13 +3,13 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../shared/prisma.service';
+import { PrismaService } from '../../../../shared/prisma.service';
 import {
   CreateMaterialDto,
   UpdateMaterialDto,
   MaterialResponseDto,
-} from '../dto/material.dto';
-import { EventsService } from '../../websocket/services/events.service';
+} from '../../dto/material.dto';
+import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()
 export class MaterialsService {
