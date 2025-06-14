@@ -10,9 +10,11 @@ import { ProductionStagesLevel1Service } from './services/flows/production-stage
 import { ProductionStagesLevel2Service } from './services/flows/production-stages-level2.service';
 import { ProductionStagesLevel1Controller } from './controllers/flows/production-stages-level1.controller';
 import { ProductionStagesLevel2Controller } from './controllers/flows/production-stages-level2.controller';
-
 import { ProductionLinesService } from './services/flows/production-lines.service';
 import { ProductionLinesController } from './controllers/flows/production-lines.controller';
+import { RoutesController } from './controllers/route/routes.controller';
+import { RoutesService } from './services/route/routes.service';
+import { RouteStagesService } from './services/route/route-stages.service';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { ProductionLinesController } from './controllers/flows/production-lines.
     ProductionLinesController,
     ProductionStagesLevel1Controller,
     ProductionStagesLevel2Controller,
+    RoutesController,
   ],
   providers: [
     MaterialGroupsService,
@@ -33,6 +36,8 @@ import { ProductionLinesController } from './controllers/flows/production-lines.
     ProductionLinesService,
     ProductionStagesLevel1Service,
     ProductionStagesLevel2Service,
+    RoutesService, // Добавляем RoutesService в провайдеры
+    RouteStagesService,
   ],
   exports: [
     MaterialGroupsService,
@@ -40,6 +45,8 @@ import { ProductionLinesController } from './controllers/flows/production-lines.
     ProductionLinesService,
     ProductionStagesLevel1Service,
     ProductionStagesLevel2Service,
+    RoutesService,
+    RouteStagesService,
   ], // Экспортируем сервисы для использования в других модулях
 })
-export class SettingsModule { }
+export class SettingsModule {}
