@@ -23,7 +23,7 @@ import {
   CreateMaterialDto,
   UpdateMaterialDto,
   MaterialResponseDto,
-} from '../../dto/material.dto';
+} from '../../dto/material/material.dto';
 
 @ApiTags('Материалы')
 @Controller('settings/materials')

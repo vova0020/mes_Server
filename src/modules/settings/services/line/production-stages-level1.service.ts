@@ -8,7 +8,7 @@ import {
   CreateProductionStageLevel1Dto,
   UpdateProductionStageLevel1Dto,
   ProductionStageLevel1ResponseDto,
-} from '../../dto/production-stage-level1.dto';
+} from '../../dto/line/production-stage-level1.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()

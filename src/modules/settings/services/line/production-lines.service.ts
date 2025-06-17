@@ -14,7 +14,7 @@ import {
   LineMaterialsUpdateDto,
   LineStagesUpdateDto,
   LineMaterialResponseDto,
-} from '../../dto/production-line.dto';
+} from '../../dto/line/production-line.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()

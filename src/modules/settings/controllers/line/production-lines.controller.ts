@@ -11,7 +11,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { ProductionLinesService } from '../../services/flows/production-lines.service';
+import { ProductionLinesService } from '../../services/line/production-lines.service';
 import {
   CreateProductionLineDto,
   UpdateProductionLineDto,
@@ -22,7 +22,7 @@ import {
   LineMaterialResponseDto,
   LineMaterialsUpdateDto,
   LineStagesUpdateDto,
-} from '../../dto/production-line.dto';
+} from '../../dto/line/production-line.dto';
 
 @ApiTags('Производственные потоки')
 @Controller('settings/production-lines')

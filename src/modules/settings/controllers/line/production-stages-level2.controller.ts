@@ -18,14 +18,14 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { ProductionStagesLevel2Service } from '../../services/flows/production-stages-level2.service';
+import { ProductionStagesLevel2Service } from '../../services/line/production-stages-level2.service';
 import {
   CreateProductionStageLevel2Dto,
   UpdateProductionStageLevel2Dto,
   ProductionStageLevel2ResponseDto,
   LinkSubstageToStageDto,
   RebindSubstageDto,
-} from '../../dto/production-stage-level2.dto';
+} from '../../dto/line/production-stage-level2.dto';
 
 @ApiTags('Технологические операции 2 уровня')
 @Controller('settings/production-stages-level2')

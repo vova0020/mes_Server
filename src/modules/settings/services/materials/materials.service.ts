@@ -8,7 +8,7 @@ import {
   CreateMaterialDto,
   UpdateMaterialDto,
   MaterialResponseDto,
-} from '../../dto/material.dto';
+} from '../../dto/material/material.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()

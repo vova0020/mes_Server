@@ -9,7 +9,7 @@ import {
   UpdateMaterialGroupDto,
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
-} from '../../dto/material-group.dto';
+} from '../../dto/material/material-group.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()

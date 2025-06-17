@@ -11,12 +11,12 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { ProductionStagesLevel1Service } from '../../services/flows/production-stages-level1.service';
+import { ProductionStagesLevel1Service } from '../../services/line/production-stages-level1.service';
 import {
   CreateProductionStageLevel1Dto,
   UpdateProductionStageLevel1Dto,
   ProductionStageLevel1ResponseDto,
-} from '../../dto/production-stage-level1.dto';
+} from '../../dto/line/production-stage-level1.dto';
 
 @ApiTags('Технологические операции 1 уровня')
 @Controller('settings/production-stages-level1')

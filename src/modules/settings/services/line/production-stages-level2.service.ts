@@ -10,7 +10,7 @@ import {
   ProductionStageLevel2ResponseDto,
   LinkSubstageToStageDto,
   RebindSubstageDto,
-} from '../../dto/production-stage-level2.dto';
+} from '../../dto/line/production-stage-level2.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 
 @Injectable()

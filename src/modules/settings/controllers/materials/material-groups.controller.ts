@@ -17,7 +17,7 @@ import {
   UpdateMaterialGroupDto,
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
-} from '../../dto/material-group.dto';
+} from '../../dto/material/material-group.dto';
 
 @ApiTags('Группы материалов')
 @Controller('settings/material-groups')
