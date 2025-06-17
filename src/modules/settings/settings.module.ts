@@ -15,12 +15,14 @@ import { ProductionLinesController } from './controllers/line/production-lines.c
 import { RoutesController } from './controllers/route/routes.controller';
 import { RoutesService } from './services/route/routes.service';
 import { RouteStagesService } from './services/route/route-stages.service';
-import { MachinesService } from './services/machines/machines.service';
+import { MachinesService } from './services/buffers/machines/machines.service';
 import { MachinesController } from './controllers/machines/machines.controller';
 import { BuffersController } from './controllers/buffers/buffers.controller';
 import { BuffersService } from './services/buffers/buffers.service';
 import { BufferCellsService } from './services/buffers/buffer-cells.service';
 import { BufferStagesService } from './services/buffers/buffer-stages.service';
+import { UsersService } from './services/users/users.service';
+import { UsersController } from './controllers/users/users.controller';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { BufferStagesService } from './services/buffers/buffer-stages.service';
     RoutesController,
     MachinesController,
     BuffersController,
+    UsersController,
   ],
   providers: [
     MaterialGroupsService,
@@ -50,6 +53,7 @@ import { BufferStagesService } from './services/buffers/buffer-stages.service';
     BuffersService,
     BufferCellsService,
     BufferStagesService,
+    UsersService,
   ],
   exports: [
     MaterialGroupsService,
@@ -63,6 +67,7 @@ import { BufferStagesService } from './services/buffers/buffer-stages.service';
     BuffersService,
     BufferCellsService,
     BufferStagesService,
+    UsersService,
   ],
 })
 export class SettingsModule {}

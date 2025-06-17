@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../shared/prisma.service';
+import { PrismaService } from '../../../../../shared/prisma.service';
 import { Machine, MachineStatus } from '@prisma/client';
 import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
-} from '../../dto/machines/machines.dto';
+} from '../../../dto/machines/machines.dto';
 
 export interface CreateMachineData {
   machineName: string;

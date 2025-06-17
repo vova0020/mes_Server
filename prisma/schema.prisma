@@ -18,18 +18,20 @@ datasource db {
 // ========================================
 
 model User {
-  userId    Int      @id @default(autoincrement()) @map("user_id")
-  login     String   @unique
-  password  String // Зашифрованный пароль
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  userId     Int           @id @default(autoincrement()) @map("user_id")
+  login      String        @unique
+  password   String
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
 
-  // Связи
+  // связи
   userDetail   UserDetail?
   userRoles    UserRole[]
   loginLogs    LoginLog[]
   pickers      Picker[]
   packingTasks PackingTask[] @relation("AssignedUser")
+  // теперь единая таблица для всех «контекстных» ролей:
+  roleBindings RoleBinding[]
 
   @@map("users")
 }
@@ -50,25 +52,51 @@ model UserDetail {
 }
 
 model Role {
-  roleId   Int    @id @default(autoincrement()) @map("role_id")
-  roleName String @map("role_name")
+  roleId    Int           @id @default(autoincrement()) @map("role_id")
+  roleName  String        @map("role_name")
 
-  // Связи
-  userRoles UserRole[]
+  userRoles    UserRole[]
+  roleBindings RoleBinding[]
 
   @@map("roles")
 }
 
-model UserRole {
-  userRoleId Int @id @default(autoincrement()) @map("user_role_id")
-  userId     Int @map("user_id")
-  roleId     Int @map("role_id")
 
-  // Связи
+/// Глобальное назначение роли (без контекста объекта)
+model UserRole {
+  userRoleId Int    @id @default(autoincrement()) @map("user_role_id")
+  userId     Int    @map("user_id")
+  roleId     Int    @map("role_id")
+
   user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade)
 
   @@map("user_roles")
+}
+
+/// Полиморфная привязка «роль ↔ контекст»
+/// contextType — тип объекта (станок, этап и т.п.)
+/// contextId   — ID этого объекта
+model RoleBinding {
+  id          Int              @id @default(autoincrement())
+  userId      Int              @map("user_id")
+  roleId      Int              @map("role_id")
+  contextType RoleContextType  @map("context_type")
+  contextId   Int              @map("context_id")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade)
+
+  @@index([roleId])
+  @@index([contextType, contextId])
+}
+ 
+/// Типы «контекстов», к которым мы привязываем пользователя
+enum RoleContextType {
+  MACHINE           // workplace — конкретный станок
+  STAGE_LEVEL1      // master / operator — этап 1-го уровня
+  ORDER_PICKER      // orderPicker — комплектовщик
+  // при необходимости — добавить новые, напр. LINE, AREA и т.п.
 }
 
 model LoginLog {

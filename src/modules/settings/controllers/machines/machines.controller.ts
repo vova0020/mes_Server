@@ -22,7 +22,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { MachinesService } from '../../services/machines/machines.service';
+import { MachinesService } from '../../services/buffers/machines/machines.service';
 import { EventsService } from '../../../websocket/services/events.service';
 
 // DTO для создания станка с валидацией
