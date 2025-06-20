@@ -23,6 +23,7 @@ import { BufferCellsService } from './services/buffers/buffer-cells.service';
 import { BufferStagesService } from './services/buffers/buffer-stages.service';
 import { UsersService } from './services/users/users.service';
 import { UsersController } from './controllers/users/users.controller';
+import { PickersService } from './services/users/pickers.service';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { UsersController } from './controllers/users/users.controller';
     BufferCellsService,
     BufferStagesService,
     UsersService,
+    PickersService,
   ],
   exports: [
     MaterialGroupsService,
@@ -68,6 +70,7 @@ import { UsersController } from './controllers/users/users.controller';
     BufferCellsService,
     BufferStagesService,
     UsersService,
+    PickersService,
   ],
 })
 export class SettingsModule {}

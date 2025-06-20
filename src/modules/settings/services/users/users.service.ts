@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   Logger,
@@ -8,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
 import { EventsService } from '../../../websocket/services/events.service';
+import { PickersService } from './pickers.service';
 import * as bcrypt from 'bcrypt';
 import {
   CreateUserDto,
@@ -22,6 +22,13 @@ import {
   UserRoleType,
   RoleContextType,
 } from '../../dto/users/user-roles.dto';
+import {
+  CreatePickerDto,
+  UpdatePickerDto,
+  PickerResponseDto,
+  CreatePickerWithRoleDto,
+  PickerWithRoleResponseDto,
+} from '../../dto/users/picker-management.dto';
 
 @Injectable()
 export class UsersService {
@@ -30,6 +37,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventsService: EventsService,
+    private readonly pickersService: PickersService,
   ) {}
 
   // ========================================
@@ -581,34 +589,52 @@ export class UsersService {
   }
 
   async getPickersForBinding(): Promise<{ pickers: Array<{ pickerId: number; pickerName: string }> }> {
-    this.logger.log('Получение списка комплектовщиков для привязки');
+    this.logger.log('Получение списка комплектовщиков для привязки - делегирование в PickersService');
+    return await this.pickersService.getPickersForBinding();
+  }
 
-    try {
-      const pickers = await this.prisma.picker.findMany({
-        include: {
-          user: {
-            include: { userDetail: true }
-          }
-        },
-        orderBy: { pickerId: 'asc' },
-      });
+  // ========================================
+  // Методы для работы с комплектовщиками (делегирование в PickersService)
+  // ========================================
 
-      const formattedPickers = pickers.map(picker => ({
-        pickerId: picker.pickerId,
-        pickerName: picker.user?.userDetail 
-          ? `${picker.user.userDetail.firstName} ${picker.user.userDetail.lastName}`
-          : `Комплектовщик ${picker.pickerId}`
-      }));
+  async createPicker(createPickerDto: CreatePickerDto): Promise<PickerResponseDto> {
+    this.logger.log(`Создание комплектовщика через UsersService - делегирование в PickersService`);
+    return await this.pickersService.createPicker(createPickerDto);
+  }
 
-      this.logger.log(`Получено ${formattedPickers.length} комплектовщиков для привязки`);
-      return { pickers: formattedPickers };
-    } catch (error) {
-      this.logger.error(
-        `Ошибка получения списка комплектовщиков: ${error.message}`,
-        error.stack,
-      );
-      throw new BadRequestException('Не удалось получить список комплектовщиков');
-    }
+  async createPickerWithRole(
+    createPickerWithRoleDto: CreatePickerWithRoleDto,
+  ): Promise<PickerWithRoleResponseDto> {
+    this.logger.log(`Создание комплектовщика с ролью через UsersService - делегирование в PickersService`);
+    return await this.pickersService.createPickerWithRole(createPickerWithRoleDto);
+  }
+
+  async getAllPickers(): Promise<PickerResponseDto[]> {
+    this.logger.log('Получение всех комплектовщиков через UsersService - делегирование в PickersService');
+    return await this.pickersService.getAllPickers();
+  }
+
+  async getPickerById(pickerId: number): Promise<PickerResponseDto> {
+    this.logger.log(`Получение комплектовщика по ID через UsersService - делегирование в PickersService`);
+    return await this.pickersService.getPickerById(pickerId);
+  }
+
+  async getPickerByUserId(userId: number): Promise<PickerResponseDto> {
+    this.logger.log(`Получение комплектовщика по userId через UsersService - делегирование в PickersService`);
+    return await this.pickersService.getPickerByUserId(userId);
+  }
+
+  async updatePicker(
+    pickerId: number,
+    updatePickerDto: UpdatePickerDto,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(`Обновление комплектовщика через UsersService - делегирование в PickersService`);
+    return await this.pickersService.updatePicker(pickerId, updatePickerDto);
+  }
+
+  async deletePicker(pickerId: number): Promise<void> {
+    this.logger.log(`Удаление комплектовщика через UsersService - делегирование в PickersService`);
+    return await this.pickersService.deletePicker(pickerId);
   }
 
   // ========================================
@@ -701,10 +727,13 @@ export class UsersService {
         break;
 
       case RoleContextType.ORDER_PICKER:
-        const picker = await this.prisma.picker.findUnique({
-          where: { pickerId: contextId },
-        });
-        exists = !!picker;
+        // Используем метод из PickersService для валидации
+        try {
+          await this.pickersService.validatePickerExists(contextId);
+          exists = true;
+        } catch (error) {
+          exists = false;
+        }
         break;
     }
 
@@ -734,17 +763,8 @@ export class UsersService {
           return stage?.stageName || `Этап ${contextId}`;
 
         case RoleContextType.ORDER_PICKER:
-          const picker = await this.prisma.picker.findUnique({
-            where: { pickerId: contextId },
-            include: {
-              user: {
-                include: { userDetail: true },
-              },
-            },
-          });
-          return picker?.user?.userDetail
-            ? `${picker.user.userDetail.firstName} ${picker.user.userDetail.lastName}`
-            : `Комплектовщик ${contextId}`;
+          // Используем метод из PickersService для получения имени
+          return await this.pickersService.getContextObjectName(contextId);
 
         default:
           return `Объект ${contextId}`;

@@ -31,6 +31,13 @@ import {
   UserRolesResponseDto,
   UserRoleType,
 } from '../../dto/users/user-roles.dto';
+import {
+  CreatePickerDto,
+  UpdatePickerDto,
+  PickerResponseDto,
+  CreatePickerWithRoleDto,
+  PickerWithRoleResponseDto,
+} from '../../dto/users/picker-management.dto';
 
 @ApiTags('Управление пользователями')
 @Controller('settings/users')
@@ -106,7 +113,7 @@ export class UsersController {
     @Param('userId', ParseIntPipe) userId: number,
     @Body() updateUserDto: UpdateUserDto,
   ): Promise<UserResponseDto> {
-    this.logger.log(`REST: Обн��вление пользователя ID: ${userId}`);
+    this.logger.log(`REST: Обновление пользователя ID: ${userId}`);
     return await this.usersService.updateUser(userId, updateUserDto);
   }
 
@@ -220,6 +227,132 @@ export class UsersController {
   }
 
   // ========================================
+  // Управление комплектовщиками
+  // ========================================
+
+  @Post('pickers')
+  @ApiOperation({ summary: 'Создать комплектовщика' })
+  @ApiResponse({
+    status: 201,
+    description: 'Комплектовщик создан успешно',
+    type: PickerResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Неверные данные' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  @ApiResponse({
+    status: 409,
+    description: 'Пользователь уже является комплектовщиком',
+  })
+  async createPicker(
+    @Body() createPickerDto: CreatePickerDto,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(
+      `REST: Создание комплектовщика для пользователя ID: ${createPickerDto.userId}`,
+    );
+    return await this.usersService.createPicker(createPickerDto);
+  }
+
+  @Post('pickers/with-role')
+  @ApiOperation({ summary: 'Создать комплектовщика с автоматическим назначением роли' })
+  @ApiResponse({
+    status: 201,
+    description: 'Комплектовщик создан с ролью',
+    type: PickerWithRoleResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Неверные данные' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  @ApiResponse({
+    status: 409,
+    description: 'Пользователь уже является комплектовщиком',
+  })
+  async createPickerWithRole(
+    @Body() createPickerWithRoleDto: CreatePickerWithRoleDto,
+  ): Promise<PickerWithRoleResponseDto> {
+    this.logger.log(
+      `REST: Создание комплектовщика с ролью для пользователя ID: ${createPickerWithRoleDto.userId}`,
+    );
+    return await this.usersService.createPickerWithRole(createPickerWithRoleDto);
+  }
+
+  @Get('pickers')
+  @ApiOperation({ summary: 'Получить список всех комплектовщиков' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список комплектовщиков получен',
+    type: [PickerResponseDto],
+  })
+  async getAllPickers(): Promise<PickerResponseDto[]> {
+    this.logger.log('REST: Получение списка всех комплектовщиков');
+    return await this.usersService.getAllPickers();
+  }
+
+  @Get('pickers/:pickerId')
+  @ApiOperation({ summary: 'Получить комплектовщика по ID' })
+  @ApiParam({ name: 'pickerId', description: 'ID комплектовщика' })
+  @ApiResponse({
+    status: 200,
+    description: 'Комплектовщик найден',
+    type: PickerResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Комплектовщик не найден' })
+  async getPickerById(
+    @Param('pickerId', ParseIntPipe) pickerId: number,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(`REST: Получение комплектовщика по ID: ${pickerId}`);
+    return await this.usersService.getPickerById(pickerId);
+  }
+
+  @Get('pickers/by-user/:userId')
+  @ApiOperation({ summary: 'Получить комплектовщика по ID пользователя' })
+  @ApiParam({ name: 'userId', description: 'ID пользователя' })
+  @ApiResponse({
+    status: 200,
+    description: 'Комплектовщик найден',
+    type: PickerResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Комплектовщик не найден' })
+  async getPickerByUserId(
+    @Param('userId', ParseIntPipe) userId: number,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(`REST: Получение комплектовщика по ID пользователя: ${userId}`);
+    return await this.usersService.getPickerByUserId(userId);
+  }
+
+  @Put('pickers/:pickerId')
+  @ApiOperation({ summary: 'Обновить данные комплектовщика' })
+  @ApiParam({ name: 'pickerId', description: 'ID комплектовщика' })
+  @ApiResponse({
+    status: 200,
+    description: 'Комплектовщик обновлён',
+    type: PickerResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Комплектовщик не на��ден' })
+  @ApiResponse({
+    status: 409,
+    description: 'Пользователь уже является комплектовщиком',
+  })
+  async updatePicker(
+    @Param('pickerId', ParseIntPipe) pickerId: number,
+    @Body() updatePickerDto: UpdatePickerDto,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(`REST: Обновление комплектовщика ID: ${pickerId}`);
+    return await this.usersService.updatePicker(pickerId, updatePickerDto);
+  }
+
+  @Delete('pickers/:pickerId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Удалить комплектовщика' })
+  @ApiParam({ name: 'pickerId', description: 'ID комплектовщика' })
+  @ApiResponse({ status: 204, description: 'Комплектовщик удалён' })
+  @ApiResponse({ status: 404, description: 'Комплектовщик не найден' })
+  async deletePicker(
+    @Param('pickerId', ParseIntPipe) pickerId: number,
+  ): Promise<void> {
+    this.logger.log(`REST: Удаление комплектовщика ID: ${pickerId}`);
+    await this.usersService.deletePicker(pickerId);
+  }
+
+  // ========================================
   // Вспомогательные эндпоинты
   // ========================================
 
@@ -245,7 +378,7 @@ export class UsersController {
 
   @Get('context/stages')
   @ApiOperation({ summary: 'Получить список этапов для привязки' })
-  @ApiResponse({ status: 200, description: 'Спис��к этапов получен' })
+  @ApiResponse({ status: 200, description: 'Список этапов получен' })
   async getStagesForBinding(): Promise<{
     stages: Array<{ stageId: number; stageName: string }>;
   }> {
