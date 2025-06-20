@@ -22,7 +22,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { MachinesService } from '../../services/buffers/machines/machines.service';
+import { MachinesService } from '../../services/machines/machines.service';
 import { EventsService } from '../../../websocket/services/events.service';
 
 // DTO для создания станка с валидацией
@@ -32,7 +32,7 @@ export class CreateMachineDto {
   machineName: string;
 
   @IsEnum(['ACTIVE', 'INACTIVE', 'MAINTENANCE'], {
-    message: 'Стат��с должен быть ACTIVE, INACTIVE или MAINTENANCE',
+    message: 'Статeс должен быть ACTIVE, INACTIVE или MAINTENANCE',
   })
   status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
 
@@ -52,7 +52,7 @@ export class CreateMachineDto {
     }
     return Boolean(value);
   })
-  isTaskChangeable: boolean;
+  noSmenTask: boolean;
 }
 
 // DTO для обновления станка с валидацией
@@ -87,7 +87,7 @@ export class UpdateMachineDto {
     }
     return Boolean(value);
   })
-  isTaskChangeable?: boolean;
+  noSmenTask?: boolean;
 }
 
 // DTO для управления связями с этапами

@@ -28,7 +28,6 @@ export class AuthService {
     console.log('🌐 IP адрес:', ip);
     console.log('🖥️ User Agent:', userAgent);
 
-    // Поиск пользователя по login (вместо username)
     console.log('🔍 Поиск пользователя по login:', dto.username);
     const user = await this.prisma.user.findUnique({
       where: { login: dto.username },
@@ -76,7 +75,6 @@ export class AuthService {
     console.log('✅ Пароль верный - логируем успешный вход');
     await this.recordLoginLog(user.userId, ip, userAgent, true);
 
-    // Получаем роли пользователя
     console.log('🎭 Обработка ролей пользователя...');
     const roles = user.userRoles.map((ur) => ur.role.roleName);
     const primaryRole = roles[0];
@@ -84,7 +82,6 @@ export class AuthService {
     console.log('🎭 Роли пользователя:', roles);
     console.log('🎭 Основная роль:', primaryRole);
 
-    // Формируем payload для JWT-токена
     const payload = {
       sub: user.userId,
       login: user.login,
@@ -96,12 +93,10 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
     console.log('🔐 JWT Token сформирован, длина:', token.length);
 
-    // Получаем данные о привязанных технологических этапах
     console.log('🏭 Получение assignments для пользователя...');
     const assignments = await this.getUserStageAssignments(user.userId, roles);
     console.log('🏭 Полученные assignments:', assignments);
 
-    // Формируем полный ответ с токеном, информацией о пользователе и привязками
     const response: LoginResponseDto = {
       token,
       user: {
@@ -128,7 +123,6 @@ export class AuthService {
     return response;
   }
 
-  // Получение привязанных технологических этапов для пользователя
   private async getUserStageAssignments(userId: number, roles: string[]) {
     console.log('🏭 === Начало получения assignments ===');
     console.log('🏭 UserId:', userId);
@@ -136,185 +130,91 @@ export class AuthService {
 
     const assignments: any = {};
 
-    // Проверяем роли
-    const isOperator = this.hasOperatorRole(roles);
-    const isMaster = this.hasMasterRole(roles);
-    const isPicker = this.hasPickerRole(roles);
-    const isAdmin = this.hasAdminRole(roles);
+    // Получаем все контекстные привязки пользователя
+    const roleBindings = await this.prisma.roleBinding.findMany({
+      where: { userId },
+    });
 
-    console.log('🏭 Проверка ролей:');
-    console.log('🏭 - isOperator:', isOperator);
-    console.log('🏭 - isMaster:', isMaster);
-    console.log('🏭 - isPicker:', isPicker);
-    console.log('🏭 - isAdmin:', isAdmin);
+    console.log('🏭 Найдено roleBindings:', roleBindings.length);
 
-    // Для операторов и мастеров получаем технологические этапы
-    if (isOperator || isMaster) {
-      console.log('🏭 Получаем технологические этапы для оператора/мастера...');
+    // Группируем привязки по contextType
+    const bindingsByType = roleBindings.reduce((acc, binding) => {
+      const type = binding.contextType;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(binding);
+      return acc;
+    }, {});
 
+    console.log('🏭 bindingsByType:', Object.keys(bindingsByType));
+
+    // Обрабатываем STAGE_LEVEL1
+    if (bindingsByType['STAGE_LEVEL1']) {
+      const stageIds = bindingsByType['STAGE_LEVEL1'].map(b => b.contextId);
       const stages = await this.prisma.productionStageLevel1.findMany({
-        include: {
-          productionStagesLevel2: true,
-          linesStages: {
-            include: {
-              line: true,
-            },
-          },
+        where: { stageId: { in: stageIds } },
+        select: {
+          stageId: true,
+          stageName: true,
         },
       });
 
-      console.log('🏭 Найдено технологических этапов Level1:', stages.length);
-
-      assignments.stages = stages.map((stage) => {
-        const stageData = {
-          id: stage.stageId,
-          name: stage.stageName,
-          description: stage.description,
-          substages: stage.productionStagesLevel2.map((substage) => ({
-            id: substage.substageId,
-            name: substage.substageName,
-            description: substage.description,
-            allowance: substage.allowance,
-          })),
-          lines: stage.linesStages.map((ls) => ({
-            id: ls.line.lineId,
-            name: ls.line.lineName,
-            type: ls.line.lineType,
-          })),
-        };
-
-        console.log(`🏭 Этап ${stage.stageId} (${stage.stageName}):`, {
-          subsStages: stage.productionStagesLevel2.length,
-          lines: stage.linesStages.length,
-        });
-
-        return stageData;
-      });
+      assignments.stages = stages.map(stage => ({
+        id: stage.stageId,
+        name: stage.stageName,
+      }));
 
       console.log('🏭 Обработанные stages:', assignments.stages.length);
     }
 
-    // Для операторов также получаем доступные станки
-    if (isOperator) {
-      console.log('🏭 Получаем станки для оператора...');
-
+    // Обрабатываем MACHINE
+    if (bindingsByType['MACHINE']) {
+      const machineIds = bindingsByType['MACHINE'].map(b => b.contextId);
       const machines = await this.prisma.machine.findMany({
-        include: {
-          machinesStages: {
-            include: {
-              stage: true,
-            },
-          },
+        where: { machineId: { in: machineIds } },
+        select: {
+          machineId: true,
+          machineName: true,
         },
       });
 
-      console.log('🏭 Найдено станков:', machines.length);
-
-      assignments.machines = machines.map((machine) => {
-        const machineData = {
-          id: machine.machineId,
-          name: machine.machineName,
-          status: machine.status,
-          recommendedLoad: machine.recommendedLoad,
-          loadUnit: machine.loadUnit,
-          stages: machine.machinesStages.map((ms) => ({
-            id: ms.stage.stageId,
-            name: ms.stage.stageName,
-          })),
-        };
-
-        console.log(
-          `🏭 Станок ${machine.machineId} (${machine.machineName}):`,
-          {
-            status: machine.status,
-            stages: machine.machinesStages.length,
-          },
-        );
-
-        return machineData;
-      });
+      assignments.machines = machines.map(machine => ({
+        id: machine.machineId,
+        name: machine.machineName,
+      }));
 
       console.log('🏭 Обработанные machines:', assignments.machines.length);
     }
 
-    // Для комплектовщиков получаем информацию о picker
-    if (isPicker) {
-      console.log('🏭 Получаем информацию picker для комплектовщика...');
-
-      const picker = await this.prisma.picker.findFirst({
-        where: { userId: userId },
+    // Обрабатываем ORDER_PICKER
+    if (bindingsByType['ORDER_PICKER']) {
+      const pickerIds = bindingsByType['ORDER_PICKER'].map(b => b.contextId);
+      const pickers = await this.prisma.picker.findMany({
+        where: { pickerId: { in: pickerIds } },
+        select: {
+          pickerId: true,
+          userId: true,
+        },
       });
 
-      console.log(
-        '🏭 Найден picker:',
-        picker ? `ID: ${picker.pickerId}` : 'Не найден',
-      );
+      assignments.pickers = pickers.map(picker => ({
+        id: picker.pickerId,
+        userId: picker.userId,
+      }));
 
-      if (picker) {
-        assignments.picker = {
-          id: picker.pickerId,
-          userId: picker.userId,
-        };
-        console.log('🏭 Добавлен picker в assignments:', assignments.picker);
-      }
+      console.log('🏭 Обработанные pickers:', assignments.pickers.length);
     }
 
     console.log('🏭 === Финальные assignments ===');
-    console.log(
-      '🏭 stages:',
-      assignments.stages ? assignments.stages.length : 'не задано',
-    );
-    console.log(
-      '🏭 machines:',
-      assignments.machines ? assignments.machines.length : 'не задано',
-    );
-    console.log('🏭 picker:', assignments.picker ? 'задано' : 'не задано');
+    console.log('🏭 stages:', assignments.stages ? assignments.stages.length : 'не задано');
+    console.log('🏭 machines:', assignments.machines ? assignments.machines.length : 'не задано');
+    console.log('🏭 pickers:', assignments.pickers ? assignments.pickers.length : 'не задано');
 
     return assignments;
   }
 
-  // Вспомогательные методы для проверки ролей
-  private hasOperatorRole(roles: string[]): boolean {
-    const result = roles.some(
-      (role) =>
-        role.toLowerCase().includes('operator') ||
-        role.toLowerCase().includes('оператор'),
-    );
-    console.log('🎭 hasOperatorRole check:', roles, '=> result:', result);
-    return result;
-  }
-
-  private hasMasterRole(roles: string[]): boolean {
-    const result = roles.some(
-      (role) =>
-        role.toLowerCase().includes('master') ||
-        role.toLowerCase().includes('мастер'),
-    );
-    console.log('🎭 hasMasterRole check:', roles, '=> result:', result);
-    return result;
-  }
-
-  private hasPickerRole(roles: string[]): boolean {
-    const result = roles.some(
-      (role) =>
-        role.toLowerCase().includes('picker') ||
-        role.toLowerCase().includes('комплектовщик'),
-    );
-    console.log('🎭 hasPickerRole check:', roles, '=> result:', result);
-    return result;
-  }
-
-  private hasAdminRole(roles: string[]): boolean {
-    const result = roles.some(
-      (role) =>
-        role.toLowerCase().includes('admin') ||
-        role.toLowerCase().includes('администратор'),
-    );
-    console.log('🎭 hasAdminRole check:', roles, '=> result:', result);
-    return result;
-  }
-
-  // Запись лога входа в систему
+   // Запись лога входа в систему
   private async recordLoginLog(
     userId: number | null,
     ip: string,

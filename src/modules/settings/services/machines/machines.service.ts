@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../../shared/prisma.service';
+import { PrismaService } from '../../../../shared/prisma.service';
 import { Machine, MachineStatus } from '@prisma/client';
 import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
-} from '../../../dto/machines/machines.dto';
+} from '../../dto/machines/machines.dto';
 
 export interface CreateMachineData {
   machineName: string;
   status: MachineStatus;
   recommendedLoad: number;
   loadUnit: string;
-  isTaskChangeable: boolean;
+  noSmenTask: boolean;
 }
 
 export interface UpdateMachineData {
@@ -19,7 +19,7 @@ export interface UpdateMachineData {
   status?: MachineStatus;
   recommendedLoad?: number;
   loadUnit?: string;
-  isTaskChangeable?: boolean;
+  noSmenTask?: boolean;
 }
 
 @Injectable()
@@ -120,7 +120,7 @@ export class MachinesService {
           status: data.status,
           recommendedLoad: data.recommendedLoad,
           loadUnit: data.loadUnit,
-          isTaskChangeable: data.isTaskChangeable,
+          noSmenTask: data.noSmenTask,
         },
         include: {
           machinesStages: {

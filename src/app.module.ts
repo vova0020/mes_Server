@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
 // import { UsersModule } from './modules/users/users.module';
-// import { OrdersModule } from './modules/ordersProduct/orders.module';
+import { OrdersModule } from './modules/ordersProduct/orders.module';
 // import { DetailsModule } from './modules/detailsProduct/details.module';
 // import { PalletsModule } from './modules/palletsProduct/pallets.module';
 // import { BuffersModule } from './modules/buffer/buffer.module';
@@ -21,7 +21,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     AuthModule,
     SettingsModule,
     // UsersModule,
-    // OrdersModule,
+    OrdersModule,
     // DetailsModule,
     // PalletsModule,
     // BuffersModule,

@@ -368,7 +368,7 @@ model Machine {
   status           MachineStatus
   recommendedLoad  Decimal       @map("recommended_load")
   loadUnit         String        @map("load_unit")
-  isTaskChangeable Boolean       @map("is_task_changeable")
+  noSmenTask Boolean      @default(false) @map("no_smen_task")
 
   // Связи
   machinesStages     MachineStage[]

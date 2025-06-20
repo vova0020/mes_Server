@@ -33,8 +33,8 @@ export class CreateMachineDto {
   @IsNotEmpty({ message: 'Единица измерения нагрузки не может быть пустой' })
   loadUnit: string;
 
-  @IsBoolean({ message: 'isTaskChangeable должно быть булевым значением' })
-  isTaskChangeable: boolean;
+  @IsBoolean({ message: 'noSmenTask должно быть булевым значением' })
+  noSmenTask: boolean;
 }
 
 // DTO для обновления станка
@@ -58,9 +58,9 @@ export class UpdateMachineDto {
   @IsOptional()
   loadUnit?: string;
 
-  @IsBoolean({ message: 'isTaskChangeable должно быть булевым значением' })
+  @IsBoolean({ message: 'noSmenTask должно быть булевым значением' })
   @IsOptional()
-  isTaskChangeable?: boolean;
+  noSmenTask?: boolean;
 }
 
 // DTO для управления связями с этапами 1-го уровня
@@ -129,7 +129,7 @@ export interface MachineResponse {
   status: MachineStatus;
   recommendedLoad: number;
   loadUnit: string;
-  isTaskChangeable: boolean;
+  noSmenTask: boolean;
   machinesStages?: MachineStageResponse[];
   machineSubstages?: MachineSubstageResponse[];
 }
