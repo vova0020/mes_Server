@@ -4,7 +4,7 @@ import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
 // import { UsersModule } from './modules/users/users.module';
 import { OrdersModule } from './modules/ordersProduct/orders.module';
-// import { DetailsModule } from './modules/detailsProduct/details.module';
+import { DetailsModule } from './modules/detailsProduct/details.module';
 // import { PalletsModule } from './modules/palletsProduct/pallets.module';
 // import { BuffersModule } from './modules/buffer/buffer.module';
 // import { MachinNoSmenModule } from './modules/machinsNoSmen!/machin.module';
@@ -22,7 +22,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     SettingsModule,
     // UsersModule,
     OrdersModule,
-    // DetailsModule,
+    DetailsModule,
     // PalletsModule,
     // BuffersModule,
     // MachinsModule,
