@@ -1,3 +1,4 @@
+
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { LoginDto } from '../dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -151,7 +152,7 @@ export class AuthService {
 
     // Обрабатываем STAGE_LEVEL1
     if (bindingsByType['STAGE_LEVEL1']) {
-      const stageIds = bindingsByType['STAGE_LEVEL1'].map(b => b.contextId);
+      const stageIds = bindingsByType['STAGE_LEVEL1'].map((b) => b.contextId);
       const stages = await this.prisma.productionStageLevel1.findMany({
         where: { stageId: { in: stageIds } },
         select: {
@@ -160,7 +161,7 @@ export class AuthService {
         },
       });
 
-      assignments.stages = stages.map(stage => ({
+      assignments.stages = stages.map((stage) => ({
         id: stage.stageId,
         name: stage.stageName,
       }));
@@ -170,26 +171,41 @@ export class AuthService {
 
     // Обрабатываем MACHINE
     if (bindingsByType['MACHINE']) {
-      const machineIds = bindingsByType['MACHINE'].map(b => b.contextId);
+      const machineIds = bindingsByType['MACHINE'].map((b) => b.contextId);
       const machines = await this.prisma.machine.findMany({
         where: { machineId: { in: machineIds } },
         select: {
           machineId: true,
           machineName: true,
+          machinesStages: {
+            select: {
+              stage: {
+                select: {
+                  stageId: true,
+                  stageName: true,
+                },
+              },
+            },
+          },
         },
       });
 
-      assignments.machines = machines.map(machine => ({
+      assignments.machines = machines.map((machine) => ({
         id: machine.machineId,
         name: machine.machineName,
+        stages: machine.machinesStages.map((ms) => ({
+          id: ms.stage.stageId,
+          name: ms.stage.stageName,
+        })),
       }));
 
       console.log('🏭 Обработанные machines:', assignments.machines.length);
+      console.log('🏭 Machines с этапами:', assignments.machines.map(m => `${m.name}: ${m.stages.length} этапов`));
     }
 
     // Обрабатываем ORDER_PICKER
     if (bindingsByType['ORDER_PICKER']) {
-      const pickerIds = bindingsByType['ORDER_PICKER'].map(b => b.contextId);
+      const pickerIds = bindingsByType['ORDER_PICKER'].map((b) => b.contextId);
       const pickers = await this.prisma.picker.findMany({
         where: { pickerId: { in: pickerIds } },
         select: {
@@ -198,7 +214,7 @@ export class AuthService {
         },
       });
 
-      assignments.pickers = pickers.map(picker => ({
+      assignments.pickers = pickers.map((picker) => ({
         id: picker.pickerId,
         userId: picker.userId,
       }));
@@ -207,14 +223,23 @@ export class AuthService {
     }
 
     console.log('🏭 === Финальные assignments ===');
-    console.log('🏭 stages:', assignments.stages ? assignments.stages.length : 'не задано');
-    console.log('🏭 machines:', assignments.machines ? assignments.machines.length : 'не задано');
-    console.log('🏭 pickers:', assignments.pickers ? assignments.pickers.length : 'не задано');
+    console.log(
+      '🏭 stages:',
+      assignments.stages ? assignments.stages.length : 'не задано',
+    );
+    console.log(
+      '🏭 machines:',
+      assignments.machines ? assignments.machines.length : 'не задано',
+    );
+    console.log(
+      '🏭 pickers:',
+      assignments.pickers ? assignments.pickers.length : 'не задано',
+    );
 
     return assignments;
   }
 
-   // Запись лога входа в систему
+  // Запись лога входа в систему
   private async recordLoginLog(
     userId: number | null,
     ip: string,
