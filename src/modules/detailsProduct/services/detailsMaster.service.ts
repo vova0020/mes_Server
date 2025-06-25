@@ -71,7 +71,10 @@ export class DetailsMasterService {
                 },
                 material: true,
                 pallets: {
-                  include: {
+                  select: {
+                    palletId: true,
+                    palletName: true,
+                    quantity: true,
                     palletStageProgress: {
                       include: {
                         routeStage: {
@@ -206,9 +209,8 @@ export class DetailsMasterService {
 
           // Анализируем поддоны для данной детали
           for (const pallet of part.pallets) {
-            // Определяем количество на поддоне (пока используем общее количество детали)
-            const palletQuantity =
-              Number(part.totalQuantity) / part.pallets.length || 1;
+            // Используем количество деталей на конкретном поддоне
+            const palletQuantity = Number(pallet.quantity);
 
             // Находим прогресс поддона по этапам текущего участка
             const currentSegmentProgress = pallet.palletStageProgress.filter(

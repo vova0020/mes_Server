@@ -65,7 +65,11 @@ export class PalletsMachineTaskService {
       where: {
         partId,
       },
-      include: {
+      select: {
+        palletId: true,
+        palletName: true,
+        quantity: true,
+        partId: true,
         part: {
           include: {
             material: true,
@@ -128,7 +132,7 @@ export class PalletsMachineTaskService {
         );
         const processingStatus = await this.getProcessingStatus(
           pallet,
-          stageId,
+          stageId, 
         );
 
         // Получаем информацию о станке из активного назначения
@@ -138,16 +142,16 @@ export class PalletsMachineTaskService {
             : null;
 
         return {
-          id: pallet.palletId,
+          id: pallet.palletId, 
           name: pallet.palletName,
-          quantity: Number(pallet.part.totalQuantity), // Количество берется из part
+          quantity: Number(pallet.quantity), // Количество берется из поддона
           part: {
             id: pallet.part.partId,
             article: pallet.part.partCode,
             name: pallet.part.partName,
             material: pallet.part.material.materialName,
             size: pallet.part.size,
-            totalNumber: Number(pallet.part.totalQuantity),
+            totalNumber: Number(pallet.quantity),
             status: pallet.part.status,
             readyForProcessing: partProgressStats.readyForProcessing,
             completed: partProgressStats.completed,

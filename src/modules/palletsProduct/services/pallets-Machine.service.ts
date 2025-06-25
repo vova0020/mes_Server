@@ -154,11 +154,29 @@ export class PalletMachineService {
         machineId: machineId,
         completedAt: null,
       },
-      include: {
-        machine: true,
+      select: {
+        assignmentId: true,
+        machineId: true,
+        palletId: true,
+        assignedAt: true,
+        machine: {
+          select: {
+            machineId: true,
+            machineName: true,
+            status: true,
+          },
+        },
         pallet: {
-          include: {
-            part: true,
+          select: {
+            palletId: true,
+            palletName: true,
+            partId: true,
+            part: {
+              select: {
+                partId: true,
+                partName: true,
+              },
+            },
           },
         },
       },
@@ -191,19 +209,18 @@ export class PalletMachineService {
     // Создаем новое назначение на станок и обновляем прогресс
     return this.prisma.$transaction(async (prisma) => {
       // Создаем назначение станка
+      const assignedAt = new Date();
       const newAssignment = await prisma.machineAssignment.create({
         data: {
           machineId: machineId,
           palletId: palletId,
-          assignedAt: new Date(),
+          assignedAt,
         },
-        include: {
-          machine: true,
-          pallet: {
-            include: {
-              part: true,
-            },
-          },
+        select: {
+          assignmentId: true,
+          machineId: true,
+          palletId: true,
+          assignedAt: true,
         },
       });
 
@@ -230,9 +247,34 @@ export class PalletMachineService {
         });
       }
 
+      // Получаем минимальные данные для ответа
+      const optimizedAssignment = {
+        assignmentId: newAssignment.assignmentId,
+        machineId: newAssignment.machineId,
+        palletId: newAssignment.palletId,
+        assignedAt: newAssignment.assignedAt,
+        completedAt: null,
+        machine: {
+          machineId: machine.machineId,
+          machineName: machine.machineName,
+          status: machine.status,
+        },
+        pallet: {
+          palletId: pallet.palletId,
+          palletName: pallet.palletName,
+          partId: pallet.partId,
+          part: {
+            partId: pallet.part.partId,
+            partName: pallet.part.partName,
+          },
+        },
+      };
+
       // Отправляем событие
-      this.eventsGateway.server.to('palets').emit('startWork', newAssignment);
-      return newAssignment;
+      this.eventsGateway.server
+        .to('palets')
+        .emit('startWork', optimizedAssignment);
+      return optimizedAssignment;
     });
   }
 
@@ -245,33 +287,57 @@ export class PalletMachineService {
     operatorId?: number,
     stageId?: number,
   ) {
-    // Находим активное назначение
+    // Находим активное назначение с минимальными данными
     const assignment = await this.prisma.machineAssignment.findFirst({
       where: {
         palletId: palletId,
         machineId: machineId,
         completedAt: null,
       },
-      include: {
+      select: {
+        assignmentId: true,
+        machineId: true,
+        palletId: true,
+        assignedAt: true,
         machine: {
-          include: {
-            machinesStages: {
-              include: {
-                stage: true,
-              },
-            },
+          select: {
+            machineId: true,
+            machineName: true,
+            status: true,
           },
         },
         pallet: {
-          include: {
+          select: {
+            palletId: true,
+            palletName: true,
+            partId: true,
             part: {
-              include: {
+              select: {
+                partId: true,
+                partName: true,
+                routeId: true,
                 route: {
-                  include: {
+                  select: {
+                    routeId: true,
+                    routeName: true,
                     routeStages: {
-                      include: {
-                        stage: true,
-                        substage: true,
+                      select: {
+                        routeStageId: true,
+                        sequenceNumber: true,
+                        stageId: true,
+                        substageId: true,
+                        stage: {
+                          select: {
+                            stageId: true,
+                            stageName: true,
+                          },
+                        },
+                        substage: {
+                          select: {
+                            substageId: true,
+                            substageName: true,
+                          },
+                        },
                       },
                       orderBy: {
                         sequenceNumber: 'asc',
@@ -282,11 +348,29 @@ export class PalletMachineService {
               },
             },
             palletStageProgress: {
-              include: {
+              select: {
+                pspId: true,
+                palletId: true,
+                routeStageId: true,
+                status: true,
                 routeStage: {
-                  include: {
-                    stage: true,
-                    substage: true,
+                  select: {
+                    routeStageId: true,
+                    sequenceNumber: true,
+                    stageId: true,
+                    substageId: true,
+                    stage: {
+                      select: {
+                        stageId: true,
+                        stageName: true,
+                      },
+                    },
+                    substage: {
+                      select: {
+                        substageId: true,
+                        substageName: true,
+                      },
+                    },
                   },
                 },
               },
@@ -320,9 +404,10 @@ export class PalletMachineService {
 
     return this.prisma.$transaction(async (prisma) => {
       // Завершаем назначение станка
+      const completedAt = new Date();
       await prisma.machineAssignment.update({
         where: { assignmentId: assignment.assignmentId },
-        data: { completedAt: new Date() },
+        data: { completedAt },
       });
 
       // Завершаем текущий прогресс этапа
@@ -330,7 +415,7 @@ export class PalletMachineService {
         where: { pspId: currentProgress.pspId },
         data: {
           status: 'COMPLETED',
-          completedAt: new Date(),
+          completedAt,
         },
       });
 
@@ -358,7 +443,7 @@ export class PalletMachineService {
           where: { prpId: existingPartProgress.prpId },
           data: {
             status: 'COMPLETED',
-            completedAt: new Date(),
+            completedAt,
           },
         });
       } else {
@@ -367,13 +452,34 @@ export class PalletMachineService {
             partId: assignment.pallet.partId,
             routeStageId: currentProgress.routeStageId,
             status: 'COMPLETED',
-            completedAt: new Date(),
+            completedAt,
           },
         });
       }
 
+      // Возвращаем оптимизированный ответ с минимальными данными
       return {
-        assignment,
+        assignment: {
+          assignmentId: assignment.assignmentId,
+          machineId: assignment.machineId,
+          palletId: assignment.palletId,
+          assignedAt: assignment.assignedAt,
+          completedAt,
+          machine: {
+            machineId: assignment.machine.machineId,
+            machineName: assignment.machine.machineName,
+            status: assignment.machine.status,
+          },
+          pallet: {
+            palletId: assignment.pallet.palletId,
+            palletName: assignment.pallet.palletName,
+            partId: assignment.pallet.partId,
+            part: {
+              partId: assignment.pallet.part.partId,
+              partName: assignment.pallet.part.partName,
+            },
+          },
+        },
         nextStage: nextRouteStage
           ? `Установлен следующий этап: ${nextRouteStage.stage.stageName}`
           : 'Обработка завершена',
@@ -387,35 +493,83 @@ export class PalletMachineService {
   async getPalletInfo(palletId: number) {
     return this.prisma.pallet.findUnique({
       where: { palletId: palletId },
-      include: {
-        part: true,
+      select: {
+        palletId: true,
+        palletName: true,
+        quantity: true,
+        partId: true,
+        part: {
+          select: {
+            partId: true,
+            partCode: true,
+            partName: true,
+            status: true,
+            totalQuantity: true,
+          },
+        },
         machineAssignments: {
+          select: {
+            assignmentId: true,
+            machineId: true,
+            assignedAt: true,
+            completedAt: true,
+            machine: {
+              select: {
+                machineId: true,
+                machineName: true,
+                status: true,
+              },
+            },
+          },
           orderBy: {
             assignedAt: 'desc',
           },
           take: 5,
-          include: {
-            machine: true,
-          },
         },
         palletBufferCells: {
-          where: {
-            removedAt: null, // Активные размещения в буфере
-          },
-          include: {
+          select: {
+            palletCellId: true,
+            placedAt: true,
             cell: {
-              include: {
-                buffer: true,
+              select: {
+                cellId: true,
+                cellCode: true,
+                status: true,
+                buffer: {
+                  select: {
+                    bufferId: true,
+                    bufferName: true,
+                    location: true,
+                  },
+                },
               },
             },
           },
+          where: {
+            removedAt: null, // Активные размещения в буфере
+          },
         },
         palletStageProgress: {
-          include: {
+          select: {
+            pspId: true,
+            status: true,
+            completedAt: true,
             routeStage: {
-              include: {
-                stage: true,
-                substage: true,
+              select: {
+                routeStageId: true,
+                sequenceNumber: true,
+                stage: {
+                  select: {
+                    stageId: true,
+                    stageName: true,
+                  },
+                },
+                substage: {
+                  select: {
+                    substageId: true,
+                    substageName: true,
+                  },
+                },
               },
             },
           },
@@ -489,31 +643,67 @@ export class PalletMachineService {
           },
         },
       },
-      include: {
-        part: true,
+      select: {
+        palletId: true,
+        palletName: true,
+        quantity: true,
+        partId: true,
+        part: {
+          select: {
+            partId: true,
+            partCode: true,
+            partName: true,
+            status: true,
+            totalQuantity: true,
+          },
+        },
         palletStageProgress: {
+          select: {
+            pspId: true,
+            status: true,
+            routeStage: {
+              select: {
+                routeStageId: true,
+                sequenceNumber: true,
+                stage: {
+                  select: {
+                    stageId: true,
+                    stageName: true,
+                  },
+                },
+                substage: {
+                  select: {
+                    substageId: true,
+                    substageName: true,
+                  },
+                },
+              },
+            },
+          },
           where: {
             status: 'PENDING',
           },
-          include: {
-            routeStage: {
-              include: {
-                stage: true,
-                substage: true,
-              },
-            },
-          },
         },
         palletBufferCells: {
-          where: {
-            removedAt: null,
-          },
-          include: {
+          select: {
+            palletCellId: true,
+            placedAt: true,
             cell: {
-              include: {
-                buffer: true,
+              select: {
+                cellId: true,
+                cellCode: true,
+                buffer: {
+                  select: {
+                    bufferId: true,
+                    bufferName: true,
+                    location: true,
+                  },
+                },
               },
             },
+          },
+          where: {
+            removedAt: null,
           },
         },
       },

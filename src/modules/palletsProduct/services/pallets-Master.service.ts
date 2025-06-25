@@ -95,7 +95,7 @@ export class PalletsMasterService {
       return {
         id: pallet.palletId,
         name: pallet.palletName,
-        quantity: Number(pallet.part.totalQuantity), // Используем общее количество из детали
+        quantity: Number(pallet.quantity), // Используем количество из поддона
         detailId: pallet.partId,
 
         // Форматируем данные о ячейке буфера (если есть)
@@ -358,7 +358,7 @@ export class PalletsMasterService {
             status: stageProgress.status,
             startedAt: machineAssignment.assignedAt,
             completedAt: stageProgress.completedAt,
-            quantity: Number(pallet.part.totalQuantity),
+            quantity: Number(pallet.quantity),
             productionPallet: {
               id: pallet.palletId,
               name: pallet.palletName,
@@ -597,7 +597,7 @@ export class PalletsMasterService {
             id: palletBufferCell.pallet.palletId,
             name: palletBufferCell.pallet.palletName,
             partId: palletBufferCell.pallet.partId,
-            quantity: Number(palletBufferCell.pallet.part.totalQuantity),
+            quantity: Number(palletBufferCell.pallet.quantity),
           },
           bufferCell: {
             id: palletBufferCell.cell.cellId,
@@ -722,7 +722,7 @@ export class PalletsMasterService {
           status: updatedStageProgress.status,
           startedAt: new Date(), // В новой схеме нет точного времени начала
           completedAt: updatedStageProgress.completedAt,
-          quantity: Number(updatedStageProgress.pallet.part.totalQuantity),
+          quantity: Number(updatedStageProgress.pallet.quantity),
           productionPallet: {
             id: updatedStageProgress.pallet.palletId,
             name: updatedStageProgress.pallet.palletName,

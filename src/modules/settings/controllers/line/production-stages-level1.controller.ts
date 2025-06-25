@@ -29,7 +29,7 @@ export class ProductionStagesLevel1Controller {
   @ApiOperation({ summary: 'Создать технологическую операцию 1 уровня' })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Технологическая операция успешно с��здана',
+    description: 'Технологическая операция успешно создана',
     type: ProductionStageLevel1ResponseDto,
   })
   @ApiResponse({

@@ -158,12 +158,14 @@ export class AuthService {
         select: {
           stageId: true,
           stageName: true,
+          finalStage: true,
         },
       });
 
       assignments.stages = stages.map((stage) => ({
         id: stage.stageId,
         name: stage.stageName,
+        finalStage: stage.finalStage,
       }));
 
       console.log('🏭 Обработанные stages:', assignments.stages.length);

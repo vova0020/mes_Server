@@ -310,6 +310,8 @@ model Pallet {
   partId     Int    @map("part_id")
   /// Название или код поддона
   palletName String @map("pallet_name")
+    /// Количество таких деталей на поддоне
+  quantity   Decimal @map("quantity")
 
   // связи:
   /// Ссылка на деталь
@@ -460,6 +462,8 @@ model ProductionStageLevel1 {
   createdAt   DateTime @default(now()) @map("created_at")
   /// Дата и время последнего обновления записи
   updatedAt   DateTime @updatedAt @map("updated_at")
+  /// Отметка для финального этапа (упаковка)
+  finalStage   Boolean   @default(false) @map("final_stage")
 
   // связи: какие подэтапы, линии и другие сущности связаны с этим этапом
   productionStagesLevel2 ProductionStageLevel2[]  // операции 2-го уровня, входящие в этот этап

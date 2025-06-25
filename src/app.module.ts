@@ -13,6 +13,7 @@ import { BuffersModule } from './modules/buffer/buffer.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { MachinsModule } from './modules/machins/machin.module';
+import { PackagingModule } from './modules/packaging/packaging.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MachinsModule } from './modules/machins/machin.module';
     PalletsModule,
     BuffersModule,
     MachinsModule,
+    PackagingModule,
     // MachinNoSmenModule,
     // MachinModule,
     // YpakModule,

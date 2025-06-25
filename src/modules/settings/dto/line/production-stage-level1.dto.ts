@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateProductionStageLevel1Dto {
   @IsString()
@@ -8,6 +8,10 @@ export class CreateProductionStageLevel1Dto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  finalStage?: boolean;
 }
 
 export class UpdateProductionStageLevel1Dto {
@@ -19,12 +23,17 @@ export class UpdateProductionStageLevel1Dto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  finalStage?: boolean;
 }
 
 export class ProductionStageLevel1ResponseDto {
   stageId: number;
   stageName: string;
   description?: string;
+  finalStage: boolean;
   createdAt: Date;
   updatedAt: Date;
   substagesCount: number;

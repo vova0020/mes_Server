@@ -136,12 +136,12 @@ async function seed() {
   // Создание поддонов для деталей
   await prisma.pallet.createMany({
     data: [
-      { partId: part1.partId, palletName: 'Поддон для фронта ящика' },
-      { partId: part2.partId, palletName: 'Поддон для боковины ящика' },
-      { partId: part3.partId, palletName: 'Поддон для дна ящика' },
-      { partId: part4.partId, palletName: 'Поддон для двери шкафа' },
-      { partId: part5.partId, palletName: 'Поддон для полки шкафа' },
-      { partId: part6.partId, palletName: 'Поддон для задней стенки шкафа' },
+      { partId: part1.partId, palletName: 'Поддон для фронта ящика', quantity: 10 },
+      { partId: part2.partId, palletName: 'Поддон для боковины ящика', quantity: 20 },
+      { partId: part3.partId, palletName: 'Поддон для дна ящика', quantity: 10 },
+      { partId: part4.partId, palletName: 'Поддон для двери шкафа', quantity: 5 },
+      { partId: part5.partId, palletName: 'Поддон для полки шкафа', quantity: 10 },
+      { partId: part6.partId, palletName: 'Поддон для задней стенки шкафа', quantity: 5 },
     ],
   });
 

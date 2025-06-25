@@ -108,7 +108,10 @@ export class MachinMasterService {
             },
             include: {
               pallet: {
-                include: {
+                select: {
+                  palletId: true,
+                  palletName: true,
+                  quantity: true,
                   part: true,
                 },
               },
@@ -139,7 +142,10 @@ export class MachinMasterService {
           },
           include: {
             pallet: {
-              include: {
+              select: {
+                palletId: true,
+                palletName: true,
+                quantity: true,
                 part: true,
               },
             },
@@ -157,8 +163,8 @@ export class MachinMasterService {
             acc[machineId] = 0;
           }
 
-          // Суммируем общее количество деталей по части
-          acc[machineId] += Number(assignment.pallet.part.totalQuantity);
+          // Суммируем количество деталей на поддоне
+          acc[machineId] += Number(assignment.pallet.quantity);
 
           return acc;
         },
@@ -170,7 +176,7 @@ export class MachinMasterService {
         // Расчет запланированного количества - суммируем количество деталей по всем активным назначениям
         const plannedQuantity = machine.machineAssignments.reduce(
           (total, assignment) =>
-            total + Number(assignment.pallet.part.totalQuantity),
+            total + Number(assignment.pallet.quantity),
           0,
         );
 
@@ -229,7 +235,10 @@ export class MachinMasterService {
         include: {
           // Включаем информацию о поддоне
           pallet: {
-            include: {
+            select: {
+              palletId: true,
+              palletName: true,
+              quantity: true,
               // Включаем информацию о детали
               part: {
                 include: {
@@ -285,7 +294,7 @@ export class MachinMasterService {
           detailMaterial: assignment.pallet.part.material.materialName,
           detailSize: assignment.pallet.part.size,
           palletName: assignment.pallet.palletName,
-          quantity: Number(assignment.pallet.part.totalQuantity),
+          quantity: Number(assignment.pallet.quantity),
           status: status,
           completionStatus: completionStatus,
         };
