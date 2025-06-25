@@ -85,10 +85,10 @@ export class PalletsMasterService {
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
       // Получаем текущее размещение в буфере (если есть)
       const currentBufferPlacement = pallet.palletBufferCells[0];
-      
+
       // Получаем текущее назначение на станок (если есть)
       const currentMachineAssignment = pallet.machineAssignments[0];
-      
+
       // Получаем текущий прогресс по этапам (если есть)
       const currentStageProgress = pallet.palletStageProgress[0];
 
@@ -97,7 +97,7 @@ export class PalletsMasterService {
         name: pallet.palletName,
         quantity: Number(pallet.part.totalQuantity), // Используем общее количество из детали
         detailId: pallet.partId,
-        
+
         // Форматируем данные о ячейке буфера (если есть)
         bufferCell: currentBufferPlacement
           ? {
@@ -107,7 +107,7 @@ export class PalletsMasterService {
               bufferName: currentBufferPlacement.cell.buffer?.bufferName,
             }
           : null,
-          
+
         // Форматируем данные о станке (если есть)
         machine: currentMachineAssignment?.machine
           ? {
@@ -116,19 +116,20 @@ export class PalletsMasterService {
               status: currentMachineAssignment.machine.status,
             }
           : null,
-          
-        // Добавляем информацию о текущей операции на основе прогресса этапов
+
+        // Добавляем информацию о текущей о��ерации на основе прогресса этапов
         currentOperation: currentStageProgress
           ? {
               id: currentStageProgress.pspId,
               status: currentStageProgress.status,
-              completionStatus: this.mapTaskStatusToCompletionStatus(currentStageProgress.status),
               startedAt: new Date(), // В новой схеме нет точного времени начала, используем текущее
               completedAt: currentStageProgress.completedAt || undefined,
               processStep: {
                 id: currentStageProgress.routeStage.stageId,
                 name: currentStageProgress.routeStage.stage.stageName,
-                sequence: Number(currentStageProgress.routeStage.sequenceNumber),
+                sequence: Number(
+                  currentStageProgress.routeStage.sequenceNumber,
+                ),
               },
             }
           : null,
@@ -220,6 +221,23 @@ export class PalletsMasterService {
 
       // Используем транзакцию для атомарного выполнения всех операций
       return await this.prisma.$transaction(async (prisma) => {
+        // Получаем текущее размещение поддона в буфере для обновления статуса ячейки
+        const currentBufferPlacement = await prisma.palletBufferCell.findFirst({
+          where: {
+            palletId,
+            removedAt: null,
+          },
+          include: {
+            cell: {
+              include: {
+                palletBufferCells: {
+                  where: { removedAt: null },
+                },
+              },
+            },
+          },
+        });
+
         // Завершаем предыдущее назначение на станок (если есть)
         await prisma.machineAssignment.updateMany({
           where: {
@@ -248,6 +266,43 @@ export class PalletsMasterService {
           },
         });
 
+        // Если поддон был в буфере, обновляем статус ячейки
+        if (currentBufferPlacement) {
+          // Завершаем размещение в буфере
+          await prisma.palletBufferCell.update({
+            where: { palletCellId: currentBufferPlacement.palletCellId },
+            data: { removedAt: new Date() },
+          });
+
+          // Пересчитываем загрузку ячейки (считаем количество поддонов, а не деталей)
+          const remainingPallets =
+            currentBufferPlacement.cell.palletBufferCells.filter(
+              (pbc) => pbc.palletId !== palletId,
+            );
+
+          const newLoad = remainingPallets.length; // Количество поддонов в ячейке
+
+          const newStatus =
+            newLoad === 0
+              ? 'AVAILABLE'
+              : newLoad >= Number(currentBufferPlacement.cell.capacity)
+                ? 'OCCUPIED'
+                : 'AVAILABLE';
+
+          await prisma.bufferCell.update({
+            where: { cellId: currentBufferPlacement.cellId },
+            data: {
+              currentLoad: newLoad,
+              status: newStatus,
+            },
+          });
+
+          this.logger.log(
+            `Обновлена ячейка буфера ${currentBufferPlacement.cell.cellCode}: ` +
+              `загрузка ${newLoad}/${currentBufferPlacement.cell.capacity} поддонов, статус ${newStatus}`,
+          );
+        }
+
         // Создаем или обновляем прогресс этапа
         const existingProgress = await prisma.palletStageProgress.findFirst({
           where: {
@@ -261,7 +316,7 @@ export class PalletsMasterService {
           stageProgress = await prisma.palletStageProgress.update({
             where: { pspId: existingProgress.pspId },
             data: {
-              status: TaskStatus.IN_PROGRESS,
+              status: TaskStatus.PENDING, // Меняем на PENDING при назначении на станок
               completedAt: null,
             },
             include: {
@@ -278,7 +333,7 @@ export class PalletsMasterService {
             data: {
               palletId,
               routeStageId: routeStage.routeStageId,
-              status: TaskStatus.IN_PROGRESS,
+              status: TaskStatus.PENDING, // Сразу PENDING при назначении на станок
             },
             include: {
               routeStage: {
@@ -292,7 +347,8 @@ export class PalletsMasterService {
         }
 
         this.logger.log(
-          `Создано назначение ${machineAssignment.assignmentId} поддона ${palletId} на станок ${machineId}`,
+          `Создано назначение ${machineAssignment.assignmentId} поддона ${palletId} на станок ${machineId}. ` +
+            `Статус операции: ${stageProgress.status}`,
         );
 
         return {
@@ -300,7 +356,6 @@ export class PalletsMasterService {
           operation: {
             id: stageProgress.pspId,
             status: stageProgress.status,
-            completionStatus: this.mapTaskStatusToCompletionStatus(stageProgress.status),
             startedAt: machineAssignment.assignedAt,
             completedAt: stageProgress.completedAt,
             quantity: Number(pallet.part.totalQuantity),
@@ -317,13 +372,15 @@ export class PalletsMasterService {
               id: routeStage.stageId,
               name: routeStage.stage.stageName,
             },
-            operator: operatorId ? {
-              id: operatorId,
-              username: 'Unknown', // В новой схеме нет прямой связи с пользователем
-              details: {
-                fullName: 'Unknown User',
-              },
-            } : undefined,
+            operator: operatorId
+              ? {
+                  id: operatorId,
+                  username: 'Unknown', // В новой схеме нет прямой связи с пользователем
+                  details: {
+                    fullName: 'Unknown User',
+                  },
+                }
+              : undefined,
           },
         };
       });
@@ -348,9 +405,20 @@ export class PalletsMasterService {
       const pallet = await this.prisma.pallet.findUnique({
         where: { palletId },
         include: {
+          part: true,
           palletBufferCells: {
             where: { removedAt: null },
-            include: { cell: true },
+            include: {
+              cell: {
+                include: {
+                  buffer: true,
+                },
+              },
+            },
+            take: 1,
+          },
+          machineAssignments: {
+            where: { completedAt: null },
             take: 1,
           },
         },
@@ -360,10 +428,11 @@ export class PalletsMasterService {
         throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
       }
 
-      // Проверяем существование ячей��и буфера
+      // Проверяем существование ячейки буфера
       const bufferCell = await this.prisma.bufferCell.findUnique({
         where: { cellId: bufferCellId },
         include: {
+          buffer: true,
           palletBufferCells: {
             where: { removedAt: null },
           },
@@ -377,25 +446,48 @@ export class PalletsMasterService {
       }
 
       // Проверяем доступность ячейки
-      if (bufferCell.status !== 'AVAILABLE' && bufferCell.status !== 'OCCUPIED') {
+      if (bufferCell.status === 'RESERVED') {
         throw new Error(
-          `Ячейка буфера ${bufferCell.cellCode} недоступна. Текущий статус: ${bufferCell.status}`,
+          `Ячейка буфера ${bufferCell.cellCode} зарезервирована и недоступна для размещения`,
         );
       }
 
-      // Проверяем вместимость
+      // Получаем текущую загрузку ячейки (количество поддонов)
       const currentPalletsInCell = bufferCell.palletBufferCells.length;
+      const currentLoad = currentPalletsInCell; // Используем количество поддонов, а не currentLoad из БД
+
+      // Проверяем, находится ли поддон уже в этой ячейке
       const isCurrentPalletInThisCell = pallet.palletBufferCells.some(
-        pbc => pbc.cellId === bufferCellId
+        (pbc) => pbc.cellId === bufferCellId,
       );
-      
-      if (!isCurrentPalletInThisCell && currentPalletsInCell >= Number(bufferCell.capacity)) {
+
+      // Если поддон уже в этой ячейке, не нужно его перемещать
+      if (isCurrentPalletInThisCell) {
+        this.logger.warn(
+          `Поддон ${palletId} уже находится в ячейке ${bufferCell.cellCode}`,
+        );
+        return {
+          message: 'Поддон уже находится в указанной ячейке',
+          pallet: pallet,
+          operation: null,
+        };
+      }
+
+      // Проверяем вместимость (учитываем количество поддонов, а не деталей)
+      const newLoad = currentLoad + 1; // Добавляем 1 поддон
+
+      if (newLoad > Number(bufferCell.capacity)) {
         throw new Error(
-          `Ячейка буфера ${bufferCell.cellCode} уже заполнена до максимальной вместимости (${bufferCell.capacity})`,
+          `Недостаточно места в ячейке ${bufferCell.cellCode}. ` +
+            `Текущая загрузка: ${currentLoad} поддонов, требуется: 1 поддон, ` +
+            `максимальная вместимость: ${bufferCell.capacity} поддонов`,
         );
       }
 
       return await this.prisma.$transaction(async (prisma) => {
+        // Получае�� предыдущую ячейку для обновления её статуса
+        const previousPlacement = pallet.palletBufferCells[0];
+
         // Завершаем предыдущие размещения в буфере
         await prisma.palletBufferCell.updateMany({
           where: {
@@ -406,6 +498,60 @@ export class PalletsMasterService {
             removedAt: new Date(),
           },
         });
+
+        // Если поддон был в другой ячейке, обновляем её статус
+        if (previousPlacement) {
+          const previousCell = await prisma.bufferCell.findUnique({
+            where: { cellId: previousPlacement.cellId },
+            include: {
+              palletBufferCells: {
+                where: { removedAt: null },
+              },
+            },
+          });
+
+          if (previousCell) {
+            // Пересчитываем загрузку предыдущей ячейки (считаем поддоны)
+            const remainingPallets = previousCell.palletBufferCells.filter(
+              (pbc) => pbc.palletId !== palletId,
+            );
+
+            const newPreviousLoad = remainingPallets.length; // Количество поддонов
+
+            const newPreviousStatus =
+              newPreviousLoad === 0
+                ? 'AVAILABLE'
+                : newPreviousLoad >= Number(previousCell.capacity)
+                  ? 'OCCUPIED'
+                  : 'AVAILABLE';
+
+            await prisma.bufferCell.update({
+              where: { cellId: previousPlacement.cellId },
+              data: {
+                currentLoad: newPreviousLoad,
+                status: newPreviousStatus,
+              },
+            });
+
+            this.logger.log(
+              `Обновлена предыдущая ячейка ${previousCell.cellCode}: загрузка ${newPreviousLoad} по��донов, статус ${newPreviousStatus}`,
+            );
+          }
+        }
+
+        // Завершаем активные назначения на станки
+        if (pallet.machineAssignments.length > 0) {
+          await prisma.machineAssignment.updateMany({
+            where: {
+              palletId,
+              completedAt: null,
+            },
+            data: {
+              completedAt: new Date(),
+            },
+          });
+          this.logger.log(`Завершены назначения поддона ${palletId} на станки`);
+        }
 
         // Создаем новое размещение в буфере
         const palletBufferCell = await prisma.palletBufferCell.create({
@@ -428,22 +574,40 @@ export class PalletsMasterService {
           },
         });
 
-        // Обновляем статус ячейки буфера
-        const newPalletsCount = currentPalletsInCell + (isCurrentPalletInThisCell ? 0 : 1);
-        const newStatus = newPalletsCount >= Number(bufferCell.capacity) ? 'OCCUPIED' : 'AVAILABLE';
-        
+        // Обновляем статус и загрузку целевой ячейки буфера
+        const newStatus =
+          newLoad >= Number(bufferCell.capacity) ? 'OCCUPIED' : 'AVAILABLE';
+
         await prisma.bufferCell.update({
           where: { cellId: bufferCellId },
-          data: { status: newStatus },
+          data: {
+            currentLoad: newLoad,
+            status: newStatus,
+          },
         });
 
         this.logger.log(
-          `Поддон ${palletId} перемещен в ячейку буфера ${bufferCellId}`,
+          `Поддон ${palletId} перемещен в ячейку буфера ${bufferCell.cellCode}. ` +
+            `Новая загрузка: ${newLoad}/${bufferCell.capacity} поддонов, статус: ${newStatus}`,
         );
 
         return {
           message: 'Поддон успешно перемещен в буфер',
-          pallet: palletBufferCell.pallet,
+          pallet: {
+            id: palletBufferCell.pallet.palletId,
+            name: palletBufferCell.pallet.palletName,
+            partId: palletBufferCell.pallet.partId,
+            quantity: Number(palletBufferCell.pallet.part.totalQuantity),
+          },
+          bufferCell: {
+            id: palletBufferCell.cell.cellId,
+            code: palletBufferCell.cell.cellCode,
+            bufferId: palletBufferCell.cell.bufferId,
+            bufferName: palletBufferCell.cell.buffer.bufferName,
+            currentLoad: newLoad,
+            capacity: Number(palletBufferCell.cell.capacity),
+            status: newStatus,
+          },
           operation: null, // В новой схеме нет прямой связи с операциями
         };
       });
@@ -512,28 +676,30 @@ export class PalletsMasterService {
       }
 
       // Обновляем прогресс этапа
-      const updatedStageProgress = await this.prisma.palletStageProgress.update({
-        where: { pspId: operationId },
-        data: updateData,
-        include: {
-          pallet: {
-            include: {
-              part: true,
-              machineAssignments: {
-                where: { completedAt: null },
-                include: { machine: true },
-                take: 1,
+      const updatedStageProgress = await this.prisma.palletStageProgress.update(
+        {
+          where: { pspId: operationId },
+          data: updateData,
+          include: {
+            pallet: {
+              include: {
+                part: true,
+                machineAssignments: {
+                  where: { completedAt: null },
+                  include: { machine: true },
+                  take: 1,
+                },
+              },
+            },
+            routeStage: {
+              include: {
+                stage: true,
+                substage: true,
               },
             },
           },
-          routeStage: {
-            include: {
-              stage: true,
-              substage: true,
-            },
-          },
         },
-      });
+      );
 
       let message = 'Статус операции обновлен';
       if (status === OperationCompletionStatus.COMPLETED) {
@@ -546,14 +712,14 @@ export class PalletsMasterService {
 
       this.logger.log(`Операция ${operationId} обновлена: ${message}`);
 
-      const currentMachine = updatedStageProgress.pallet.machineAssignments[0]?.machine;
+      const currentMachine =
+        updatedStageProgress.pallet.machineAssignments[0]?.machine;
 
       return {
         message,
         operation: {
           id: updatedStageProgress.pspId,
           status: updatedStageProgress.status,
-          completionStatus: status,
           startedAt: new Date(), // В новой схеме нет точного времени начала
           completedAt: updatedStageProgress.completedAt,
           quantity: Number(updatedStageProgress.pallet.part.totalQuantity),
@@ -561,23 +727,27 @@ export class PalletsMasterService {
             id: updatedStageProgress.pallet.palletId,
             name: updatedStageProgress.pallet.palletName,
           },
-          machine: currentMachine ? {
-            id: currentMachine.machineId,
-            name: currentMachine.machineName,
-            status: currentMachine.status,
-          } : undefined,
+          machine: currentMachine
+            ? {
+                id: currentMachine.machineId,
+                name: currentMachine.machineName,
+                status: currentMachine.status,
+              }
+            : undefined,
           processStep: {
             id: updatedStageProgress.routeStage.stageId,
             name: updatedStageProgress.routeStage.stage.stageName,
           },
           operator: undefined, // В новой схеме нет прямой связи с оператором
-          master: masterId ? {
-            id: masterId,
-            username: 'Unknown',
-            details: {
-              fullName: 'Unknown Master',
-            },
-          } : undefined,
+          master: masterId
+            ? {
+                id: masterId,
+                username: 'Unknown',
+                details: {
+                  fullName: 'Unknown Master',
+                },
+              }
+            : undefined,
         },
       };
     } catch (error) {
@@ -664,13 +834,13 @@ export class PalletsMasterService {
         const pallet = assignment.pallet;
         const part = pallet.part;
         const stageProgress = pallet.palletStageProgress[0];
-        
+
         // Получаем информацию о заказе через связь с пакетом
         const packagePart = part.productionPackageParts[0];
         const order = packagePart?.package?.order;
 
         return {
-          operationId: stageProgress?.pspId || assignment.assignmentId,
+          operationId: assignment.assignmentId,
           orderId: order?.orderId || 0,
           orderName: order?.orderName || 'Неизвестный заказ',
           detailArticle: part.partCode,
@@ -679,8 +849,7 @@ export class PalletsMasterService {
           detailSize: part.size,
           palletName: pallet.palletName,
           quantity: Number(part.totalQuantity),
-          status: this.mapTaskStatusToOperationStatus(stageProgress?.status || TaskStatus.PENDING),
-          completionStatus: stageProgress ? this.mapTaskStatusToCompletionStatus(stageProgress.status) : null,
+          status: stageProgress?.status || TaskStatus.PENDING,
         };
       });
 
@@ -726,5 +895,36 @@ export class PalletsMasterService {
       default:
         return 'ON_MACHINE';
     }
+  }
+
+  /**
+   * Обновить статус и загрузку ячейки буфера на основе количества поддонов
+   * @param prisma Экземпляр Prisma для транзакции
+   * @param cellId ID ячейки
+   * @param palletCount Количество поддонов в ячейке
+   * @param capacity Вместимость ячейки
+   */
+  private async updateBufferCellStatus(
+    prisma: any,
+    cellId: number,
+    palletCount: number,
+    capacity: number,
+  ) {
+    const newStatus =
+      palletCount === 0
+        ? 'AVAILABLE'
+        : palletCount >= capacity
+          ? 'OCCUPIED'
+          : 'AVAILABLE';
+
+    await prisma.bufferCell.update({
+      where: { cellId },
+      data: {
+        currentLoad: palletCount,
+        status: newStatus,
+      },
+    });
+
+    return { newLoad: palletCount, newStatus };
   }
 }

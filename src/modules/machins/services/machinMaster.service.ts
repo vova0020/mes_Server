@@ -312,25 +312,78 @@ export class MachinMasterService {
     this.logger.log(`Удаление задания с ID: ${operationId}`);
 
     try {
-      // Проверяем существование назначения
+      // Проверяем существование назначения с информацией о поддоне и станке
       const assignment = await this.prisma.machineAssignment.findUnique({
         where: { assignmentId: operationId },
+        include: {
+          pallet: true,
+          machine: {
+            include: {
+              machinesStages: {
+                include: {
+                  stage: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!assignment) {
         throw new NotFoundException(`Задание с ID ${operationId} не найдено`);
       }
 
-      // Удаляем назначение
-      await this.prisma.machineAssignment.delete({
-        where: { assignmentId: operationId },
+      // Используем транзакцию для обеспечения целостности данных
+      await this.prisma.$transaction(async (prisma) => {
+        // Удаляем назначение
+        await prisma.machineAssignment.delete({
+          where: { assignmentId: operationId },
+        });
+
+        // Находим и удаляем связанные записи прогресса поддона для этапов, 
+        // на которых работает данный станок
+        const stageIds = assignment.machine.machinesStages.map(
+          (ms) => ms.stageId,
+        );
+
+        if (stageIds.length > 0) {
+          // Находим этапы маршрута, соответствующие этапам станка
+          const routeStages = await prisma.routeStage.findMany({
+            where: {
+              stageId: {
+                in: stageIds,
+              },
+            },
+          });
+
+          const routeStageIds = routeStages.map((rs) => rs.routeStageId);
+
+          if (routeStageIds.length > 0) {
+            // Удаляем записи прогресса поддона для соответствующих этапов маршрута
+            const deletedProgressRecords =
+              await prisma.palletStageProgress.deleteMany({
+                where: {
+                  palletId: assignment.palletId,
+                  routeStageId: {
+                    in: routeStageIds,
+                  },
+                  // Удаляем только незавершенные записи прогресса
+                  completedAt: null,
+                },
+              });
+
+            this.logger.log(
+              `Удалено ${deletedProgressRecords.count} записей прогресса поддона для поддона ID: ${assignment.palletId}`,
+            );
+          }
+        }
       });
 
       this.logger.log(`Задание с ID ${operationId} успешно удалено`);
       return { message: `Задание с ID ${operationId} успешно удалено` };
     } catch (error) {
       this.logger.error(
-        `О��ибка при удалении задания с ID ${operationId}: ${error.message}`,
+        `Ошибка при удалении задания с ID ${operationId}: ${error.message}`,
       );
       throw error;
     }
@@ -397,3 +450,4 @@ export class MachinMasterService {
     }
   }
 }
+ 

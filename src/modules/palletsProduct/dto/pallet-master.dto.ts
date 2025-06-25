@@ -23,7 +23,7 @@ export class ProcessStepDto {
 export class OperationStatusDto {
   id: number;
   status: string; // Общий статус (IN_PROGRESS, COMPLETED)
-  completionStatus?: string; // Статус выполнения (COMPLETED, IN_PROGRESS, PARTIALLY_COMPLETED)
+  // completionStatus?: string; // Статус выполнения (COMPLETED, IN_PROGRESS, PARTIALLY_COMPLETED)
   processStep?: ProcessStepDto; // Информация о текущем шаге процесса
   startedAt: Date;
   completedAt?: Date;

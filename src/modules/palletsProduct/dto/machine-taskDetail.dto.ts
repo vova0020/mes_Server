@@ -14,6 +14,7 @@ export class MachineTaskQueryDto {
   @IsNumber()
   machineId: number;
 }
+
 export class OrderInfoDto {
   @ApiProperty({ description: 'ID заказа', example: 1 })
   id: number;
@@ -77,7 +78,7 @@ export class TaskItemDto {
     example: 'IN_PROGRESS',
     enumName: 'TaskStatus',
   })
-  status: TaskStatus; // Изменено с OperationStatus на TaskStatus
+  status: TaskStatus;
 
   @ApiProperty({
     description: 'Общее количество деталей, готовых к обработке на станке',
@@ -179,12 +180,4 @@ export class MachineTaskMasterResponseDto {
     enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED'],
   })
   status: string;
-
-  @ApiProperty({
-    description: 'Статус выполнения',
-    example: 'COMPLETED',
-    enum: ['COMPLETED', 'IN_PROGRESS', 'PARTIALLY_COMPLETED'],
-    nullable: true,
-  })
-  completionStatus: string | null;
 }

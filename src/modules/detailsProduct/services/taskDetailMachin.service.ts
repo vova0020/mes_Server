@@ -96,45 +96,58 @@ export class TaskDetailService {
       },
     });
 
-    const routeStageIds = relevantRouteStages.map(rs => rs.routeStageId);
+    const routeStageIds = relevantRouteStages.map((rs) => rs.routeStageId);
 
-    const palletProgress = await this.prisma.palletStageProgress.findMany({
-      where: {
-        routeStageId: {
-          in: routeStageIds,
-        },
-        status: {
-          in: ['PENDING', 'IN_PROGRESS', 'COMPLETED'],
-        },
-      },
-      include: {
-        pallet: {
-          include: {
-            part: {
-              include: {
-                material: true,
-                productionPackageParts: {
-                  include: {
-                    package: {
-                      include: {
-                        order: true,
+    // Получаем ID поддонов, которые назначены на данный ��танок
+    const assignedPalletIds = machineAssignments.map(
+      (assignment) => assignment.palletId,
+    );
+
+    // Получаем прогресс только если есть назначенные поддоны
+    const palletProgress =
+      assignedPalletIds.length > 0
+        ? await this.prisma.palletStageProgress.findMany({
+            where: {
+              routeStageId: {
+                in: routeStageIds,
+              },
+              status: {
+                in: ['PENDING', 'IN_PROGRESS', 'COMPLETED'],
+              },
+              // Фильтруем только поддоны, которые назначены на данный станок
+              palletId: {
+                in: assignedPalletIds,
+              },
+            },
+            include: {
+              pallet: {
+                include: {
+                  part: {
+                    include: {
+                      material: true,
+                      productionPackageParts: {
+                        include: {
+                          package: {
+                            include: {
+                              order: true,
+                            },
+                          },
+                        },
+                        take: 1,
                       },
                     },
                   },
-                  take: 1,
+                },
+              },
+              routeStage: {
+                include: {
+                  stage: true,
+                  substage: true,
                 },
               },
             },
-          },
-        },
-        routeStage: {
-          include: {
-            stage: true,
-            substage: true,
-          },
-        },
-      },
-    });
+          })
+        : [];
 
     // Группируем задания по деталям
     const detailMap = new Map<number, TaskItemDto>();
@@ -233,33 +246,23 @@ export class TaskDetailService {
 
     // Подсчитываем статистику для каждой детали
     for (const partId of detailIds) {
-      // Получаем все поддоны для детали, связанные с этим станком
+      // Полу��аем только поддоны для детали, которые назначены на данный станок
       const assignedPallets = await this.prisma.pallet.findMany({
         where: {
           partId,
-          OR: [
-            {
-              machineAssignments: {
-                some: {
-                  machineId,
-                },
-              },
+          // Только поддоны, которые назначены на данный станок
+          machineAssignments: {
+            some: {
+              machineId,
+              completedAt: null, // Только активные назначения
             },
-            {
-              palletStageProgress: {
-                some: {
-                  routeStageId: {
-                    in: routeStageIds,
-                  },
-                },
-              },
-            },
-          ],
+          },
         },
         include: {
           machineAssignments: {
             where: {
               machineId,
+              completedAt: null,
             },
           },
           palletStageProgress: {
