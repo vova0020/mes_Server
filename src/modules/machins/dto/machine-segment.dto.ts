@@ -11,7 +11,7 @@ export class MachineSegmentQueryDto {
   })
   @Transform(({ value }) => parseInt(value, 10))
   @IsNumber()
-  segmentId: number;
+  stageId: number;
 }
 
 // DTO для ответа с детальной информацией о станке

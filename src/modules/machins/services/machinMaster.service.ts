@@ -73,22 +73,22 @@ export class MachinMasterService {
 
   /**
    * Получить все станки по ID участка с дополнительной информацией
-   * @param segmentId ID производственного участка (этапа 1-го уровня)
+   * @param stageId ID производственного участка (этапа 1-го уровня)
    * @returns Массив объектов с информацией о станках
    */
   async getMachinesBySegmentId(
-    segmentId: number,
+    stageId: number,
   ): Promise<MachineSegmentResponseDto[]> {
-    this.logger.log(`Получение станков для участка с ID: ${segmentId}`);
+    this.logger.log(`Получение станков для участка с ID: ${stageId}`);
 
     try {
       // Проверяем существование участка (этапа 1-го уровня)
       const stage = await this.prisma.productionStageLevel1.findUnique({
-        where: { stageId: segmentId },
+        where: { stageId: stageId },
       });
 
       if (!stage) {
-        throw new NotFoundException(`Участок с ID ${segmentId} не найден`);
+        throw new NotFoundException(`Участок с ID ${stageId} не найден`);
       }
 
       // Получаем все станки данного участка че��ез связь MachineStage
@@ -96,7 +96,7 @@ export class MachinMasterService {
         where: {
           machinesStages: {
             some: {
-              stageId: segmentId,
+              stageId: stageId,
             },
           },
         },
@@ -121,7 +121,7 @@ export class MachinMasterService {
       });
 
       if (machines.length === 0) {
-        this.logger.warn(`Для участка с ID ${segmentId} не найдено станков`);
+        this.logger.warn(`Для участка с ID ${stageId} не найдено станков`);
         return [];
       }
 
@@ -132,7 +132,7 @@ export class MachinMasterService {
             machine: {
               machinesStages: {
                 some: {
-                  stageId: segmentId,
+                  stageId: stageId,
                 },
               },
             },
@@ -175,8 +175,7 @@ export class MachinMasterService {
       const resultMachines = machines.map((machine) => {
         // Расчет запланированного количества - суммируем количество деталей по всем активным назначениям
         const plannedQuantity = machine.machineAssignments.reduce(
-          (total, assignment) =>
-            total + Number(assignment.pallet.quantity),
+          (total, assignment) => total + Number(assignment.pallet.quantity),
           0,
         );
 
@@ -195,12 +194,12 @@ export class MachinMasterService {
       });
 
       this.logger.log(
-        `Успешно получено ${resultMachines.length} станков для участка с ID ${segmentId}`,
+        `Успешно получено ${resultMachines.length} станков для участка с ID ${stageId}`,
       );
       return resultMachines;
     } catch (error) {
       this.logger.error(
-        `Ошибка при получении станков для участка с ID ${segmentId}: ${error.message}`,
+        `Ошибка при получении станков для участка с ID ${stageId}: ${error.message}`,
       );
       throw error;
     }
@@ -349,7 +348,7 @@ export class MachinMasterService {
           where: { assignmentId: operationId },
         });
 
-        // Находим и удаляем связанные записи прогресса поддона для этапов, 
+        // Находим и удаляем связанные записи прогресса поддона для этапов,
         // на которых работает данный станок
         const stageIds = assignment.machine.machinesStages.map(
           (ms) => ms.stageId,
@@ -459,4 +458,3 @@ export class MachinMasterService {
     }
   }
 }
- 

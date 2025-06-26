@@ -94,9 +94,9 @@ export class MachinsMasterController {
     @Query() query: MachineSegmentQueryDto,
   ): Promise<MachineSegmentResponseDto[]> {
     this.logger.log(
-      `Запрос на получение станков для участка с ID: ${query.segmentId}`,
+      `Запрос на получение станков для участка с ID: ${query.stageId}`,
     );
-    return this.machinService.getMachinesBySegmentId(query.segmentId);
+    return this.machinService.getMachinesBySegmentId(query.stageId);
   }
 
   @Get('machine-tasks')

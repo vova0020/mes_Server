@@ -15,6 +15,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { MachinsModule } from './modules/machins/machin.module';
 import { PackagingModule } from './modules/packaging/packaging.module';
 import { PackagingProductModule } from './modules/packagingProduct/packagingProduct.module';
+import { NavbarModule } from './modules/navbar/navbar.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PackagingProductModule } from './modules/packagingProduct/packagingProd
     BuffersModule,
     MachinsModule,
     PackagingModule,
+    NavbarModule,
     // MachinNoSmenModule,
     // MachinModule,
     // YpakModule,
