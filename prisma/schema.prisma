@@ -194,6 +194,8 @@ model Package {
   packageName          String  @map("package_name")
   /// Процент готовности упаковки
   completionPercentage Decimal @map("completion_percentage")
+    /// Количество упаковок в заказе
+  quantity  Decimal
 
   // связи:
   /// Ссылка на родительский заказ
@@ -526,6 +528,8 @@ enum MachineStatus {
   INACTIVE
   /// Станок на техническом обслуживании
   MAINTENANCE
+  /// Станок сломан
+  BROKEN
 }
 
 model Machine {

@@ -14,6 +14,7 @@ import { WebsocketModule } from './modules/websocket/websocket.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { MachinsModule } from './modules/machins/machin.module';
 import { PackagingModule } from './modules/packaging/packaging.module';
+import { PackagingProductModule } from './modules/packagingProduct/packagingProduct.module';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { PackagingModule } from './modules/packaging/packaging.module';
     SharedModule,
     AuthModule,
     SettingsModule,
-    // UsersModule,
+    PackagingProductModule,
     OrdersModule,
     DetailsModule,
     PalletsModule,

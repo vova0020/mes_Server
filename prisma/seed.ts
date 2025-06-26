@@ -3,149 +3,92 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function seed() {
-  // Создание заказа
-  const order = await prisma.order.create({
-    data: {
-      batchNumber: 'BATCH001',
-      orderName: 'Набор мебели A',
-      completionPercentage: 0,
-      launchPermission: true,
-      isCompleted: false,
-    },
-  });
+  console.log('Создание заказов с полной структурой...');
 
-  // Создание упаковок для заказа
-  const package1 = await prisma.package.create({
-    data: {
-      orderId: order.orderId,
-      packageCode: 'PKG001',
-      packageName: 'Блок ящиков',
-      completionPercentage: 0,
-    },
-  });
+  // Создание нескольких заказов
+  for (let orderNum = 1; orderNum <= 3; orderNum++) {
+    const order = await prisma.order.create({
+      data: {
+        batchNumber: `BATCH00${orderNum}`,
+        orderName: `Заказ производства №${orderNum}`,
+        completionPercentage: 0,
+        launchPermission: true,
+        isCompleted: false,
+      },
+    });
 
-  const package2 = await prisma.package.create({
-    data: {
-      orderId: order.orderId,
-      packageCode: 'PKG002',
-      packageName: 'Блок шкафа',
-      completionPercentage: 0,
-    },
-  });
+    console.log(`Создан заказ: ${order.orderName}`);
 
-  // Создание деталей с привязкой к маршруту ID 8
-  const part1 = await prisma.part.create({
-    data: {
-      partCode: 'PART001',
-      partName: 'Фронт ящика',
-      size: '500x300x18',
-      totalQuantity: 10,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+    // Создание 3 упаковок для каждого заказа
+    for (let pkgNum = 1; pkgNum <= 3; pkgNum++) {
+      const packageItem = await prisma.package.create({
+        data: {
+          orderId: order.orderId,
+          packageCode: `PKG${orderNum}${pkgNum.toString().padStart(2, '0')}`,
+          packageName: `Упаковка ${pkgNum} заказа ${orderNum}`,
+          completionPercentage: 0,
+          quantity: 10,
+        },
+      });
 
-  const part2 = await prisma.part.create({
-    data: {
-      partCode: 'PART002',
-      partName: 'Боковина ящика',
-      size: '400x100x18',
-      totalQuantity: 20,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+      console.log(`  Создана упаковка: ${packageItem.packageName}`);
 
-  const part3 = await prisma.part.create({
-    data: {
-      partCode: 'PART003',
-      partName: 'Дно ящика',
+      // Создание 3 деталей для каждой упаковки
+      for (let partNum = 1; partNum <= 3; partNum++) {
+        const partCode = `PART${orderNum}${pkgNum}${partNum}`;
+        const totalQuantity = 20; // Общее количество деталей
 
-      size: '480x280x5',
-      totalQuantity: 10,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+        const part = await prisma.part.create({
+          data: {
+            partCode: partCode,
+            partName: `Деталь ${partNum} упаковки ${pkgNum} заказа ${orderNum}`,
+            size: `${400 + partNum * 50}x${200 + partNum * 30}x${15 + partNum * 2}`,
+            totalQuantity: totalQuantity,
+            status: 'PENDING',
+            isSubassembly: false,
+            route: { connect: { routeId: 1 } },
+            material: { connect: { materialId: 1 } },
+            readyForMainFlow: false,
+          },
+        });
 
-  const part4 = await prisma.part.create({
-    data: {
-      partCode: 'PART004',
-      partName: 'Дверь шкафа',
+        console.log(`    Создана деталь: ${part.partName} (количество: ${totalQuantity})`);
 
-      size: '600x400x18',
-      totalQuantity: 5,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+        // Связывание детали с упаковкой
+        await prisma.productionPackagePart.create({
+          data: {
+            packageId: packageItem.packageId,
+            partId: part.partId,
+            quantity: totalQuantity,
+          },
+        });
 
-  const part5 = await prisma.part.create({
-    data: {
-      partCode: 'PART005',
-      partName: 'Полка шкафа',
+        // Создание 4 поддонов для каждой детали с равномерным распределением количества
+        const quantityPerPallet = totalQuantity / 4; // 5 штук на поддон
 
-      size: '580x380x18',
-      totalQuantity: 10,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+        for (let palletNum = 1; palletNum <= 4; palletNum++) {
+          await prisma.pallet.create({
+            data: {
+              partId: part.partId,
+              palletName: `Поддон ${palletNum} для ${part.partName}`,
+              quantity: quantityPerPallet,
+            },
+          });
 
-  const part6 = await prisma.part.create({
-    data: {
-      partCode: 'PART006',
-      partName: 'Задняя стенка шкафа',
-      size: '600x400x5',
-      totalQuantity: 5,
-      status: 'PENDING',
-      isSubassembly: false,
-      route: { connect: { routeId: 8 } },
-      material: { connect: { materialId: 2 } },
-      readyForMainFlow: false,
-    },
-  });
+          console.log(`      Создан поддон ${palletNum} (количество: ${quantityPerPallet})`);
+        }
+      }
+    }
 
-  // Связывание деталей с упаковками
-  await prisma.productionPackagePart.createMany({
-    data: [
-      { packageId: package1.packageId, partId: part1.partId, quantity: 10 },
-      { packageId: package1.packageId, partId: part2.partId, quantity: 20 },
-      { packageId: package1.packageId, partId: part3.partId, quantity: 10 },
-      { packageId: package2.packageId, partId: part4.partId, quantity: 5 },
-      { packageId: package2.packageId, partId: part5.partId, quantity: 10 },
-      { packageId: package2.packageId, partId: part6.partId, quantity: 5 },
-    ],
-  });
+    console.log(`Заказ ${orderNum} полностью создан\n`);
+  }
 
-  // Создание поддонов для деталей
-  await prisma.pallet.createMany({
-    data: [
-      { partId: part1.partId, palletName: 'Поддон для фронта ящика', quantity: 10 },
-      { partId: part2.partId, palletName: 'Поддон для боковины ящика', quantity: 20 },
-      { partId: part3.partId, palletName: 'Поддон для дна ящика', quantity: 10 },
-      { partId: part4.partId, palletName: 'Поддон для двери шкафа', quantity: 5 },
-      { partId: part5.partId, palletName: 'Поддон для полки шкафа', quantity: 10 },
-      { partId: part6.partId, palletName: 'Поддон для задней стенки шкафа', quantity: 5 },
-    ],
-  });
-
-  console.log('Данные успешно добавлены в базу');
+  console.log('✅ Все данные успешно добавлены в базу!');
+  console.log('📊 Создано:');
+  console.log('   - 3 заказа');
+  console.log('   - 9 упаковок (3 на заказ)');
+  console.log('   - 27 деталей (3 на упаковку)');
+  console.log('   - 108 поддонов (4 на деталь)');
 }
 
 seed()
@@ -173,7 +116,37 @@ seed()
 //   // Создаем роль администратора
 //   const adminRole = await prisma.role.create({
 //     data: {
-//       roleName: 'Administrator',
+//       roleName: 'admin',
+//     },
+//   });
+//   const masterRole = await prisma.role.create({
+//     data: {
+//       roleName: 'master',
+//     },
+//   });
+//   const managementRole = await prisma.role.create({
+//     data: {
+//       roleName: 'management',
+//     },
+//   });
+//   const technologistRole = await prisma.role.create({
+//     data: {
+//       roleName: 'technologist',
+//     },
+//   });
+//   const orderPickerRole = await prisma.role.create({
+//     data: {
+//       roleName: 'orderPicker',
+//     },
+//   });
+//   const workplaceRole = await prisma.role.create({
+//     data: {
+//       roleName: 'workplace',
+//     },
+//   });
+//   const operatorRole = await prisma.role.create({
+//     data: {
+//       roleName: 'operator',
 //     },
 //   });
 
