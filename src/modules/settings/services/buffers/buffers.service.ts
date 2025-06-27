@@ -13,6 +13,7 @@ import {
   BufferDetailResponse,
 } from '../../dto/buffers/buffers.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 import { BufferCellsService } from './buffer-cells.service';
 import { BufferStagesService } from './buffer-stages.service';
 
@@ -172,14 +173,17 @@ export class BuffersService {
   /**
    * Создать новый буфер
    */
-  async createBuffer(createBufferDto: CreateBufferDto): Promise<BufferDetailResponse> {
+  async createBuffer(
+    createBufferDto: CreateBufferDto,
+  ): Promise<BufferDetailResponse> {
     const startTime = Date.now();
     this.logger.log(
       `Запрос на создание буфера: ${JSON.stringify(createBufferDto)}`,
     );
 
     try {
-      const { bufferName, description, location, cells, stageIds } = createBufferDto;
+      const { bufferName, description, location, cells, stageIds } =
+        createBufferDto;
 
       // Проверяем уникальность названия буфера
       const existingBuffer = await this.prisma.buffer.findFirst({
@@ -214,13 +218,23 @@ export class BuffersService {
         // Если переданы ячейки, создаем их
         if (cells && cells.length > 0) {
           this.logger.log(`Создание ${cells.length} ячеек для буфера`);
-          await this.bufferCellsService.createBufferCells(buffer.bufferId, cells, prisma);
+          await this.bufferCellsService.createBufferCells(
+            buffer.bufferId,
+            cells,
+            prisma,
+          );
         }
 
         // Если переданы этапы, создаем связи
         if (stageIds && stageIds.length > 0) {
-          this.logger.log(`Создание связей с ${stageIds.length} этапами для буфера`);
-          await this.bufferStagesService.createBufferStages(buffer.bufferId, stageIds, prisma);
+          this.logger.log(
+            `Создание связей с ${stageIds.length} этапами для буфера`,
+          );
+          await this.bufferStagesService.createBufferStages(
+            buffer.bufferId,
+            stageIds,
+            prisma,
+          );
         }
 
         return buffer.bufferId;
@@ -230,10 +244,14 @@ export class BuffersService {
       const newBuffer = await this.getBufferById(createdBufferId);
 
       // Отправляем событие о создании буфера
-      this.eventsService.emitToRoom('buffers', 'bufferCreated', {
-        buffer: newBuffer,
-        timestamp: new Date().toISOString(),
-      });
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_BUFFERS,
+        'bufferCreated',
+        {
+          buffer: newBuffer,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -254,7 +272,10 @@ export class BuffersService {
   /**
    * Обновить буфер
    */
-  async updateBuffer(bufferId: number, updateBufferDto: UpdateBufferDto): Promise<BufferDetailResponse> {
+  async updateBuffer(
+    bufferId: number,
+    updateBufferDto: UpdateBufferDto,
+  ): Promise<BufferDetailResponse> {
     const startTime = Date.now();
     this.logger.log(
       `Запрос на обновление буфера ID: ${bufferId}, данные: ${JSON.stringify(updateBufferDto)}`,
@@ -277,9 +298,12 @@ export class BuffersService {
       const oldLocation = buffer.location;
 
       // Проверяем уникальность нового названия, если оно изменяется
-      if (updateBufferDto.bufferName && updateBufferDto.bufferName !== oldName) {
+      if (
+        updateBufferDto.bufferName &&
+        updateBufferDto.bufferName !== oldName
+      ) {
         const existingBuffer = await this.prisma.buffer.findFirst({
-          where: { 
+          where: {
             bufferName: updateBufferDto.bufferName,
             NOT: { bufferId },
           },
@@ -308,14 +332,18 @@ export class BuffersService {
       const updatedBuffer = await this.getBufferById(bufferId);
 
       // Отправляем событие об обновлении буфера
-      this.eventsService.emitToRoom('buffers', 'bufferUpdated', {
-        buffer: updatedBuffer,
-        changes: {
-          name: oldName !== updatedBuffer.bufferName,
-          location: oldLocation !== updatedBuffer.location,
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_BUFFERS,
+        'bufferUpdated',
+        {
+          buffer: updatedBuffer,
+          changes: {
+            name: oldName !== updatedBuffer.bufferName,
+            location: oldLocation !== updatedBuffer.location,
+          },
+          timestamp: new Date().toISOString(),
         },
-        timestamp: new Date().toISOString(),
-      });
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -325,7 +353,10 @@ export class BuffersService {
       return updatedBuffer;
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       this.logger.error(
@@ -367,10 +398,12 @@ export class BuffersService {
 
       // Проверяем, не используется ли буфер
       const usageCount = buffer.bufferCells.reduce((count, cell) => {
-        return count + 
-          cell.palletBufferCells.length + 
-          cell.pickerTasksFrom.length + 
-          cell.pickerTasksTo.length;
+        return (
+          count +
+          cell.palletBufferCells.length +
+          cell.pickerTasksFrom.length +
+          cell.pickerTasksTo.length
+        );
       }, 0);
 
       if (usageCount > 0) {
@@ -388,11 +421,15 @@ export class BuffersService {
       });
 
       // Отправляем событие об удалении буфера
-      this.eventsService.emitToRoom('buffers', 'bufferDeleted', {
-        bufferId: bufferId,
-        bufferName: buffer.bufferName,
-        timestamp: new Date().toISOString(),
-      });
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_BUFFERS,
+        'bufferDeleted',
+        {
+          bufferId: bufferId,
+          bufferName: buffer.bufferName,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -419,7 +456,10 @@ export class BuffersService {
   /**
    * Скопировать буфер
    */
-  async copyBuffer(bufferId: number, copyBufferDto: CopyBufferDto): Promise<BufferDetailResponse> {
+  async copyBuffer(
+    bufferId: number,
+    copyBufferDto: CopyBufferDto,
+  ): Promise<BufferDetailResponse> {
     const startTime = Date.now();
     this.logger.log(
       `Запрос на копирование буфера ID: ${bufferId} с данными: ${JSON.stringify(copyBufferDto)}`,
@@ -427,7 +467,12 @@ export class BuffersService {
 
     try {
       const originalBuffer = await this.getBufferById(bufferId);
-      const { newBufferName, newLocation, copyCells = true, copyStages = true } = copyBufferDto;
+      const {
+        newBufferName,
+        newLocation,
+        copyCells = true,
+        copyStages = true,
+      } = copyBufferDto;
 
       // Проверяем уникальность нового названия
       const existingBuffer = await this.prisma.buffer.findFirst({
@@ -463,7 +508,7 @@ export class BuffersService {
           this.logger.log(
             `Копирование ${originalBuffer.bufferCells.length} ячеек в новый буфер`,
           );
-          
+
           for (const cell of originalBuffer.bufferCells) {
             await prisma.bufferCell.create({
               data: {
@@ -482,7 +527,7 @@ export class BuffersService {
           this.logger.log(
             `Копирование связей с ${originalBuffer.bufferStages.length} этапами в новый буфер`,
           );
-          
+
           for (const bufferStage of originalBuffer.bufferStages) {
             await prisma.bufferStage.create({
               data: {
@@ -500,12 +545,16 @@ export class BuffersService {
       const finalCopiedBuffer = await this.getBufferById(copiedBufferId);
 
       // Отправляем событие о копировании буфера
-      this.eventsService.emitToRoom('buffers', 'bufferCopied', {
-        originalBuffer: originalBuffer,
-        copiedBuffer: finalCopiedBuffer,
-        copyOptions: { copyCells, copyStages },
-        timestamp: new Date().toISOString(),
-      });
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_BUFFERS,
+        'bufferCopied',
+        {
+          originalBuffer: originalBuffer,
+          copiedBuffer: finalCopiedBuffer,
+          copyOptions: { copyCells, copyStages },
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -532,7 +581,9 @@ export class BuffersService {
    */
   async getBuffersStatistics() {
     const startTime = Date.now();
-    this.logger.log('📊 BuffersService.getBuffersStatistics: Получение статистики');
+    this.logger.log(
+      '📊 BuffersService.getBuffersStatistics: Получение статистики',
+    );
 
     try {
       console.log('🔢 Подсчет буферов...');
@@ -557,10 +608,7 @@ export class BuffersService {
       console.log('🔢 Подсчет активных задач комплектовщиков...');
       const pickerTasksCount = await this.prisma.pickerTask.count({
         where: {
-          OR: [
-            { fromCellId: { not: null } },
-            { toCellId: { not: null } },
-          ],
+          OR: [{ fromCellId: { not: null } }, { toCellId: { not: null } }],
         },
       });
 
@@ -570,7 +618,8 @@ export class BuffersService {
         bufferStageConnections: bufferStagesCount,
         occupiedCells: occupiedCellsCount,
         reservedCells: reservedCellsCount,
-        availableCells: bufferCellsCount - occupiedCellsCount - reservedCellsCount,
+        availableCells:
+          bufferCellsCount - occupiedCellsCount - reservedCellsCount,
         pickerTasks: pickerTasksCount,
       };
 

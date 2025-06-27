@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 import {
   CreatePickerDto,
   UpdatePickerDto,
@@ -68,15 +69,14 @@ export class PickersService {
       );
 
       // Уведомляем через WebSocket
-      if (
-        this.eventsService &&
-        typeof this.eventsService.emitToAll === 'function'
-      ) {
-        this.eventsService.emitToAll('picker:created', {
-          pickerId: picker.pickerId,
-          userId: createPickerDto.userId,
-        });
-      }
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'pickerCreated',
+        {
+          picker: this.formatPickerResponse(picker),
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       return this.formatPickerResponse(picker);
     } catch (error) {
@@ -160,15 +160,30 @@ export class PickersService {
         );
 
         // Уведомляем через WebSocket
-        if (
-          this.eventsService &&
-          typeof this.eventsService.emitToAll === 'function'
-        ) {
-          this.eventsService.emitToAll('picker:created:with:role', {
-            pickerId: picker.pickerId,
-            userId: createPickerWithRoleDto.userId,
-            roleBindingId,
-          });
+        this.eventsService.emitToRoom(
+          WebSocketRooms.SETTINGS_USER,
+          'pickerCreated',
+          {
+            picker: this.formatPickerResponse(picker),
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Если была создана привязка роли, отправляем дополнительное уведомление
+        if (roleBindingId) {
+          this.eventsService.emitToRoom(
+            WebSocketRooms.SETTINGS_USER,
+            'userRoleBindingCreated',
+            {
+              userId: createPickerWithRoleDto.userId,
+              bindingId: roleBindingId,
+              role: UserRoleType.ORDER_PICKER,
+              contextType: RoleContextType.ORDER_PICKER,
+              contextId: picker.pickerId,
+              contextName: this.formatPickerName(picker),
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
 
         return result;
@@ -288,15 +303,15 @@ export class PickersService {
       this.logger.log(`Комплектовщик обновлён успешно: ID ${pickerId}`);
 
       // Уведомляем через WebSocket
-      if (
-        this.eventsService &&
-        typeof this.eventsService.emitToAll === 'function'
-      ) {
-        this.eventsService.emitToAll('picker:updated', {
-          pickerId,
-          userId: updatedPicker.userId,
-        });
-      }
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'pickerUpdated',
+        {
+          picker: this.formatPickerResponse(updatedPicker),
+          changes: this.getChangesFromUpdateDto(updatePickerDto),
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       return this.formatPickerResponse(updatedPicker);
     } catch (error) {
@@ -332,15 +347,15 @@ export class PickersService {
       this.logger.log(`Комплектовщик удалён успешно: ID ${pickerId}`);
 
       // Уведомляем через WebSocket
-      if (
-        this.eventsService &&
-        typeof this.eventsService.emitToAll === 'function'
-      ) {
-        this.eventsService.emitToAll('picker:deleted', {
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'pickerDeleted',
+        {
           pickerId,
-          userId: picker.userId,
-        });
-      }
+          pickerName: this.formatPickerName(picker),
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка удаления комплектовщика ID ${pickerId}: ${error.message}`,
@@ -469,5 +484,21 @@ export class PickersService {
     if (!picker) {
       throw new BadRequestException(`Комплектовщик с ID ${pickerId} не найден`);
     }
+  }
+
+  private formatPickerName(picker: any): string {
+    return picker?.user?.userDetail
+      ? `${picker.user.userDetail.firstName} ${picker.user.userDetail.lastName}`
+      : `Комплектовщик ${picker.pickerId}`;
+  }
+
+  private getChangesFromUpdateDto(updateDto: UpdatePickerDto): Record<string, boolean> {
+    const changes: Record<string, boolean> = {};
+    
+    if (updateDto.userId !== undefined) {
+      changes.userId = true;
+    }
+    
+    return changes;
   }
 }

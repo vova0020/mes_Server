@@ -12,6 +12,7 @@ import {
   StagesWithBuffersResponse,
 } from '../../dto/buffers/buffers.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class BufferStagesService {
@@ -168,7 +169,7 @@ export class BufferStagesService {
       };
 
       // Отправляем событие о создании связи буфера с этапом
-      this.eventsService.emitToRoom('buffers', 'bufferStageCreated', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStageCreated', {
         bufferId: bufferId,
         bufferName: buffer.bufferName,
         bufferStage: result,
@@ -228,7 +229,7 @@ export class BufferStagesService {
       });
 
       // Отправляем событие об удалении связи буфера с этапом
-      this.eventsService.emitToRoom('buffers', 'bufferStageDeleted', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStageDeleted', {
         bufferStageId: bufferStageId,
         bufferId: bufferStage.bufferId,
         bufferName: bufferStage.buffer.bufferName,
@@ -333,7 +334,7 @@ export class BufferStagesService {
       }));
 
       // Отправляем событие об обновлении связей буфера с этапами
-      this.eventsService.emitToRoom('buffers', 'bufferStagesUpdated', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStagesUpdated', {
         bufferId: bufferId,
         bufferName: buffer.bufferName,
         bufferStages: mappedResult,

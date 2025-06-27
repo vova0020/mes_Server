@@ -35,7 +35,7 @@ export class ProductionLinesController {
   @ApiOperation({ summary: 'Создать производственный поток' })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Поток успеш��о создан',
+    description: 'Поток успешно создан',
     type: ProductionLineResponseDto,
   })
   @ApiResponse({

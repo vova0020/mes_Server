@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 import { PickersService } from './pickers.service';
 import * as bcrypt from 'bcrypt';
 import {
@@ -97,15 +98,15 @@ export class UsersService {
         `Пользователь создан успешно: ID ${user.userId}, логин: ${user.login}`,
       );
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:created', {
-          userId: user.userId,
-          login: user.login,
-          firstName: user.userDetail?.firstName,
-          lastName: user.userDetail?.lastName,
-        });
-      }
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userCreated',
+        {
+          user: this.formatUserResponse(user),
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       return this.formatUserResponse(user);
     } catch (error) {
@@ -225,13 +226,16 @@ export class UsersService {
 
       this.logger.log(`Пользователь обновлён успешно: ID ${userId}`);
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:updated', {
-          userId: updatedUser.userId,
-          login: updatedUser.login,
-        });
-      }
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userUpdated',
+        {
+          user: this.formatUserResponse(updatedUser),
+          changes: this.getChangesFromUpdateDto(updateUserDto),
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       return this.formatUserResponse(updatedUser);
     } catch (error) {
@@ -264,13 +268,16 @@ export class UsersService {
         `Пользователь удалён успешно: ID ${userId}, логин: ${user.login}`,
       );
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:deleted', {
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userDeleted',
+        {
           userId,
-          login: user.login,
-        });
-      }
+          userName: user.login,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка удаления пользователя ID ${userId}: ${error.message}`,
@@ -322,14 +329,17 @@ export class UsersService {
         `Глобальная роль назначена успешно: ${createUserRoleDto.role} -> пользователь ID ${createUserRoleDto.userId}`,
       );
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:role:assigned', {
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userRoleAssigned',
+        {
           userId: createUserRoleDto.userId,
           role: createUserRoleDto.role,
-          type: 'global',
-        });
-      }
+          roleType: 'global' as const,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка назначения глобальной роли: ${error.message}`,
@@ -385,19 +395,40 @@ export class UsersService {
         },
       });
 
+      // Получаем название объекта контекста для уведомления
+      const contextName = await this.getContextObjectName(
+        createRoleBindingDto.contextType,
+        createRoleBindingDto.contextId,
+      );
+
+      // Получаем ID созданной привязки
+      const createdBinding = await this.prisma.roleBinding.findFirst({
+        where: {
+          userId: createRoleBindingDto.userId,
+          roleId: role.roleId,
+          contextType: this.mapDtoContextTypeToPrisma(createRoleBindingDto.contextType),
+          contextId: createRoleBindingDto.contextId,
+        },
+      });
+
       this.logger.log(
         `Контекстная привязка создана успешно: ${createRoleBindingDto.role} -> ${createRoleBindingDto.contextType}:${createRoleBindingDto.contextId}`,
       );
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:role:binding:created', {
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userRoleBindingCreated',
+        {
           userId: createRoleBindingDto.userId,
+          bindingId: createdBinding?.id || 0,
           role: createRoleBindingDto.role,
           contextType: createRoleBindingDto.contextType,
           contextId: createRoleBindingDto.contextId,
-        });
-      }
+          contextName,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка создания контекстной привязки: ${error.message}`,
@@ -483,14 +514,17 @@ export class UsersService {
         `Глобальная роль удалена успешно: ${role} у пользователя ID ${userId}`,
       );
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:role:removed', {
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userRoleRemoved',
+        {
           userId,
           role,
-          type: 'global',
-        });
-      }
+          roleType: 'global' as const,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка удаления глобальной роли: ${error.message}`,
@@ -517,18 +551,28 @@ export class UsersService {
         where: { id: bindingId },
       });
 
+      // Получаем название объекта контекста для уведомления
+      const contextName = await this.getContextObjectName(
+        this.mapPrismaContextTypeToDto(binding.contextType),
+        binding.contextId,
+      );
+
       this.logger.log(`Контекстная привязка удалена успешно: ID ${bindingId}`);
 
-      // Уведомляем через WebSocket (если метод существует)
-      if (this.eventsService && typeof this.eventsService.emitToAll === 'function') {
-        this.eventsService.emitToAll('user:role:binding:removed', {
-          bindingId,
+      // Уведомляем через WebSocket
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_USER,
+        'userRoleBindingRemoved',
+        {
           userId: binding.userId,
+          bindingId,
           role: binding.role.roleName,
           contextType: this.mapPrismaContextTypeToDto(binding.contextType),
           contextId: binding.contextId,
-        });
-      }
+          contextName,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка удаления контекстной привязки: ${error.message}`,
@@ -640,6 +684,20 @@ export class UsersService {
   // ========================================
   // Вспомогательные методы
   // ========================================
+
+  private getChangesFromUpdateDto(updateDto: UpdateUserDto): Record<string, boolean> {
+    const changes: Record<string, boolean> = {};
+    
+    if (updateDto.login !== undefined) changes.login = true;
+    if (updateDto.password !== undefined) changes.password = true;
+    if (updateDto.firstName !== undefined) changes.firstName = true;
+    if (updateDto.lastName !== undefined) changes.lastName = true;
+    if (updateDto.phone !== undefined) changes.phone = true;
+    if (updateDto.position !== undefined) changes.position = true;
+    if (updateDto.salary !== undefined) changes.salary = true;
+    
+    return changes;
+  }
 
   private formatUserResponse(user: any): UserResponseDto {
     return {

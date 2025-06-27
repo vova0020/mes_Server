@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
 import { Machine, MachineStatus } from '@prisma/client';
 import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
 } from '../../dto/machines/machines.dto';
+import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 export interface CreateMachineData {
   machineName: string;
@@ -24,13 +26,20 @@ export interface UpdateMachineData {
 
 @Injectable()
 export class MachinesService {
-  constructor(private readonly prisma: PrismaService) {
-    console.log('🔧 MachinesService: Сервис инициализирован');
+  private readonly logger = new Logger(MachinesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsService: EventsService,
+  ) {
+    this.logger.log('🔧 MachinesService: Сервис инициализирован');
   }
 
   // Получить все станки с их связями
   async findAll() {
-    console.log('📋 MachinesService.findAll: Запрос всех станков');
+    const startTime = Date.now();
+    this.logger.log('📋 Запрос всех станков');
+
     try {
       const result = await this.prisma.machine.findMany({
         include: {
@@ -53,14 +62,17 @@ export class MachinesService {
           machineName: 'asc',
         },
       });
-      console.log(
-        `✅ MachinesService.findAll: Найдено ${result.length} станков`,
+
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `✅ Найдено ${result.length} станков за ${executionTime}ms`,
       );
       return result;
     } catch (error) {
-      console.error(
-        '❌ MachinesService.findAll: Ошибка при получении станков:',
-        error,
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `❌ Ошибка при получении станков за ${executionTime}ms`,
+        error.stack,
       );
       throw error;
     }
@@ -68,7 +80,9 @@ export class MachinesService {
 
   // Получить станок по ID
   async findOne(id: number) {
-    console.log(`🔍 MachinesService.findOne: Поиск станка с ID ${id}`);
+    const startTime = Date.now();
+    this.logger.log(`🔍 Поиск станка с ID ${id}`);
+
     try {
       const result = await this.prisma.machine.findUnique({
         where: { machineId: id },
@@ -90,19 +104,23 @@ export class MachinesService {
         },
       });
 
+      const executionTime = Date.now() - startTime;
       if (result) {
-        console.log(
-          `✅ MachinesService.findOne: Найден станок "${result.machineName}" (ID: ${id})`,
+        this.logger.log(
+          `✅ Найден станок "${result.machineName}" (ID: ${id}) за ${executionTime}ms`,
         );
       } else {
-        console.log(`⚠️ MachinesService.findOne: Станок с ID ${id} не найден`);
+        this.logger.warn(
+          `⚠️ Станок с ID ${id} не найден за ${executionTime}ms`,
+        );
       }
 
       return result;
     } catch (error) {
-      console.error(
-        `❌ MachinesService.findOne: Ошибка при поиске станка ID ${id}:`,
-        error,
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `❌ Ошибка при пои��ке станка ID ${id} за ${executionTime}ms`,
+        error.stack,
       );
       throw error;
     }
@@ -110,8 +128,9 @@ export class MachinesService {
 
   // Создать новый станок
   async create(data: CreateMachineData) {
-    console.log('➕ MachinesService.create: Создание нового станка');
-    console.log('📝 Данные для создания:', JSON.stringify(data, null, 2));
+    const startTime = Date.now();
+    this.logger.log('➕ Создание нового станка');
+    this.logger.debug('📝 Данные для создания:', JSON.stringify(data, null, 2));
 
     try {
       const result = await this.prisma.machine.create({
@@ -140,14 +159,26 @@ export class MachinesService {
         },
       });
 
-      console.log(
-        `✅ MachinesService.create: Успешно создан станок "${result.machineName}" (ID: ${result.machineId})`,
+      // Отправляем событие о создании машины в комнату машин
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_MACHINES,
+        'machineCreated',
+        {
+          machine: result,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `✅ Успешно создан станок "${result.machineName}" (ID: ${result.machineId}) за ${executionTime}ms`,
       );
       return result;
     } catch (error) {
-      console.error(
-        '❌ MachinesService.create: Ошибка при создании станка:',
-        error,
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `❌ Ошибка при создании станка за ${executionTime}ms`,
+        error.stack,
       );
       throw error;
     }
@@ -155,8 +186,12 @@ export class MachinesService {
 
   // Обновить станок
   async update(id: number, data: UpdateMachineData) {
-    console.log(`🔄 MachinesService.update: Обновление станка ID ${id}`);
-    console.log('📝 Данные для обновления:', JSON.stringify(data, null, 2));
+    const startTime = Date.now();
+    this.logger.log(`🔄 Обновление станка ID ${id}`);
+    this.logger.debug(
+      '📝 Данные для обновления:',
+      JSON.stringify(data, null, 2),
+    );
 
     try {
       const result = await this.prisma.machine.update({
@@ -180,20 +215,32 @@ export class MachinesService {
         },
       });
 
-      console.log(
-        `✅ MachinesService.update: Успешно обновлен станок "${result.machineName}" (ID: ${id})`,
+      // Отправляем событие об обновлении машины в комнату машин
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_MACHINES,
+        'machineUpdated',
+        {
+          machine: result,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `✅ Успешно обновлен станок "${result.machineName}" (ID: ${id}) за ${executionTime}ms`,
       );
       return result;
     } catch (error) {
+      const executionTime = Date.now() - startTime;
       if (error.code === 'P2025') {
-        console.log(
-          `⚠️ MachinesService.update: Станок с ID ${id} не найден (P2025)`,
+        this.logger.warn(
+          `⚠️ Станок с ID ${id} не найден (P2025) за ${executionTime}ms`,
         );
         return null;
       }
-      console.error(
-        `❌ MachinesService.update: Ошибка при обновлении станка ID ${id}:`,
-        error,
+      this.logger.error(
+        `❌ Ошибка при обновлении станка ID ${id} за ${executionTime}ms`,
+        error.stack,
       );
       throw error;
     }
@@ -201,42 +248,56 @@ export class MachinesService {
 
   // Удалить станок
   async remove(id: number) {
-    console.log(`🗑️ MachinesService.remove: Удаление станка ID ${id}`);
+    const startTime = Date.now();
+    this.logger.log(`🗑️ Удаление станка ID ${id}`);
 
     try {
-      // Сначала получаем данные станка для возврата
+      // Сначала получаем да��ные станка для возврата
       const machine = await this.prisma.machine.findUnique({
         where: { machineId: id },
       });
 
       if (!machine) {
-        console.log(`⚠️ MachinesService.remove: Станок с ID ${id} не найден`);
+        const executionTime = Date.now() - startTime;
+        this.logger.warn(
+          `⚠️ Станок с ID ${id} не найден за ${executionTime}ms`,
+        );
         return null;
       }
 
-      console.log(
-        `🔍 MachinesService.remove: Найден станок "${machine.machineName}" для удаления`,
-      );
+      this.logger.log(`🔍 Найден станок "${machine.machineName}" для удаления`);
 
       // Удаляем станок (связи удалятся автоматически благодаря CASCADE)
       await this.prisma.machine.delete({
         where: { machineId: id },
       });
 
-      console.log(
-        `✅ MachinesService.remove: Успешно удален станок "${machine.machineName}" (ID: ${id})`,
+      // Отправляем событие об удалении машины в комнату машин
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_MACHINES,
+        'machineDeleted',
+        {
+          machine: machine,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `✅ Успешно удален станок "${machine.machineName}" (ID: ${id}) за ${executionTime}ms`,
       );
       return machine;
     } catch (error) {
+      const executionTime = Date.now() - startTime;
       if (error.code === 'P2025') {
-        console.log(
-          `⚠️ MachinesService.remove: Станок с ID ${id} не найден (P2025)`,
+        this.logger.warn(
+          `⚠️ Станок с ID ${id} не найден (P2025) за ${executionTime}ms`,
         );
         return null;
       }
-      console.error(
-        `❌ MachinesService.remove: Ошибка при удалении станка ID ${id}:`,
-        error,
+      this.logger.error(
+        `❌ Ошибка при удалении станка ID ${id} за ${executionTime}ms`,
+        error.stack,
       );
       throw error;
     }

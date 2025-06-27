@@ -69,7 +69,7 @@ export class MachinsController {
 
   //   @Get('segment/orders')
   //   @ApiOperation({
-  //     summary: 'Получить все заказы для конкретного производственного участка',
+  //     summary: 'Получить все заказы д��я конкретного производственного участка',
   //   })
   //   @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
   //   @ApiResponse({
@@ -122,7 +122,7 @@ export class MachinsController {
   //   @ApiQuery({ name: 'segmentId', description: 'ID производственного участка' })
   //   @ApiResponse({
   //     status: 200,
-  //     description: 'Возвращает все поддоны, связанные с указанной деталью',
+  //     description: 'Возвращ��ет все поддоны, связанные с указанной деталью',
   //     type: PalletsResponseDto,
   //   })
   //   @ApiResponse({ status: 404, description: 'Деталь или участок не найдены' })

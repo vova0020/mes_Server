@@ -1,13 +1,18 @@
-import { OnGatewayInit } from '@nestjs/websockets';
 import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayInit,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { Logger } from '@nestjs/common';
 import { EventsService } from './services/events.service';
+import { RoomManagerService } from './services/room-manager.service';
+import { WebSocketRooms } from './types/rooms.types';
 
 @WebSocketGateway({
   cors: {
@@ -17,40 +22,137 @@ import { EventsService } from './services/events.service';
   },
   pingInterval: 30000,
   pingTimeout: 25000,
-}) // Можно указать порт или namespace, если нужно
-export class EventsGateway implements OnGatewayInit {
-  constructor(private readonly eventsService: EventsService) {}
+})
+export class EventsGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
+  private readonly logger = new Logger(EventsGateway.name);
 
-  // С помощью декоратора @WebSocketServer() получаем экземпляр Socket.IO-сервера
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly roomManager: RoomManagerService,
+  ) {}
+
   @WebSocketServer()
   server: Server;
 
-  // Инициализация после создания сервера
+  // ================================
+  // Lifecycle методы
+  // ================================
+
   afterInit(server: Server) {
     this.eventsService.setServer(server);
+    this.logger.log('🚀 WebSocket Gateway инициализирован');
+
+    // Запускаем периодическую очистку неактивных подписок
+    setInterval(
+      () => {
+        this.eventsService.cleanup();
+      },
+      5 * 60 * 1000,
+    ); // каждые 5 минут
   }
 
-  // Обработчик события от клиента для присоединения к комнате "orders"
-  @SubscribeMessage('joinPalletsRoom')
-  handleJoinOrdersRoom(@ConnectedSocket() client: Socket) {
-    client.join('palets');
+  handleConnection(client: Socket) {
+    this.logger.log(`🔗 Клиент подключен: ${client.id}`);
+
+    // Отправляем клиенту информацию о доступных комнатах
+    client.emit('roomsAvailable', {
+      rooms: Object.values(WebSocketRooms),
+      timestamp: new Date().toISOString(),
+    });
   }
 
-  // Обработчик события от клиента для присоединения к комнате "machines"
-  @SubscribeMessage('joinMachinesRoom')
-  handleJoinMachinesRoom(@ConnectedSocket() client: Socket) {
-    client.join('machines');
+  async handleDisconnect(client: Socket) {
+    this.logger.log(`🔌 Клиент отключен: ${client.id}`);
+
+    // Отключаем клиента от всех комнат
+    await this.roomManager.leaveAllRooms(client);
   }
 
-  // Обработчик события от клиента для присоединения к комнате "materials"
-  @SubscribeMessage('joinMaterialsRoom')
-  handleJoinMaterialsRoom(@ConnectedSocket() client: Socket) {
-    client.join('materials');
+  // ================================
+  // Обработчики подписки на комнаты
+  // ================================
+
+  @SubscribeMessage('joinRoom')
+  async handleJoinRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { room: WebSocketRooms },
+  ) {
+    try {
+      if (!Object.values(WebSocketRooms).includes(data.room)) {
+        client.emit('error', {
+          message: `Неизвестная комната: ${data.room}`,
+          availableRooms: Object.values(WebSocketRooms),
+        });
+        return;
+      }
+
+      await this.roomManager.joinRoom(client, data.room);
+
+      client.emit('roomJoined', {
+        room: data.room,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `✅ Клиент ${client.id} присоединился к комнате "${data.room}"`,
+      );
+    } catch (error) {
+      this.logger.error(`❌ Ошибка при присоединении к комнате:`, error);
+      client.emit('error', {
+        message: 'Ошибка при присоединении к комнате',
+        error: error.message,
+      });
+    }
   }
 
-  // Обработчик события от клиента для присоединения к комнате "materialGroups"
-  @SubscribeMessage('joinMaterialGroupsRoom')
-  handleJoinMaterialGroupsRoom(@ConnectedSocket() client: Socket) {
-    client.join('materialGroups');
+  @SubscribeMessage('leaveRoom')
+  async handleLeaveRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { room: WebSocketRooms },
+  ) {
+    try {
+      await this.roomManager.leaveRoom(client, data.room);
+
+      client.emit('roomLeft', {
+        room: data.room,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.logger.log(`✅ Клиент ${client.id} покинул комнату "${data.room}"`);
+    } catch (error) {
+      this.logger.error(`❌ Ошибка при выходе из комнаты:`, error);
+      client.emit('error', {
+        message: 'Ошибка при выходе из комнаты',
+        error: error.message,
+      });
+    }
+  }
+
+  // ================================
+  // Административные методы
+  // ================================
+
+  @SubscribeMessage('getRoomStats')
+  handleGetRoomStats(@ConnectedSocket() client: Socket) {
+    const stats = this.eventsService.getStats();
+    client.emit('roomStats', stats);
+  }
+
+  @SubscribeMessage('getMyRooms')
+  handleGetMyRooms(@ConnectedSocket() client: Socket) {
+    const myRooms = this.roomManager.getClientRooms(client.id);
+    client.emit('myRooms', {
+      rooms: myRooms,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  @SubscribeMessage('ping')
+  handlePing(@ConnectedSocket() client: Socket) {
+    client.emit('pong', {
+      timestamp: new Date().toISOString(),
+    });
   }
 }

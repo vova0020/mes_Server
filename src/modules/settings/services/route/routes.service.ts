@@ -5,12 +5,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
-import {
-  CreateRouteDto,
-  UpdateRouteDto,
-} from '../../dto/route/routes.dto';
+import { CreateRouteDto, UpdateRouteDto } from '../../dto/route/routes.dto';
 import { EventsService } from '../../../websocket/services/events.service';
 import { RouteStagesService } from './route-stages.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class RoutesService {
@@ -154,7 +152,11 @@ export class RoutesService {
         // Если переданы этапы, создаем их
         if (stages && stages.length > 0) {
           this.logger.log(`Создание ${stages.length} этапов для маршрута`);
-          await this.routeStagesService.createRouteStages(route.routeId, stages, prisma);
+          await this.routeStagesService.createRouteStages(
+            route.routeId,
+            stages,
+            prisma,
+          );
         }
 
         return route.routeId;
@@ -163,11 +165,15 @@ export class RoutesService {
       // Получаем созданны�� маршрут со всеми связанными данными после коммита транзакции
       const newRoute = await this.getRouteById(createdRouteId);
 
-      // Отправляем событие о создании маршрута
-      this.eventsService.emitToRoom('routes', 'routeCreated', {
-        route: newRoute,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие о создании маршрута в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineCreated',
+        {
+          line: newRoute,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -218,11 +224,15 @@ export class RoutesService {
 
       const updatedRoute = await this.getRouteById(routeId);
 
-      // Отправляем событие об обновлении маршрута
-      this.eventsService.emitToRoom('routes', 'routeUpdated', {
-        route: updatedRoute,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об обновлении маршрута в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineUpdated',
+        {
+          line: updatedRoute,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -281,12 +291,16 @@ export class RoutesService {
         where: { routeId },
       });
 
-      // Отправляем событие об удалении маршрута
-      this.eventsService.emitToRoom('routes', 'routeDeleted', {
-        routeId: routeId,
-        routeName: route.routeName,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об удалении маршрута в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineDeleted',
+        {
+          lineId: routeId,
+          lineName: route.routeName,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -356,12 +370,15 @@ export class RoutesService {
       // Получаем скопированный маршрут со всеми данными
       const finalCopiedRoute = await this.getRouteById(copiedRoute);
 
-      // Отправляем событие о копировании маршрута
-      this.eventsService.emitToRoom('routes', 'routeCopied', {
-        originalRoute: originalRoute,
-        copiedRoute: finalCopiedRoute,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие о копировании маршрута в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineCreated',
+        {
+          line: finalCopiedRoute,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

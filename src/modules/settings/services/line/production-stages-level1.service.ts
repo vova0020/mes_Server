@@ -10,6 +10,7 @@ import {
   ProductionStageLevel1ResponseDto,
 } from '../../dto/line/production-stage-level1.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class ProductionStagesLevel1Service {
@@ -53,10 +54,14 @@ export class ProductionStagesLevel1Service {
     };
 
     // Отправляем событие о создании технологической операции
-    this.eventsService.emitToRoom('productionStages', 'stageLevel1Created', {
-      stage: newStage,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+      'stageLevel1Created',
+      {
+        stage: newStage,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     return newStage;
   }
@@ -172,10 +177,14 @@ export class ProductionStagesLevel1Service {
     };
 
     // Отправляем событие об обновлении технологической операции
-    this.eventsService.emitToRoom('productionStages', 'stageLevel1Updated', {
-      stage: stageResponse,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+      'stageLevel1Updated',
+      {
+        stage: stageResponse,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     return stageResponse;
   }
@@ -224,10 +233,14 @@ export class ProductionStagesLevel1Service {
     });
 
     // Отправляем событие об удалении технологической операции
-    this.eventsService.emitToRoom('productionStages', 'stageLevel1Deleted', {
-      stageId: id,
-      stageName: stage.stageName,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+      'stageLevel1Deleted',
+      {
+        stageId: id,
+        stageName: stage.stageName,
+        timestamp: new Date().toISOString(),
+      }
+    );
   }
 }

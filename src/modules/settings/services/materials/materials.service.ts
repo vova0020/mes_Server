@@ -10,6 +10,7 @@ import {
   MaterialResponseDto,
 } from '../../dto/material/material.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class MaterialsService {
@@ -64,10 +65,14 @@ export class MaterialsService {
     const newMaterial = await this.findOne(material.materialId);
 
     // Отправляем событие о создании материала
-    this.eventsService.emitToRoom('materials', 'materialCreated', {
-      material: newMaterial,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_MATERIALS,
+      'materialCreated',
+      {
+        material: newMaterial,
+        timestamp: new Date().toISOString(),
+      },
+    );
 
     return newMaterial;
   }
@@ -199,10 +204,14 @@ export class MaterialsService {
     const updatedMaterial = await this.findOne(id);
 
     // Отправляем событие об обновлении материала
-    this.eventsService.emitToRoom('materials', 'materialUpdated', {
-      material: updatedMaterial,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_MATERIALS,
+      'materialUpdated',
+      {
+        material: updatedMaterial,
+        timestamp: new Date().toISOString(),
+      },
+    );
 
     return updatedMaterial;
   }
@@ -239,11 +248,15 @@ export class MaterialsService {
     });
 
     // Отправляем событие об удалении материала
-    this.eventsService.emitToRoom('materials', 'materialDeleted', {
-      materialId: id,
-      materialName: material.materialName,
-      timestamp: new Date().toISOString(),
-    });
+    this.eventsService.emitToRoom(
+      WebSocketRooms.SETTINGS_MATERIALS,
+      'materialDeleted',
+      {
+        materialId: id,
+        materialName: material.materialName,
+        timestamp: new Date().toISOString(),
+      },
+    );
   }
 
   async findByGroup(groupId: number): Promise<MaterialResponseDto[]> {

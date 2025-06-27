@@ -12,6 +12,7 @@ import {
   ReorderRouteStagesDto,
 } from '../../dto/route/routes.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class RouteStagesService {
@@ -169,13 +170,28 @@ export class RouteStagesService {
         },
       });
 
-      // Отправляем событие о создании этапа маршрута
-      this.eventsService.emitToRoom('routes', 'routeStageCreated', {
-        routeId: routeId,
-        routeName: route.routeName,
-        routeStage: routeStage,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие о связывании этапа с линией в комнату производственных этапов
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+        'stageLevel1Created',
+        {
+          stage: routeStage,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      // Также отправляем событие в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'stageLinkedToLine',
+        {
+          lineId: routeId,
+          stageId: routeStage.stageId,
+          lineName: route.routeName,
+          stageName: routeStage.stage.stageName,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -301,13 +317,15 @@ export class RouteStagesService {
         },
       });
 
-      // Отправляем событие об обновлении этапа маршрута
-      this.eventsService.emitToRoom('routes', 'routeStageUpdated', {
-        routeId: routeStage.routeId,
-        routeName: routeStage.route.routeName,
-        routeStage: updatedRouteStage,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об обновлении этапа в комнату производственных этапов
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+        'stageLevel1Updated',
+        {
+          stage: updatedRouteStage,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -387,15 +405,18 @@ export class RouteStagesService {
         where: { routeStageId },
       });
 
-      // Отправляем событие об удалении этапа маршрута
-      this.eventsService.emitToRoom('routes', 'routeStageDeleted', {
-        routeStageId: routeStageId,
-        routeId: routeStage.routeId,
-        routeName: routeStage.route.routeName,
-        stageName: routeStage.stage.stageName,
-        substageName: routeStage.substage?.substageName,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об отвязке этапа от линии в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'stageUnlinkedFromLine',
+        {
+          lineId: routeStage.routeId,
+          stageId: routeStage.stageId,
+          lineName: routeStage.route.routeName,
+          stageName: routeStage.stage.stageName,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -479,13 +500,17 @@ export class RouteStagesService {
 
       const reorderedStages = await this.getRouteStages(routeId);
 
-      // Отправляем событие о переупорядочивании этапов маршрута
-      this.eventsService.emitToRoom('routes', 'routeStagesReordered', {
-        routeId: routeId,
-        routeName: route.routeName,
-        stages: reorderedStages,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об обновлении этапов линии в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineStagesUpdated',
+        {
+          lineId: routeId,
+          lineName: route.routeName,
+          stages: reorderedStages,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -537,7 +562,9 @@ export class RouteStagesService {
       }
 
       const routeId = routeStage.routeId;
-      const oldSequenceNumber = new Decimal(routeStage.sequenceNumber.toString());
+      const oldSequenceNumber = new Decimal(
+        routeStage.sequenceNumber.toString(),
+      );
       const newSeqNum = new Decimal(newSequenceNumber);
 
       await this.prisma.$transaction(async (prisma) => {
@@ -584,16 +611,17 @@ export class RouteStagesService {
 
       const updatedStages = await this.getRouteStages(routeId);
 
-      // Отправляем событие о перемещении этапа маршрута
-      this.eventsService.emitToRoom('routes', 'routeStageMoved', {
-        routeId: routeId,
-        routeName: routeStage.route.routeName,
-        routeStageId: routeStageId,
-        oldSequenceNumber: oldSequenceNumber.toNumber(),
-        newSequenceNumber: newSequenceNumber,
-        stages: updatedStages,
-        timestamp: new Date().toISOString(),
-      });
+      // Отправляем событие об обновлении этапов линии в комнату производственных линий
+      this.eventsService.emitToRoom(
+        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
+        'lineStagesUpdated',
+        {
+          lineId: routeId,
+          lineName: routeStage.route.routeName,
+          stages: updatedStages,
+          timestamp: new Date().toISOString(),
+        },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -639,7 +667,7 @@ export class RouteStagesService {
             routeId,
             stageId: stage.stageId,
             substageId: stage.substageId,
-            sequenceNumber: new Decimal(stage.sequenceNumber || (i + 1)),
+            sequenceNumber: new Decimal(stage.sequenceNumber || i + 1),
           },
         });
         this.logger.log(

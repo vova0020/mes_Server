@@ -12,6 +12,7 @@ import {
   CellStatus,
 } from '../../dto/buffers/buffers.dto';
 import { EventsService } from '../../../websocket/services/events.service';
+import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 @Injectable()
 export class BufferCellsService {
@@ -148,7 +149,7 @@ export class BufferCellsService {
       };
 
       // Отправляем событие о создании ячейки буфера
-      this.eventsService.emitToRoom('buffers', 'bufferCellCreated', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellCreated', {
         bufferId: bufferId,
         bufferName: buffer.bufferName,
         bufferCell: result,
@@ -251,7 +252,7 @@ export class BufferCellsService {
       };
 
       // Отправляем событие об обновлении ячейки буфера
-      this.eventsService.emitToRoom('buffers', 'bufferCellUpdated', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellUpdated', {
         bufferId: bufferCell.bufferId,
         bufferName: bufferCell.buffer.bufferName,
         bufferCell: result,
@@ -331,7 +332,7 @@ export class BufferCellsService {
       });
 
       // Отправляем событие об удалении ячейки буфера
-      this.eventsService.emitToRoom('buffers', 'bufferCellDeleted', {
+      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellDeleted', {
         cellId: cellId,
         bufferId: bufferCell.bufferId,
         bufferName: bufferCell.buffer.bufferName,
