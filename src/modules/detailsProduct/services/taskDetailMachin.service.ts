@@ -175,6 +175,7 @@ export class TaskDetailService {
           quantity: 1, // Количество поддонов, может быть изменено позже
           status: latestProgress?.status || 'PENDING',
           readyForProcessing: 0,
+          distributed: 0,
           completed: 0,
           detail: {
             id: part.partId,
@@ -211,11 +212,12 @@ export class TaskDetailService {
           quantity: 1,
           status: progress.status,
           readyForProcessing: 0,
+          distributed: 0,
           completed: 0,
           detail: {
             id: part.partId,
             article: part.partCode,
-            name: part.partName,
+            name: part.partName, 
             material: part.material.materialName,
             size: part.size,
             totalNumber: Number(part.totalQuantity),
@@ -246,54 +248,87 @@ export class TaskDetailService {
 
     // Подсчитываем статистику для каждой детали
     for (const partId of detailIds) {
-      // Полу��аем только поддоны для детали, которые назначены на данный станок
-      const assignedPallets = await this.prisma.pallet.findMany({
-        where: {
-          partId,
-          // Только поддоны, которые назначены на данный станок
-          machineAssignments: {
-            some: {
-              machineId,
-              completedAt: null, // Только активные назначения
-            },
-          },
-        },
+      // Получаем деталь с полной информацией о маршруте
+      const part = await this.prisma.part.findUnique({
+        where: { partId },
         include: {
-          machineAssignments: {
-            where: {
-              machineId,
-              completedAt: null,
+          route: {
+            include: {
+              routeStages: {
+                include: {
+                  stage: true,
+                  substage: true,
+                },
+                orderBy: {
+                  sequenceNumber: 'asc',
+                },
+              },
             },
           },
-          palletStageProgress: {
-            where: {
-              routeStageId: {
-                in: routeStageIds,
+          pallets: {
+            include: {
+              palletStageProgress: {
+                include: {
+                  routeStage: {
+                    include: {
+                      stage: true,
+                      substage: true,
+                    },
+                  },
+                },
+              },
+              machineAssignments: {
+                where: {
+                  machineId,
+                },
+                include: {
+                  machine: true,
+                },
               },
             },
           },
         },
       });
 
+      if (!part) continue;
+
+      
+      
+      // Вычисляем распределение по статусам для станка
+      // readyForProcessing - сумма количества поддонов, которые назначены станку на обработку, но еще не обработаны
+      // completed - сумма количества поддонов, которые станок завершил обрабатывать
       let readyForProcessing = 0;
       let completed = 0;
 
-      for (const pallet of assignedPallets) {
-        // Находим прогресс для этого станка
-        const relevantProgress = pallet.palletStageProgress;
+      // Анализируем поддоны для данной детали
+      for (const pallet of part.pallets) {
+        // Используем количество деталей на конкретном поддоне
+        const palletQuantity = Number(pallet.quantity);
 
-        if (relevantProgress.length === 0) {
-          readyForProcessing += 1; // Поддон готов к обработке
-        } else {
-          const latestProgress = relevantProgress.sort(
-            (a, b) => b.pspId - a.pspId,
-          )[0];
-          if (latestProgress.status === 'COMPLETED') {
-            completed += 1;
+        // Проверяем назначения на текущий станок
+        const currentMachineAssignments = pallet.machineAssignments.filter(
+          (assignment) => assignment.machine.machineId === machineId,
+        );
+
+        // Проверяем завершенные назначения на текущий станок
+        const completedMachineAssignments = pallet.machineAssignments.filter(
+          (assignment) => 
+            assignment.machine.machineId === machineId &&
+            assignment.completedAt // Только завершенные назначения
+        );
+
+        // Определяем статус поддона для данного станка
+        if (currentMachineAssignments.length > 0) {
+          // Поддон назначен на этот станок
+          if (completedMachineAssignments.length > 0) {
+            // Есть завершенные назначения - поддон обработан станком
+            completed += palletQuantity;
           } else {
-            readyForProcessing += 1;
+            // Есть активные назначения, но не завершенные - поддон назначен на обработку
+            readyForProcessing += palletQuantity;
           }
         }
+        // Если поддон не назначен на этот станок - не учитываем его в статистике
       }
 
       // Обновляем статистику в карте
@@ -301,8 +336,9 @@ export class TaskDetailService {
       if (detailItem) {
         detailMap.set(partId, {
           ...detailItem,
-          quantity: assignedPallets.length, // Общее количество поддонов
+          quantity: part.pallets.length, // Общее количество поддонов
           readyForProcessing,
+          distributed: 0, // Не используется для станков
           completed,
         });
       }

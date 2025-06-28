@@ -32,7 +32,7 @@ export class PalletMachinController {
   constructor(
     private readonly palletService: PalletMachineService,
     private readonly palletsMachineTaskService: PalletsMachineTaskService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Начать обработку поддона на станке' })
   @ApiResponse({
@@ -166,14 +166,16 @@ export class PalletMachinController {
   @ApiResponse({ status: 404, description: 'Деталь или участок не найдены' })
   async getPalletsByDetailId(
     @Query('detailId', ParseIntPipe) detailId: number,
-    @Query('segmentId', ParseIntPipe) segmentId: number,
+    @Query('stageId', ParseIntPipe) stageId: number,
+    @Query('machinId', ParseIntPipe) machinId: number,
   ): Promise<PalletsResponseDto> {
     console.log(
-      `Получен запрос на поддоны для детали с ID: ${detailId} и участка с ID: ${segmentId}`,
+      `Получен запрос на поддоны для детали с ID: ${detailId} и участка с ID: ${stageId}`,
     );
     const result = await this.palletsMachineTaskService.getPalletsByDetailId(
       detailId,
-      segmentId,
+      stageId,
+      machinId,
     );
     console.log(`Найдено поддонов: ${result.pallets.length}`);
     return result;

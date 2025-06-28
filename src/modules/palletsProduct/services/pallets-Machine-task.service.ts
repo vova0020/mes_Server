@@ -8,7 +8,7 @@ export class PalletsMachineTaskService {
   constructor(
     private prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
-  ) {}
+  ) { }
 
   /**
    * Получить все поддоны по ID детали
@@ -19,6 +19,7 @@ export class PalletsMachineTaskService {
   async getPalletsByDetailId(
     detailId: number,
     segmentId: number,
+    machineId: number,
   ): Promise<PalletsResponseDto> {
     // В новой схеме detailId становится partId, а segmentId становится stageId
     const partId = detailId;
@@ -64,6 +65,13 @@ export class PalletsMachineTaskService {
     const pallets = await this.prisma.pallet.findMany({
       where: {
         partId,
+        // вот фильтр по активным заданиям на этот станок:
+        machineAssignments: {
+          some: {
+            machineId,
+            completedAt: null,
+          },
+        },
       },
       select: {
         palletId: true,
@@ -132,7 +140,7 @@ export class PalletsMachineTaskService {
         );
         const processingStatus = await this.getProcessingStatus(
           pallet,
-          stageId, 
+          stageId,
         );
 
         // Получаем информацию о станке из активного назначения
@@ -142,7 +150,7 @@ export class PalletsMachineTaskService {
             : null;
 
         return {
-          id: pallet.palletId, 
+          id: pallet.palletId,
           name: pallet.palletName,
           quantity: Number(pallet.quantity), // Количество берется из поддона
           part: {
@@ -163,33 +171,33 @@ export class PalletsMachineTaskService {
           bufferCell:
             pallet.palletBufferCells.length > 0
               ? {
-                  id: pallet.palletBufferCells[0].cell.cellId,
-                  code: pallet.palletBufferCells[0].cell.cellCode,
-                  bufferId: pallet.palletBufferCells[0].cell.bufferId,
-                  bufferName:
-                    pallet.palletBufferCells[0].cell.buffer.bufferName,
-                }
+                id: pallet.palletBufferCells[0].cell.cellId,
+                code: pallet.palletBufferCells[0].cell.cellCode,
+                bufferId: pallet.palletBufferCells[0].cell.bufferId,
+                bufferName:
+                  pallet.palletBufferCells[0].cell.buffer.bufferName,
+              }
               : null,
           machine: machine
             ? {
-                id: machine.machineId,
-                name: machine.machineName,
-                status: machine.status,
-              }
+              id: machine.machineId,
+              name: machine.machineName,
+              status: machine.status,
+            }
             : null,
           currentStageProgress: currentStageProgress
             ? {
-                id: currentStageProgress.pspId,
-                status: currentStageProgress.status,
-                completedAt: currentStageProgress.completedAt,
-                routeStage: {
-                  id: currentStageProgress.routeStage.routeStageId,
-                  name: currentStageProgress.routeStage.stage.stageName,
-                  sequence: Number(
-                    currentStageProgress.routeStage.sequenceNumber,
-                  ),
-                },
-              }
+              id: currentStageProgress.pspId,
+              status: currentStageProgress.status,
+              completedAt: currentStageProgress.completedAt,
+              routeStage: {
+                id: currentStageProgress.routeStage.routeStageId,
+                name: currentStageProgress.routeStage.stage.stageName,
+                sequence: Number(
+                  currentStageProgress.routeStage.sequenceNumber,
+                ),
+              },
+            }
             : null,
           processingStatus,
         };

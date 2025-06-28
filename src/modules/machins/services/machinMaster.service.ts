@@ -305,14 +305,14 @@ export class MachinMasterService {
       return tasks;
     } catch (error) {
       this.logger.error(
-        `Ошибка при получении заданий дл�� станка с ID ${machineId}: ${error.message}`,
+        `Ошибка при получении заданий для станка с ID ${machineId}: ${error.message}`,
       );
       throw error;
     }
   }
 
   /**
-   * Удалить задание по ID
+   * Удалить задание по ID и связанные PartMachineAssignment
    * @param operationId ID операции/задания для удаления (ID назначения)
    * @returns Объект с сообщением об успешном удалении
    */
@@ -320,18 +320,18 @@ export class MachinMasterService {
     this.logger.log(`Удаление задания с ID: ${operationId}`);
 
     try {
-      // Проверяем существование назначения с информацией о поддоне и станке
+      // Загружаем назначение вместе с информацией о паллете и машине
       const assignment = await this.prisma.machineAssignment.findUnique({
         where: { assignmentId: operationId },
         include: {
-          pallet: true,
+          pallet: {
+            include: {
+              part: true, // чтобы получить partId
+            },
+          },
           machine: {
             include: {
-              machinesStages: {
-                include: {
-                  stage: true,
-                },
-              },
+              machinesStages: true, // чтобы получить stageId для прогресса
             },
           },
         },
@@ -341,50 +341,40 @@ export class MachinMasterService {
         throw new NotFoundException(`Задание с ID ${operationId} не найдено`);
       }
 
-      // Используем транзакцию для обеспечения целостности данных
-      await this.prisma.$transaction(async (prisma) => {
-        // Удаляем назначение
-        await prisma.machineAssignment.delete({
+      // Удаляем всё в одной транзакции
+      await this.prisma.$transaction(async (tx) => {
+        // 1) Удаляем само назначение из machine_assignments
+        await tx.machineAssignment.delete({
           where: { assignmentId: operationId },
         });
 
-        // Находим и удаляем связанные записи прогресса поддона для этапов,
-        // на которых работает данный станок
+        // 2) Очищаем прогресс по паллете для незавершённых этапов
         const stageIds = assignment.machine.machinesStages.map(
           (ms) => ms.stageId,
         );
-
         if (stageIds.length > 0) {
-          // Находим этапы маршрута, соответствующие этапам станка
-          const routeStages = await prisma.routeStage.findMany({
-            where: {
-              stageId: {
-                in: stageIds,
-              },
-            },
+          const routeStages = await tx.routeStage.findMany({
+            where: { stageId: { in: stageIds } },
           });
-
           const routeStageIds = routeStages.map((rs) => rs.routeStageId);
-
           if (routeStageIds.length > 0) {
-            // Удаляем записи прогресса поддона для соответствующих этапов маршрута
-            const deletedProgressRecords =
-              await prisma.palletStageProgress.deleteMany({
-                where: {
-                  palletId: assignment.palletId,
-                  routeStageId: {
-                    in: routeStageIds,
-                  },
-                  // Удаляем только незавершенные записи прогресса
-                  completedAt: null,
-                },
-              });
-
-            this.logger.log(
-              `Удалено ${deletedProgressRecords.count} записей прогресса поддона для поддона ID: ${assignment.palletId}`,
-            );
+            await tx.palletStageProgress.deleteMany({
+              where: {
+                palletId: assignment.palletId,
+                routeStageId: { in: routeStageIds },
+                completedAt: null,
+              },
+            });
           }
         }
+
+        // 3) Удаляем все привязки детали к машине из PartMachineAssignment
+        await tx.partMachineAssignment.deleteMany({
+          where: {
+            machineId: assignment.machineId,
+            partId: assignment.pallet.part.partId,
+          },
+        });
       });
 
       this.logger.log(`Задание с ID ${operationId} успешно удалено`);
@@ -398,7 +388,7 @@ export class MachinMasterService {
   }
 
   /**
-   * Переместить задание на другой станок
+   * Переместить задание на другой станок и обновить PartMachineAssignment
    * @param moveTaskDto DTO с данными для перемещения задания
    * @returns Объект с сообщением об успешном перемещении
    */
@@ -411,37 +401,54 @@ export class MachinMasterService {
     );
 
     try {
-      // Проверяем существов��ние назначения
+      // 1) Подтягиваем текущее назначение вместе с info о паллете и детали
       const assignment = await this.prisma.machineAssignment.findUnique({
         where: { assignmentId: operationId },
+        include: {
+          pallet: {
+            include: {
+              part: true, // чтобы достать partId
+            },
+          },
+        },
       });
 
       if (!assignment) {
         throw new NotFoundException(`Задание с ID ${operationId} не найдено`);
       }
 
-      // Проверяем статус назначения - перемещать можно только если задание не завершено
       if (assignment.completedAt !== null) {
         throw new BadRequestException(
           `Нельзя перемещать завершенное задание с ID ${operationId}`,
         );
       }
 
-      // Проверяем существование целевого станка
+      // 2) Проверяем существование целевого станка
       const targetMachine = await this.prisma.machine.findUnique({
         where: { machineId: targetMachineId },
       });
-
       if (!targetMachine) {
         throw new NotFoundException(`Станок с ID ${targetMachineId} не найден`);
       }
 
-      // Перемещаем задание на новый станок
-      const updatedAssignment = await this.prisma.machineAssignment.update({
-        where: { assignmentId: operationId },
-        data: {
-          machineId: targetMachineId,
-        },
+      // 3) Проводим перемещение и обновление привязки детали к станку в одной транзакции
+      await this.prisma.$transaction(async (tx) => {
+        // а) обновляем сам machineAssignment
+        await tx.machineAssignment.update({
+          where: { assignmentId: operationId },
+          data: { machineId: targetMachineId },
+        });
+
+        // б) обновляем PartMachineAssignment для той же детали
+        await tx.partMachineAssignment.updateMany({
+          where: {
+            machineId: assignment.machineId, // старый станок
+            partId: assignment.pallet.part.partId,
+          },
+          data: {
+            machineId: targetMachineId, // новый станок
+          },
+        });
       });
 
       this.logger.log(
@@ -452,7 +459,7 @@ export class MachinMasterService {
       };
     } catch (error) {
       this.logger.error(
-        `Ошибка при перемещении задания с ID ${operationId} на станок с ID ${targetMachineId}: ${error.message}`,
+        `Ошибка при перемещении задания с ID ${operationId} на станок ${targetMachineId}: ${error.message}`,
       );
       throw error;
     }

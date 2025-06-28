@@ -73,6 +73,12 @@ export class TaskItemDto {
   readyForProcessing: number;
 
   @ApiProperty({
+    description: 'Общее количество деталей, распределенных на станке',
+    example: 15,
+  })
+  distributed: number;
+
+  @ApiProperty({
     description:
       'Общее количество деталей, обработка которых завершена на станке',
     example: 10,

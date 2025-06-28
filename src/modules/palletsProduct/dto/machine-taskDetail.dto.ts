@@ -131,6 +131,11 @@ export class MachineTaskMasterResponseDto {
     example: 1,
   })
   orderId: number;
+  @ApiProperty({
+    description: 'ID детали',
+    example: 1,
+  })
+  partId: number;
 
   @ApiProperty({
     description: 'Название заказа',

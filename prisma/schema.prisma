@@ -20,15 +20,15 @@ datasource db {
 /// Таблица users: хранит основные учетные данные и связи пользователя
 model User {
   /// Первичный ключ, уникальный идентификатор пользователя
-  userId     Int           @id @default(autoincrement()) @map("user_id")
+  userId    Int      @id @default(autoincrement()) @map("user_id")
   /// Уникальный логин для авторизации
-  login      String        @unique
+  login     String   @unique
   /// Хеш пароля для безопасности
-  password   String
+  password  String
   /// Дата и время создания учетной записи
-  createdAt  DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
   /// Дата и время последнего обновления записи
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // связи:
   /// Детальная информация о пользователе (ФИО, телефон и т.д.)
@@ -74,9 +74,9 @@ model UserDetail {
 /// Таблица roles: справочник возможных ролей
 model Role {
   /// Первичный ключ роли
-  roleId    Int           @id @default(autoincrement()) @map("role_id")
+  roleId   Int    @id @default(autoincrement()) @map("role_id")
   /// Читаемое название роли (например, Admin, Operator)
-  roleName  String        @map("role_name")
+  roleName String @map("role_name")
 
   // связи:
   /// Глобальные назначения роли пользователям
@@ -90,11 +90,11 @@ model Role {
 /// Таблица user_roles: хранит глобальные назначения ролей (без контекста)
 model UserRole {
   /// Первичный ключ записи
-  userRoleId Int    @id @default(autoincrement()) @map("user_role_id")
+  userRoleId Int @id @default(autoincrement()) @map("user_role_id")
   /// Пользователь, которому назначена роль
-  userId     Int    @map("user_id")
+  userId     Int @map("user_id")
   /// Назначенная роль
-  roleId     Int    @map("role_id")
+  roleId     Int @map("role_id")
 
   // связи:
   user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
@@ -106,15 +106,15 @@ model UserRole {
 /// Таблица role_bindings: хранит привязки ролей к контекстам (станок, этап и т.п.)
 model RoleBinding {
   /// Первичный ключ записи
-  id          Int              @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   /// Пользователь, к которому привязываем роль
-  userId      Int              @map("user_id")
+  userId      Int             @map("user_id")
   /// Роль, которую привязываем
-  roleId      Int              @map("role_id")
+  roleId      Int             @map("role_id")
   /// Тип контекста (например, MACHINE или STAGE_LEVEL1)
-  contextType RoleContextType  @map("context_type")
+  contextType RoleContextType @map("context_type")
   /// Идентификатор конкретного объекта контекста
-  contextId   Int              @map("context_id")
+  contextId   Int             @map("context_id")
 
   // связи:
   user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
@@ -126,9 +126,9 @@ model RoleBinding {
 
 /// Перечисление RoleContextType: определяет типы контекстов для привязки ролей
 enum RoleContextType {
-  MACHINE         // Конкретный станок
-  STAGE_LEVEL1    // Этап 1-го уровня производства
-  ORDER_PICKER    // Комплектовщик
+  MACHINE // Конкретный станок
+  STAGE_LEVEL1 // Этап 1-го уровня производства
+  ORDER_PICKER // Комплектовщик
 }
 
 /// Таблица login_logs: хранит историю попыток входа пользователей
@@ -194,8 +194,8 @@ model Package {
   packageName          String  @map("package_name")
   /// Процент готовности упаковки
   completionPercentage Decimal @map("completion_percentage")
-    /// Количество упаковок в заказе
-  quantity  Decimal
+  /// Количество упаковок в заказе
+  quantity             Decimal
 
   // связи:
   /// Ссылка на родительский заказ
@@ -228,9 +228,9 @@ model ProductionPackagePart {
 
 /// Перечисление PartStatus: статусы обработки деталей
 enum PartStatus {
-  PENDING             // Запланировано к обработке
-  IN_PROGRESS         // В процессе обработки
-  COMPLETED           // Обработка завершена
+  PENDING // Запланировано к обработке
+  IN_PROGRESS // В процессе обработки
+  COMPLETED // Обработка завершена
 }
 
 /// Таблица parts: детали, проходящие через производство
@@ -280,6 +280,8 @@ model Part {
   childBillOfMaterials   BillOfMaterial[]        @relation("ChildPart")
   /// Прогресс по субсборкам
   subassemblyProgress    SubassemblyProgress[]
+  partMachineAssignment  PartMachineAssignment[]
+  
 
   @@map("parts")
 }
@@ -307,12 +309,12 @@ model BillOfMaterial {
 /// Таблица pallets: поддоны для хранения деталей
 model Pallet {
   /// Первичный ключ поддона
-  palletId   Int    @id @default(autoincrement()) @map("pallet_id")
+  palletId   Int     @id @default(autoincrement()) @map("pallet_id")
   /// Внешний ключ на деталь, хранимую на поддоне
-  partId     Int    @map("part_id")
+  partId     Int     @map("part_id")
   /// Название или код поддона
-  palletName String @map("pallet_name")
-    /// Количество таких деталей на поддоне
+  palletName String  @map("pallet_name")
+  /// Количество таких деталей на поддоне
   quantity   Decimal @map("quantity")
 
   // связи:
@@ -327,6 +329,7 @@ model Pallet {
 
   @@map("pallets")
 }
+
 // ========================================
 // 3. Модуль буферов
 // ========================================
@@ -344,7 +347,7 @@ model Buffer {
 
   // связи:
   /// Ячейки, входящие в состав буфера
-  bufferCells BufferCell[]
+  bufferCells  BufferCell[]
   /// Связи буфера с этапами производства уровня 1
   bufferStages BufferStage[]
 
@@ -354,8 +357,8 @@ model Buffer {
 /// Перечисление CellStatus: статусы ячеек буфера
 enum CellStatus {
   AVAILABLE // Ячейка свободна и готова к использованию
-  OCCUPIED  // Ячейка занята поддоном или материалом
-  RESERVED  // Ячейка зарезервирована для будущего размещения
+  OCCUPIED // Ячейка занята поддоном или материалом
+  RESERVED // Ячейка зарезервирована для будущего размещения
 }
 
 /// Таблица buffer_cells: ячейки внутри буферов
@@ -415,20 +418,20 @@ model PalletBufferCell {
 /// Таблица buffers_stages: связывает буферы с этапами 1-го уровня
 model BufferStage {
   /// Первичный ключ записи
-  bufferStageId Int                    @id @default(autoincrement()) @map("buffer_stage_id")
+  bufferStageId Int @id @default(autoincrement()) @map("buffer_stage_id")
   /// Внешний ключ на буфер
-  bufferId      Int                    @map("buffer_id")
+  bufferId      Int @map("buffer_id")
   /// Внешний ключ на производственный этап 1-го уровня
-  stageId       Int                    @map("stage_id")
+  stageId       Int @map("stage_id")
 
   // связи:
   /// Ссылка на буфер
-  buffer Buffer             @relation(fields: [bufferId], references: [bufferId], onDelete: Cascade)
+  buffer Buffer                @relation(fields: [bufferId], references: [bufferId], onDelete: Cascade)
   /// Ссылка на этап производства
-  stage  ProductionStageLevel1        @relation(fields: [stageId],  references: [stageId],  onDelete: Cascade)
+  stage  ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
 
-  @@map("buffers_stages")
   @@unique([bufferId, stageId])
+  @@map("buffers_stages")
 }
 
 // ========================================
@@ -445,12 +448,11 @@ model ProductionLine {
   lineType String @map("line_type")
 
   // связи: какие этапы и материалы относятся к этой линии
-  linesStages LineStage[]     // этапы 1-го уровня, на которых задействована эта линия
-  materials   LineMaterial[]  // материалы, используемые на этой линии
+  linesStages LineStage[] // этапы 1-го уровня, на которых задействована эта линия
+  materials   LineMaterial[] // материалы, используемые на этой линии
 
   @@map("production_lines")
 }
-
 
 // Таблица этапов производства 1-го уровня (крупные шаги в процессе)
 model ProductionStageLevel1 {
@@ -465,18 +467,17 @@ model ProductionStageLevel1 {
   /// Дата и время последнего обновления записи
   updatedAt   DateTime @updatedAt @map("updated_at")
   /// Отметка для финального этапа (упаковка)
-  finalStage   Boolean   @default(false) @map("final_stage")
+  finalStage  Boolean  @default(false) @map("final_stage")
 
   // связи: какие подэтапы, линии и другие сущности связаны с этим этапом
-  productionStagesLevel2 ProductionStageLevel2[]  // операции 2-го уровня, входящие в этот этап
-  linesStages            LineStage[]              // линии, на которых выполняется этот этап
-  machinesStages         MachineStage[]           // какие станки могут выполнять этот этап
-  routeStages            RouteStage[]             // маршруты, содержащие этот этап
-  bufferStages           BufferStage[]            // буферы, связанные с этим этапом
+  productionStagesLevel2 ProductionStageLevel2[] // операции 2-го уровня, входящие в этот этап
+  linesStages            LineStage[] // линии, на которых выполняется этот этап
+  machinesStages         MachineStage[] // какие станки могут выполнять этот этап
+  routeStages            RouteStage[] // маршруты, содержащие этот этап
+  bufferStages           BufferStage[] // буферы, связанные с этим этапом
 
   @@map("production_stages_level_1")
 }
-
 
 // Таблица операций (подэтапов) 2-го уровня внутри большого этапа
 model ProductionStageLevel2 {
@@ -493,12 +494,11 @@ model ProductionStageLevel2 {
 
   // связи: к какому этапу 1-го уровня относится и где используется
   stage            ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
-  routeStages      RouteStage[]          // маршруты, в которых встречается этот подэтап
-  machineSubstages MachineSubstage[]     // какие станки выполняют этот подэтап
+  routeStages      RouteStage[] // маршруты, в которых встречается этот подэтап
+  machineSubstages MachineSubstage[] // какие станки выполняют этот подэтап
 
   @@map("production_stages_level_2")
 }
-
 
 // Промежуточная таблица связи «Линия ⇄ Этап 1-го уровня»
 model LineStage {
@@ -512,7 +512,7 @@ model LineStage {
   // связи: детали связи между линией и этапом
   line  ProductionLine        @relation(fields: [lineId], references: [lineId], onDelete: Cascade)
   stage ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
-  
+
   @@map("lines_stages")
 }
 
@@ -534,24 +534,25 @@ enum MachineStatus {
 
 model Machine {
   /// Уникальный идентификатор станка
-  machineId        Int           @id @default(autoincrement()) @map("machine_id")
+  machineId       Int           @id @default(autoincrement()) @map("machine_id")
   /// Название или код станка
-  machineName      String        @map("machine_name")
+  machineName     String        @map("machine_name")
   /// Текущий статус (ACTIVE, INACTIVE или MAINTENANCE)
-  status           MachineStatus
+  status          MachineStatus
   /// Рекомендуемая загрузка станка (числовое значение)
-  recommendedLoad  Decimal       @map("recommended_load")
+  recommendedLoad Decimal       @map("recommended_load")
   /// Единица измерения загрузки (например, кг, шт и т.п.)
-  loadUnit         String        @map("load_unit")
+  loadUnit        String        @map("load_unit")
   /// Флаг, запрещающий сменные задачи на этом станке
-  noSmenTask       Boolean       @default(false) @map("no_smen_task")
+  noSmenTask      Boolean       @default(false) @map("no_smen_task")
 
   // связи: задачи и этапы, связанные с этим станком
-  machinesStages     MachineStage[]       // какие этапы 1-го уровня выполняет станок
-  pickerTasks        PickerTask[]         // задачи комплектации, где станок задействован
-  packingTasks       PackingTask[]        // задачи упаковки, назначенные на станок
-  machineAssignments MachineAssignment[]  // задания на обработку паллет на станке
-  machineSubstages   MachineSubstage[]    // операции 2-го уровня, которые может выполнять станок
+  machinesStages     MachineStage[] // какие этапы 1-го уровня выполняет станок
+  pickerTasks        PickerTask[] // задачи комплектации, где станок задействован
+  packingTasks       PackingTask[] // задачи упаковки, назначенные на станок
+  machineAssignments MachineAssignment[] // задания на обработку паллет на станке
+  machineSubstages   MachineSubstage[] // операции 2-го уровня, которые может выполнять станок
+  partMachineAssignment    PartMachineAssignment[]
 
   @@map("machines")
 }
@@ -566,7 +567,7 @@ model MachineStage {
 
   // связи: детали связи между станком и этапом
   machine Machine               @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
-  stage   ProductionStageLevel1 @relation(fields: [stageId],   references: [stageId],   onDelete: Cascade)
+  stage   ProductionStageLevel1 @relation(fields: [stageId], references: [stageId], onDelete: Cascade)
 
   @@map("machines_stages")
 }
@@ -574,20 +575,19 @@ model MachineStage {
 // Привязка станка к операции (подэтапу) 2-го уровня
 model MachineSubstage {
   /// Уникальный идентификатор связи «станок ⇄ подэтап 2-го уровня»
-  machineSubstageId Int                    @id @default(autoincrement()) @map("machine_substage_id")
+  machineSubstageId Int @id @default(autoincrement()) @map("machine_substage_id")
   /// Ссылка на станок
-  machineId         Int                    @map("machine_id")
+  machineId         Int @map("machine_id")
   /// Ссылка на подэтап 2-го уровня
-  substageId        Int                    @map("substage_id")
+  substageId        Int @map("substage_id")
 
   // связи: какой станок выполняет какой подэтап
-  machine   Machine               @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
-  substage  ProductionStageLevel2 @relation(fields: [substageId], references: [substageId], onDelete: Cascade)
+  machine  Machine               @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  substage ProductionStageLevel2 @relation(fields: [substageId], references: [substageId], onDelete: Cascade)
 
-  @@map("machines_substages")
   @@unique([machineId, substageId])
+  @@map("machines_substages")
 }
-
 
 // ========================================
 // 6. Модуль маршрутизации
@@ -601,12 +601,11 @@ model Route {
   routeName String @map("route_name")
 
   // связи: какие этапы и какие детали связаны с этим маршрутом
-  routeStages RouteStage[]  // все этапы и подэтапы в рамках этого маршрута
-  parts       Part[]        // детали, которым присвоен этот маршрут
+  routeStages RouteStage[] // все этапы и подэтапы в рамках этого маршрута
+  parts       Part[] // детали, которым присвоен этот маршрут
 
   @@map("routes")
 }
-
 
 // Таблица «Этапы маршрута» — конкретные шаги в маршруте
 model RouteStage {
@@ -625,9 +624,9 @@ model RouteStage {
   route               Route                  @relation(fields: [routeId], references: [routeId], onDelete: Cascade)
   stage               ProductionStageLevel1  @relation(fields: [stageId], references: [stageId])
   substage            ProductionStageLevel2? @relation(fields: [substageId], references: [substageId])
-  partRouteProgress   PartRouteProgress[]    // прогресс прохождения деталей по этому этапу
-  palletStageProgress PalletStageProgress[]  // прогресс прохождения паллет по этому этапу
-  subassemblyProgress SubassemblyProgress[]  // прогресс сборки полуфабрикатов на этом этапе
+  partRouteProgress   PartRouteProgress[] // прогресс прохождения деталей по этому этапу
+  palletStageProgress PalletStageProgress[] // прогресс прохождения паллет по этому этапу
+  subassemblyProgress SubassemblyProgress[] // прогресс сборки полуфабрикатов на этом этапе
   returnStageParts    Part[]                 @relation("ReturnStage") // детали, возвращенные на этот этап
 
   @@map("route_stages")
@@ -701,7 +700,6 @@ model LineMaterial {
   @@map("lines_materials")
 }
 
-
 // ========================================
 // 8. Модуль комплектовщиков
 // ========================================
@@ -745,12 +743,11 @@ model PickerTask {
   picker    Picker?     @relation(fields: [pickerId], references: [pickerId])
   part      Part        @relation(fields: [partId], references: [partId], onDelete: Cascade)
   fromCell  BufferCell? @relation("FromCell", fields: [fromCellId], references: [cellId])
-  toCell    BufferCell? @relation("ToCell",   fields: [toCellId],   references: [cellId])
+  toCell    BufferCell? @relation("ToCell", fields: [toCellId], references: [cellId])
   toMachine Machine?    @relation(fields: [toMachineId], references: [machineId])
 
   @@map("picker_tasks")
 }
-
 
 // ========================================
 // 9. Модуль упаковки
@@ -797,7 +794,7 @@ model PackagePart {
 
   // связи: навигация к пакету и детали
   package PackingPackage @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
-  part    Part           @relation(fields: [partId],    references: [partId],    onDelete: Cascade)
+  part    Part           @relation(fields: [partId], references: [partId], onDelete: Cascade)
 
   @@map("package_parts")
 }
@@ -841,7 +838,6 @@ model PackingTask {
   @@map("packing_tasks")
 }
 
-
 // ========================================
 // 10. Модуль сборки из полуфабрикатов
 // ========================================
@@ -875,7 +871,6 @@ model SubassemblyProgress {
 
   @@map("subassembly_progress")
 }
-
 
 // ========================================
 // Дополнительные модели для отслеживания прогресса
@@ -929,9 +924,7 @@ enum TaskStatus {
   IN_PROGRESS
   /// Задача завершена
   COMPLETED
-  
 }
-
 
 // Задания на обработку паллеты на станке (назначение и завершение)
 model MachineAssignment {
@@ -951,4 +944,23 @@ model MachineAssignment {
   pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
 
   @@map("machine_assignments")
+}
+
+/// Назначения деталей на станок с указанием приоритета
+model PartMachineAssignment {
+  assignmentId Int       @id @default(autoincrement()) @map("assignment_id")
+  machineId    Int       @map("machine_id")
+  partId       Int       @map("part_id")
+  /// Большое значение = более высокий приоритет
+  priority     Int       @default(0)
+  assignedAt   DateTime?  @default(now()) @map("assigned_at")
+  completedAt  DateTime? @map("completed_at")
+
+  machine Machine @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  part    Part    @relation(fields: [partId], references: [partId], onDelete: Cascade)
+
+  @@index([machineId])
+  @@index([partId])
+  @@unique([machineId, partId], name: "machine_part_unique")
+  @@map("part_machine_assignments")
 }

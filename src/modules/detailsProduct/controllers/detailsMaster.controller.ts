@@ -5,6 +5,9 @@ import {
   ParseIntPipe,
   HttpException,
   HttpStatus,
+  Post,
+  Body,
+  Put,
 } from '@nestjs/common';
 import { DetailsMasterService } from '../services/detailsMaster.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
@@ -75,6 +78,63 @@ export class DetailsMasterController {
       throw new HttpException(
         {
           error: 'Ошибка при получении деталей',
+          details: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Put('part/:partId/machine/:machineId/priority')
+  @ApiOperation({
+    summary: 'Изменить приоритет детали для определенного станка',
+  })
+  @ApiParam({ name: 'partId', description: 'ID детали', type: 'number' })
+  @ApiParam({ name: 'machineId', description: 'ID станка', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Приоритет детали успешно обновлен',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        assignment: {
+          type: 'object',
+          properties: {
+            assignmentId: { type: 'number' },
+            partId: { type: 'number' },
+            partName: { type: 'string' },
+            partCode: { type: 'string' },
+            machineId: { type: 'number' },
+            machineName: { type: 'string' },
+            priority: { type: 'number' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Деталь или станок не найден' })
+  async updatePartPriorityForMachine(
+    @Param('partId', ParseIntPipe) partId: number,
+    @Param('machineId', ParseIntPipe) machineId: number,
+    @Body() body: { priority: number },
+  ) {
+    try {
+      return await this.detailsService.updatePartPriorityForMachine(
+        partId,
+        machineId,
+        body.priority,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        {
+          error: 'Ошибка при обновлении приоритета детали',
           details: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,

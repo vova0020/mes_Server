@@ -6,6 +6,100 @@ export class DetailsMasterService {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Изменить приоритет детали для определенного станка
+   * @param partId - ID детали
+   * @param machineId - ID станка
+   * @param priority - Новый приоритет (большее значение = выше приоритет)
+   */
+  async updatePartPriorityForMachine(
+    partId: number,
+    machineId: number,
+    priority: number,
+  ) {
+    // Проверяем существование детали
+    const partExists = await this.prisma.part.findUnique({
+      where: { partId },
+    });
+
+    if (!partExists) {
+      throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+    }
+
+    // Проверяем существование станка
+    const machineExists = await this.prisma.machine.findUnique({
+      where: { machineId },
+    });
+
+    if (!machineExists) {
+      throw new NotFoundException(`Станок с ID ${machineId} не найден`);
+    }
+
+    // Проверяем, существует ли уже назначение детали на станок
+    const existingAssignment =
+      await this.prisma.partMachineAssignment.findFirst({
+        where: {
+          partId,
+          machineId,
+        },
+      });
+
+    if (existingAssignment) {
+      // Обновляем существующий приоритет
+      const updatedAssignment = await this.prisma.partMachineAssignment.update({
+        where: { assignmentId: existingAssignment.assignmentId },
+        data: { priority },
+        include: {
+          part: true,
+          machine: true,
+        },
+      });
+
+      return {
+        message: 'Приоритет детали для станка успешно обновлен',
+        assignment: {
+          assignmentId: updatedAssignment.assignmentId,
+          partId: updatedAssignment.partId,
+          partName: updatedAssignment.part.partName,
+          partCode: updatedAssignment.part.partCode,
+          machineId: updatedAssignment.machineId,
+          machineName: updatedAssignment.machine.machineName,
+          priority: updatedAssignment.priority,
+          // createdAt: updatedAssignment.createdAt,
+          // updatedAt: updatedAssignment.updatedAt,
+        },
+      };
+    } else {
+      // Создаем новое назначение с приоритетом
+      const newAssignment = await this.prisma.partMachineAssignment.create({
+        data: {
+          partId,
+          machineId,
+          priority,
+        },
+        include: {
+          part: true,
+          machine: true,
+        },
+      });
+
+      return {
+        message: 'Приоритет детали для станка успешно установлен',
+        assignment: {
+          assignmentId: newAssignment.assignmentId,
+          partId: newAssignment.partId,
+          partName: newAssignment.part.partName,
+          partCode: newAssignment.part.partCode,
+          machineId: newAssignment.machineId,
+          machineName: newAssignment.machine.machineName,
+          priority: newAssignment.priority,
+          // createdAt: newAssignment.createdAt,
+          // updatedAt: newAssignment.updatedAt,
+        },
+      };
+    }
+  }
+
+  /**
    * Получение списка деталей для указанного заказа с учетом участка обработки
    * @param orderId - ID производственного заказа
    * @param segmentId - ID участка (теперь ProductionStageLevel1), к которому привязан мастер
@@ -22,7 +116,7 @@ export class DetailsMasterService {
       );
     }
 
-    // Проверяе�� существование участка (теперь ProductionStageLevel1)
+    // Проверяем существование участка (теперь ProductionStageLevel1)
     const segmentExists = await this.prisma.productionStageLevel1.findUnique({
       where: { stageId: segmentId },
       include: {
@@ -134,7 +228,7 @@ export class DetailsMasterService {
               }))
             : [];
 
-          // Определяем, какие эта��ы относятся к текущему участку
+          // Определяем, какие этапы относятся к текущему участку
           const currentSegmentStageIds = [segmentId]; // основной этап
           const currentSegmentSubstageIds =
             segmentExists.productionStagesLevel2.map((s) => s.substageId);
@@ -203,6 +297,9 @@ export class DetailsMasterService {
           }
 
           // Вычисляем распределение по статусам с учетом участка
+          // readyForProcessing - поддоны прошли предыдущие этапы и готовы к обработке на этом этапе
+          // distributed - сумма количества поддонов, распределенных на станки
+          // completed - сумма количества поддонов, прошедших обработку на этом этапе
           let readyForProcessing = 0;
           let distributed = 0;
           let completed = 0;
@@ -230,19 +327,30 @@ export class DetailsMasterService {
 
             // Проверяем, завершены ли операции на предыдущих этапах
             const isPreviousStagesCompleted =
-              previousStageProgress.length > 0 &&
-              previousStageProgress.every(
-                (progress) => progress.status === 'COMPLETED',
-              );
+              isFirstSegment || // Если это первый этап, то предыдущие этапы не нужны
+              (previousStageIds.length === 0) || // Если нет предыдущих этапов
+              (previousStageProgress.length > 0 &&
+                previousStageProgress.every(
+                  (progress) => progress.status === 'COMPLETED',
+                ));
 
-            // Проверяем назначения на станки
+            // Проверяем назначения на станки текущего участка
             const currentMachineAssignments = pallet.machineAssignments.filter(
-              (assignment) => machineIds.includes(assignment.machine.machineId),
+              (assignment) => 
+                machineIds.includes(assignment.machine.machineId) &&
+                !assignment.completedAt // Только активные назначения
             );
 
-            // Определяем статус детали на текущем участке
+            // Проверяем завершенные назначения на станки текущего участка
+            const completedMachineAssignments = pallet.machineAssignments.filter(
+              (assignment) => 
+                machineIds.includes(assignment.machine.machineId) &&
+                assignment.completedAt // Только завершенные назначения
+            );
+
+            // Определяем статус поддона на текущем участке
             if (currentSegmentProgress.length > 0) {
-              // Берем последний прогресс на текущем участке
+              // Есть прогресс на текущем участке
               const latestProgress = currentSegmentProgress.sort(
                 (a, b) =>
                   (b.completedAt?.getTime() || 0) -
@@ -250,25 +358,33 @@ export class DetailsMasterService {
               )[0];
 
               if (latestProgress.status === 'COMPLETED') {
+                // Поддон прошел обработку на этом этапе
                 completed += palletQuantity;
-              } else if (
-                latestProgress.status === 'IN_PROGRESS' &&
-                currentMachineAssignments.length > 0 &&
-                !currentMachineAssignments.some(
-                  (assignment) => assignment.completedAt,
-                )
-              ) {
+              } else if (latestProgress.status === 'IN_PROGRESS') {
+                // Поддон в процессе обработки - считается как distributed
                 distributed += palletQuantity;
+              } else if (latestProgress.status === 'PENDING') {
+                // Поддон ожидает обработки
+                if (currentMachineAssignments.length > 0) {
+                  // Если есть активные назначения на станки - distributed
+                  distributed += palletQuantity;
+                } else if (isPreviousStagesCompleted) {
+                  // Если предыдущие этапы завершены - готов к обработке
+                  readyForProcessing += palletQuantity;
+                }
               }
-            } else if (
-              isFirstSegment &&
-              pallet.palletStageProgress.length === 0
-            ) {
-              // Если это первый участок и нет прогресса вообще, деталь готова к обработке
-              readyForProcessing += palletQuantity;
-            } else if (!isFirstSegment && isPreviousStagesCompleted) {
-              // Если не первый участок и предыдущие этапы завершены, деталь готова к обработке
-              readyForProcessing += palletQuantity;
+            } else {
+              // Нет прогресса на текущем участке
+              if (currentMachineAssignments.length > 0) {
+                // Есть назначения на станки - distributed
+                distributed += palletQuantity;
+              } else if (completedMachineAssignments.length > 0) {
+                // Есть завершенные назначения, но нет прогресса - считаем completed
+                completed += palletQuantity;
+              } else if (isPreviousStagesCompleted) {
+                // Предыдущие этапы завершены и нет назначений - готов к обработке
+                readyForProcessing += palletQuantity;
+              }
             }
           }
 
@@ -289,10 +405,12 @@ export class DetailsMasterService {
             );
 
             const isPreviousStagesCompleted =
-              previousPartProgress.length > 0 &&
-              previousPartProgress.every(
-                (progress) => progress.status === 'COMPLETED',
-              );
+              isFirstSegment || // Если это первый этап
+              (previousStageIds.length === 0) || // Если нет предыдущих этапов
+              (previousPartProgress.length > 0 &&
+                previousPartProgress.every(
+                  (progress) => progress.status === 'COMPLETED',
+                ));
 
             if (partProgress.length > 0) {
               const latestProgress = partProgress.sort(
@@ -305,10 +423,11 @@ export class DetailsMasterService {
                 completed += Number(part.totalQuantity);
               } else if (latestProgress.status === 'IN_PROGRESS') {
                 distributed += Number(part.totalQuantity);
+              } else if (latestProgress.status === 'PENDING' && isPreviousStagesCompleted) {
+                readyForProcessing += Number(part.totalQuantity);
               }
-            } else if (isFirstSegment && part.partRouteProgress.length === 0) {
-              readyForProcessing += Number(part.totalQuantity);
-            } else if (!isFirstSegment && isPreviousStagesCompleted) {
+            } else if (isPreviousStagesCompleted) {
+              // Нет прогресса на текущем этапе, но предыдущие завершены
               readyForProcessing += Number(part.totalQuantity);
             }
           }
