@@ -918,6 +918,8 @@ model PalletStageProgress {
 
 // Возможные статусы универсальных задач (используются в PartRouteProgress и PalletStageProgress)
 enum TaskStatus {
+  /// Задача поставлена в очередь но не делается ничего с ней
+  NOT_PROCESSED
   /// Задача поставлена в очередь
   PENDING
   /// Задача в процессе выполнения

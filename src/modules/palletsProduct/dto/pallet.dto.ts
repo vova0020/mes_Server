@@ -1,5 +1,6 @@
 import { IsNumber, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { TaskStatus } from '@prisma/client';
 
 export class StartPalletProcessingDto {
   @ApiProperty({
@@ -74,4 +75,35 @@ export class MovePalletToBufferDto {
   })
   @IsNumber()
   bufferCellId: number;
+}
+interface CurrentOperationDto {
+  id: number;
+  status: TaskStatus;
+  startedAt: Date;
+  completedAt?: Date;
+  processStep: {
+    id: number;
+    name: string;
+    sequence: number;
+  };
+}
+
+interface PalletDto {
+  id: number;
+  name: string;
+  quantity: number;
+  detailId: number;
+  bufferCell: {
+    id: number;
+    code: string;
+    bufferId: number;
+    bufferName?: string;
+  } | null;
+  machine: { id: number; name: string; status: string } | null;
+  currentOperation: CurrentOperationDto | null;
+}
+
+interface PalletsResponseDto {
+  pallets: PalletDto[];
+  total: number;
 }

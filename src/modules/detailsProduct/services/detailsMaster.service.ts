@@ -297,8 +297,8 @@ export class DetailsMasterService {
           }
 
           // Вычисляем распределение по статусам с учетом участка
-          // readyForProcessing - поддоны прошли предыдущие этапы и готовы к обработке на этом этапе
-          // distributed - сумма количества поддонов, распределенных на станки
+          // readyForProcessing - поддоны прошли предыдущие этапы, но еще НЕ обрабатывались и НЕ распределялись на этом этапе
+          // distributed - сумма количества поддонов, распределенных на станки (но еще не завершенных)
           // completed - сумма количества поддонов, прошедших обработку на этом этапе
           let readyForProcessing = 0;
           let distributed = 0;
@@ -328,7 +328,7 @@ export class DetailsMasterService {
             // Проверяем, завершены ли операции на предыдущих этапах
             const isPreviousStagesCompleted =
               isFirstSegment || // Если это первый этап, то предыдущие этапы не нужны
-              (previousStageIds.length === 0) || // Если нет предыдущих этапов
+              previousStageIds.length === 0 || // Если нет предыдущих этапов
               (previousStageProgress.length > 0 &&
                 previousStageProgress.every(
                   (progress) => progress.status === 'COMPLETED',
@@ -336,16 +336,22 @@ export class DetailsMasterService {
 
             // Проверяем назначения на станки текущего участка
             const currentMachineAssignments = pallet.machineAssignments.filter(
-              (assignment) => 
+              (assignment) =>
                 machineIds.includes(assignment.machine.machineId) &&
-                !assignment.completedAt // Только активные назначения
+                !assignment.completedAt, // Только активные назначения
             );
 
             // Проверяем завершенные назначения на станки текущего участка
-            const completedMachineAssignments = pallet.machineAssignments.filter(
-              (assignment) => 
-                machineIds.includes(assignment.machine.machineId) &&
-                assignment.completedAt // Только завершенные назначения
+            const completedMachineAssignments =
+              pallet.machineAssignments.filter(
+                (assignment) =>
+                  machineIds.includes(assignment.machine.machineId) &&
+                  assignment.completedAt, // Только завершенные назначения
+              );
+
+            // Проверяем, был ли поддон когда-либо назначен на станки текущего уч��стка
+            const hasAnyMachineAssignments = pallet.machineAssignments.some(
+              (assignment) => machineIds.includes(assignment.machine.machineId),
             );
 
             // Определяем статус поддона на текущем участке
@@ -363,26 +369,36 @@ export class DetailsMasterService {
               } else if (latestProgress.status === 'IN_PROGRESS') {
                 // Поддон в процессе обработки - считается как distributed
                 distributed += palletQuantity;
-              } else if (latestProgress.status === 'PENDING') {
+              } else if (
+                latestProgress.status === 'PENDING' ||
+                latestProgress.status === 'NOT_PROCESSED'
+              ) {
                 // Поддон ожидает обработки
                 if (currentMachineAssignments.length > 0) {
                   // Если есть активные назначения на станки - distributed
                   distributed += palletQuantity;
+                } else if (hasAnyMachineAssignments) {
+                  // Если были назначения, но сейчас их нет - не считаем как readyForProcessing
+                  // Возможно, поддон уже обработан или в процессе
+                  // Не добавляем ни в одну категорию, так как статус неопределен
                 } else if (isPreviousStagesCompleted) {
-                  // Если предыдущие этапы завершены - готов к обработке
+                  // Если предыдущие этапы завершены и никогда не было назначений - готов к обработке
                   readyForProcessing += palletQuantity;
                 }
               }
             } else {
-              // Нет прогресса на текущем участке
+              // Нет прогресса на текущем у��астке
               if (currentMachineAssignments.length > 0) {
-                // Есть назначения на станки - distributed
+                // Есть активные назначения на станки - distributed
                 distributed += palletQuantity;
               } else if (completedMachineAssignments.length > 0) {
                 // Есть завершенные назначения, но нет прогресса - считаем completed
                 completed += palletQuantity;
+              } else if (hasAnyMachineAssignments) {
+                // Были назначения, но сейчас их нет и нет прогресса - не считаем как readyForProcessing
+                // Возможно, поддон в переходном состоянии
               } else if (isPreviousStagesCompleted) {
-                // Предыдущие этапы завершены и нет назначений - готов к обработке
+                // Предыдущие этапы завершены и никогда не было назначений - готов к обработке
                 readyForProcessing += palletQuantity;
               }
             }
@@ -406,7 +422,7 @@ export class DetailsMasterService {
 
             const isPreviousStagesCompleted =
               isFirstSegment || // Если это первый этап
-              (previousStageIds.length === 0) || // Если нет предыдущих этапов
+              previousStageIds.length === 0 || // Если нет предыдущих этапов
               (previousPartProgress.length > 0 &&
                 previousPartProgress.every(
                   (progress) => progress.status === 'COMPLETED',
@@ -423,7 +439,10 @@ export class DetailsMasterService {
                 completed += Number(part.totalQuantity);
               } else if (latestProgress.status === 'IN_PROGRESS') {
                 distributed += Number(part.totalQuantity);
-              } else if (latestProgress.status === 'PENDING' && isPreviousStagesCompleted) {
+              } else if (
+                latestProgress.status === 'PENDING' &&
+                isPreviousStagesCompleted
+              ) {
                 readyForProcessing += Number(part.totalQuantity);
               }
             } else if (isPreviousStagesCompleted) {

@@ -17,122 +17,113 @@ export class PalletsMasterService {
   /**
    * Получить все поддоны по ID детали
    * @param detailId ID детали (partId в новой схеме)
+   * @param stageid ID 'этапа' (stageId в новой схеме)
    * @returns Список поддонов с информацией о буфере, станке и текущей операции
    */
-  async getPalletsByDetailId(detailId: number): Promise<PalletsResponseDto> {
-    // Получаем все поддоны для указанной детали
-    const pallets = await this.prisma.pallet.findMany({
-      where: {
-        partId: detailId,
-      },
+  async getPalletsByDetailId(
+    detailId: number,
+    stageid: number,
+  ): Promise<PalletsResponseDto> {
+    // 1. Получаем информацию о детали и её маршруте
+    const part = await this.prisma.part.findUnique({
+      where: { partId: detailId },
       include: {
-        // Включаем данные о ячейках буфера через промежуточную таблицу
-        palletBufferCells: {
-          where: {
-            removedAt: null, // Только активные размещения в буфере
-          },
+        route: {
           include: {
-            cell: {
-              include: {
-                buffer: true,
-              },
+            routeStages: {
+              include: { stage: true, substage: true },
+              orderBy: { sequenceNumber: 'asc' },
             },
-          },
-          orderBy: {
-            placedAt: 'desc',
-          },
-          take: 1,
-        },
-        // Включаем данные о назначениях на станки
-        machineAssignments: {
-          where: {
-            completedAt: null, // Только активные назначения
-          },
-          include: {
-            machine: true,
-          },
-          orderBy: {
-            assignedAt: 'desc',
-          },
-          take: 1,
-        },
-        // Включаем данные о прогрессе выполнения этапов
-        palletStageProgress: {
-          include: {
-            routeStage: {
-              include: {
-                stage: true,
-                substage: true,
-              },
-            },
-          },
-          orderBy: [
-            { routeStage: { sequenceNumber: 'desc' } },
-            { pspId: 'desc' },
-          ],
-          take: 1,
-        },
-        // Включаем данные о детали для получения количества
-        part: {
-          include: {
-            material: true,
           },
         },
       },
     });
 
-    // Преобразуем данные в формат DTO
+    if (!part) {
+      throw new NotFoundException(`Деталь с ID ${detailId} не найдена`);
+    }
+
+    // 2. Находим текущий этап в маршруте
+    const currentRouteStage = part.route.routeStages.find(
+      (rs) => rs.stageId === stageid,
+    );
+    if (!currentRouteStage) {
+      throw new NotFoundException(
+        `Этап с ID ${stageid} не найден в маршруте детали ${detailId}`,
+      );
+    }
+
+    // 3. Получаем все поддоны для этой детали
+    const pallets = await this.prisma.pallet.findMany({
+      where: { partId: detailId },
+      include: {
+        palletBufferCells: {
+          where: { removedAt: null },
+          include: { cell: { include: { buffer: true } } },
+          orderBy: { placedAt: 'desc' },
+          take: 1,
+        },
+        machineAssignments: {
+          where: { completedAt: null },
+          include: { machine: true },
+          orderBy: { assignedAt: 'desc' },
+          take: 1,
+        },
+        palletStageProgress: {
+          where: { routeStageId: currentRouteStage.routeStageId },
+          include: { routeStage: { include: { stage: true, substage: true } } },
+          orderBy: { pspId: 'desc' },
+          take: 1,
+        },
+        part: { include: { material: true } },
+      },
+    });
+
+    // 4. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
-      // Получаем текущее размещение в буфере (если есть)
-      const currentBufferPlacement = pallet.palletBufferCells[0];
+      const currentBuffer = pallet.palletBufferCells[0];
+      const currentMachine = pallet.machineAssignments[0];
+      const stageProgress = pallet.palletStageProgress[0];
 
-      // Получаем текущее назначение на станок (если есть)
-      const currentMachineAssignment = pallet.machineAssignments[0];
-
-      // Получаем текущий прогресс по этапам (если есть)
-      const currentStageProgress = pallet.palletStageProgress[0];
+      // Если есть запись прогресса — конструируем объект, иначе null
+      const currentOperation = stageProgress
+        ? {
+            id: stageProgress.pspId,
+            status: stageProgress.status,
+            startedAt: new Date(),
+            completedAt: stageProgress.completedAt ?? undefined,
+            processStep: {
+              id: currentRouteStage.stageId,
+              name: currentRouteStage.stage.stageName,
+              sequence: Number(currentRouteStage.sequenceNumber),
+            },
+          }
+        : null;
 
       return {
         id: pallet.palletId,
         name: pallet.palletName,
-        quantity: Number(pallet.quantity), // Используем количество из поддона
+        quantity: Number(pallet.quantity),
         detailId: pallet.partId,
 
-        // Форматируем данные о ячейке буфера (если есть)
-        bufferCell: currentBufferPlacement
+        bufferCell: currentBuffer
           ? {
-              id: currentBufferPlacement.cell.cellId,
-              code: currentBufferPlacement.cell.cellCode,
-              bufferId: currentBufferPlacement.cell.bufferId,
-              bufferName: currentBufferPlacement.cell.buffer?.bufferName,
+              id: currentBuffer.cell.cellId,
+              code: currentBuffer.cell.cellCode,
+              bufferId: currentBuffer.cell.bufferId,
+              bufferName: currentBuffer.cell.buffer?.bufferName,
             }
           : null,
 
-        // Форматируем данные о станке (если есть)
-        machine: currentMachineAssignment?.machine
+        machine: currentMachine?.machine
           ? {
-              id: currentMachineAssignment.machine.machineId,
-              name: currentMachineAssignment.machine.machineName,
-              status: currentMachineAssignment.machine.status,
+              id: currentMachine.machine.machineId,
+              name: currentMachine.machine.machineName,
+              status: currentMachine.machine.status,
             }
           : null,
 
-        // Добавляем информацию о текущей о��ерации на основе прогресса этапов
-        currentOperation: currentStageProgress
-          ? {
-              id: currentStageProgress.pspId,
-              status: currentStageProgress.status,
-              startedAt: new Date(), // В новой схеме нет точного времени начала, используем текущее
-              completedAt: currentStageProgress.completedAt || undefined,
-              processStep: {
-                id: currentStageProgress.routeStage.stageId,
-                name: currentStageProgress.routeStage.stage.stageName,
-                sequence: Number(
-                  currentStageProgress.routeStage.sequenceNumber,
-                ),
-              },
-            }
-          : null,
+        currentOperation,
       };
     });
 

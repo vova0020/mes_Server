@@ -425,7 +425,7 @@ export class PalletMachineService {
           data: {
             palletId: palletId,
             routeStageId: nextRouteStage.routeStageId,
-            status: 'PENDING',
+            status: 'NOT_PROCESSED',
           },
         });
       }

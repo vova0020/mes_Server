@@ -44,11 +44,12 @@ export class PalletsMasterController {
   // чтобы он совпадал с тем, как вы его используете в методах ниже
   constructor(private readonly palletOperationsService: PalletsMasterService) {}
 
-  @Get('pallets/:detailId')
+  @Get('pallets/:detailId/:stageid')
   @ApiOperation({
     summary: 'Получить поддоны по ID детали для страницы мастера',
   })
   @ApiParam({ name: 'detailId', description: 'ID детали', type: Number })
+  @ApiParam({ name: 'stageid', description: 'ID этапа', type: Number })
   @ApiResponse({
     status: 200,
     description:
@@ -57,8 +58,9 @@ export class PalletsMasterController {
   })
   async getPalletsByDetailId(
     @Param('detailId', ParseIntPipe) detailId: number,
+    @Param('stageid', ParseIntPipe) stageid: number,
   ): Promise<PalletsResponseDto> {
-    return this.palletOperationsService.getPalletsByDetailId(detailId);
+    return this.palletOperationsService.getPalletsByDetailId(detailId,stageid);
   }
 
   @Post('assign-to-machine')
