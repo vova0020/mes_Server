@@ -185,6 +185,7 @@ export class AuthService {
                 select: {
                   stageId: true,
                   stageName: true,
+                  finalStage: true,
                 },
               },
             },
@@ -198,6 +199,7 @@ export class AuthService {
         stages: machine.machinesStages.map((ms) => ({
           id: ms.stage.stageId,
           name: ms.stage.stageName,
+          finalStage: ms.stage.finalStage,
         })),
       }));
 

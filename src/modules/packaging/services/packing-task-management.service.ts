@@ -142,11 +142,11 @@ export class PackingTaskManagementService {
 
     // Проверяем существование нового станка
     const machine = await this.prisma.machine.findUnique({
-      where: { machineId: dto.newMachineId },
+      where: { machineId: dto.machineId },
     });
 
     if (!machine) {
-      throw new NotFoundException(`Станок с ID ${dto.newMachineId} не найден`);
+      throw new NotFoundException(`Станок с ID ${dto.machineId} не найден`);
     }
 
     // Проверяем существование пользователя, если указан
@@ -170,11 +170,11 @@ export class PackingTaskManagementService {
     const updatedTask = await this.prisma.packingTask.update({
       where: { taskId },
       data: {
-        machineId: dto.newMachineId,
+        machineId: dto.machineId,
         assignedTo: dto.assignedTo ?? existingTask.assignedTo,
         status: PackingTaskStatus.PENDING, // Сбрасываем статус на PENDING при перемещении
         assignedAt: new Date(), // Обновляем время назначения
-        completedAt: null, // Сбрасываем время завершения
+        completedAt: null, // Сбрасываем время за��ершения
       },
       include: {
         package: {

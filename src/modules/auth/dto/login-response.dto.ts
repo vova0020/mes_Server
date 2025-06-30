@@ -17,6 +17,7 @@ export class LoginResponseDto {
     stages?: {
       id: number;
       name: string;
+      finalStage: boolean;
     }[];
     
     machines?: {

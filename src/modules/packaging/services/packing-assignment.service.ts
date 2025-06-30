@@ -241,7 +241,7 @@ export class PackingAssignmentService {
     return this.mapToResponseDto(task);
   }
 
-  // Получение заданий п�� станку
+  // Получение заданий по станку
   async getAssignmentsByMachine(
     machineId: number,
   ): Promise<PackingAssignmentResponseDto[]> {

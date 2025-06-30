@@ -185,25 +185,25 @@ model Order {
 /// Таблица packages: упаковочные единицы в составе заказа
 model Package {
   /// Первичный ключ упаковки
-  packageId            Int               @id @default(autoincrement()) @map("package_id")
+  packageId            Int     @id @default(autoincrement()) @map("package_id")
   /// Внешний ключ на заказ
-  orderId              Int               @map("order_id")
+  orderId              Int     @map("order_id")
   /// Уникальный код упаковки
-  packageCode          String            @map("package_code")
+  packageCode          String  @map("package_code")
   /// Название упаковки
-  packageName          String            @map("package_name")
+  packageName          String  @map("package_name")
   /// Процент готовности упаковки
-  completionPercentage Decimal           @map("completion_percentage")
+  completionPercentage Decimal @map("completion_percentage")
   /// Количество упаковок в заказе
   quantity             Decimal
 
   // === Новые поля для этапа упаковки ===
   /// Статус финальной упаковки (NOT_PROCESSED, PENDING, IN_PROGRESS, COMPLETED)
-  packingStatus        PackageStatus     @default(NOT_PROCESSED) @map("packing_status")
+  packingStatus      PackageStatus @default(NOT_PROCESSED) @map("packing_status")
   /// Когда упаковка была назначена
-  packingAssignedAt    DateTime?         @map("packing_assigned_at")
+  packingAssignedAt  DateTime?     @map("packing_assigned_at")
   /// Когда упаковка была завершена
-  packingCompletedAt   DateTime?         @map("packing_completed_at")
+  packingCompletedAt DateTime?     @map("packing_completed_at")
 
   // связи:
   /// Ссылка на родительский заказ
@@ -212,7 +212,7 @@ model Package {
   productionPackageParts ProductionPackagePart[]
 
   /// Задачи упаковки, назначенные на эту упаковочную единицу
-  packingTasks         PackingTask[]     @relation("AssignedPackage")
+  packingTasks PackingTask[] @relation("AssignedPackage")
 
   @@map("packages")
 }
@@ -242,6 +242,8 @@ enum PartStatus {
   PENDING // Запланировано к обработке
   IN_PROGRESS // В процессе обработки
   COMPLETED // Обработка завершена
+  /// Перемещен на упаковку и ожидает упаковки
+  AWAITING_PACKAGING
 }
 
 /// Таблица parts: детали, проходящие через производство
@@ -286,12 +288,11 @@ model Part {
   productionPackageParts ProductionPackagePart[]
 
   /// Связи для составления спецификаций
-  parentBillOfMaterials  BillOfMaterial[]        @relation("ParentPart")
-  childBillOfMaterials   BillOfMaterial[]        @relation("ChildPart")
+  parentBillOfMaterials BillOfMaterial[]        @relation("ParentPart")
+  childBillOfMaterials  BillOfMaterial[]        @relation("ChildPart")
   /// Прогресс по субсборкам
-  subassemblyProgress    SubassemblyProgress[]
-  partMachineAssignment  PartMachineAssignment[]
-  
+  subassemblyProgress   SubassemblyProgress[]
+  partMachineAssignment PartMachineAssignment[]
 
   @@map("parts")
 }
@@ -557,12 +558,12 @@ model Machine {
   noSmenTask      Boolean       @default(false) @map("no_smen_task")
 
   // связи: задачи и этапы, связанные с этим станком
-  machinesStages     MachineStage[] // какие этапы 1-го уровня выполняет станок
-  pickerTasks        PickerTask[] // задачи комплектации, где станок задействован
-  packingTasks       PackingTask[] // задачи упаковки, назначенные на станок
-  machineAssignments MachineAssignment[] // задания на обработку паллет на станке
-  machineSubstages   MachineSubstage[] // операции 2-го уровня, которые может выполнять станок
-  partMachineAssignment    PartMachineAssignment[]
+  machinesStages        MachineStage[] // какие этапы 1-го уровня выполняет станок
+  pickerTasks           PickerTask[] // задачи комплектации, где станок задействован
+  packingTasks          PackingTask[] // задачи упаковки, назначенные на станок
+  machineAssignments    MachineAssignment[] // задания на обработку паллет на станке
+  machineSubstages      MachineSubstage[] // операции 2-го уровня, которые может выполнять станок
+  partMachineAssignment PartMachineAssignment[]
 
   @@map("machines")
 }
@@ -765,9 +766,9 @@ model PickerTask {
 
 // Возможные статусы упаковочных пакетов
 enum PackageStatus {
-    /// Заглушка, поскольку статус обязателен
+  /// Заглушка, поскольку статус обязателен
   NOT_PROCESSED
-     /// Задача готова к обработке но еще не обрабатывалась
+  /// Задача готова к обработке но еще не обрабатывалась
   READY_PROCESSED
   /// Ждёт начала упаковки
   PENDING
@@ -779,7 +780,7 @@ enum PackageStatus {
 
 // Возможные статусы задач упаковки
 enum PackingTaskStatus {
-    /// Задача поставлена в очередь но не делается ничего с ней
+  /// Задача поставлена в очередь но не делается ничего с ней
   NOT_PROCESSED
   /// Ждёт начала упаковки
   PENDING
@@ -812,11 +813,11 @@ model PackingTask {
 
   // связи:
   /// Ссылка на упаковочную единицу заказа
-  package      Package   @relation("AssignedPackage", fields: [packageId], references: [packageId], onDelete: Cascade)
+  package      Package @relation("AssignedPackage", fields: [packageId], references: [packageId], onDelete: Cascade)
   /// Станок или место упаковки
-  machine      Machine    @relation(fields: [machineId], references: [machineId])
+  machine      Machine @relation(fields: [machineId], references: [machineId])
   /// Пользователь-упаковщик
-  assignedUser User?      @relation("AssignedUser", fields: [assignedTo], references: [userId])
+  assignedUser User?   @relation("AssignedUser", fields: [assignedTo], references: [userId])
 
   @@map("packing_tasks")
 }
@@ -827,7 +828,7 @@ model PackingTask {
 
 // Возможные статусы сборки полуфабрикатов
 enum SubassemblyStatus {
-    /// Задача поставлена в очередь но не делается ничего с ней
+  /// Задача поставлена в очередь но не делается ничего с ней
   NOT_PROCESSED
   /// Ждёт начала сборки
   PENDING
@@ -911,6 +912,8 @@ enum TaskStatus {
   IN_PROGRESS
   /// Задача завершена
   COMPLETED
+  /// Перемещен на упаковку и ожидает упаковки
+  AWAITING_PACKAGING
 }
 
 // Задания на обработку паллеты на станке (назначение и завершение)
@@ -940,14 +943,14 @@ model PartMachineAssignment {
   partId       Int       @map("part_id")
   /// Большое значение = более высокий приоритет
   priority     Int       @default(0)
-  assignedAt   DateTime?  @default(now()) @map("assigned_at")
+  assignedAt   DateTime? @default(now()) @map("assigned_at")
   completedAt  DateTime? @map("completed_at")
 
   machine Machine @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
   part    Part    @relation(fields: [partId], references: [partId], onDelete: Cascade)
 
+  @@unique([machineId, partId], name: "machine_part_unique")
   @@index([machineId])
   @@index([partId])
-  @@unique([machineId, partId], name: "machine_part_unique")
   @@map("part_machine_assignments")
 }

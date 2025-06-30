@@ -6,7 +6,7 @@ import { PackingTaskStatus } from '@prisma/client';
 export class MoveTaskToMachineDto {
   @IsInt({ message: 'ID нового станка должен быть числом' })
   @Type(() => Number)
-  newMachineId: number;
+  machineId: number;
 
   @IsOptional()
   @IsInt({ message: 'ID пользователя должен быть числом' })
