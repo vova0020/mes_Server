@@ -1,14 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PackagePartsQueryDto } from '../dto/package-parts-query.dto';
-import { PackagePartsResponseDto, PackagePartDetailDto } from '../dto/package-parts-response.dto';
+import {
+  PackagePartsResponseDto,
+  PackagePartDetailDto,
+} from '../dto/package-parts-response.dto';
 
 @Injectable()
 export class PackagePartsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // Получение деталей по ID упаковки
-  async getPartsByPackageId(packageId: number, query?: PackagePartsQueryDto): Promise<PackagePartsResponseDto> {
+  async getPartsByPackageId(
+    packageId: number,
+    query?: PackagePartsQueryDto,
+  ): Promise<PackagePartsResponseDto> {
     // Сначала проверяем, существует ли упаковка
     const packageInfo = await this.prisma.package.findUnique({
       where: { packageId },
@@ -27,9 +33,19 @@ export class PackagePartsService {
       },
     });
 
+
+
     if (!packageInfo) {
       throw new NotFoundException(`Упаковка с ID ${packageId} не найдена`);
     }
+    // 2) получаем все PackingTask по этому же packageId
+    const tasks = await this.prisma.packingTask.findMany({
+      where: { packageId: packageInfo.packageId },
+      include: {
+        machine: true,
+        assignedUser: true,
+      },
+    });
 
     // Строим условие фильтрации для деталей
     let whereClause: any = {
@@ -45,67 +61,66 @@ export class PackagePartsService {
 
     // Получаем детали с пагинацией
     const { page = 1, limit = 10 } = query || {};
-    
-    const productionPackagePartsRaw = await this.prisma.productionPackagePart.findMany({
-      where: whereClause,
-      orderBy: { partId: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-      select: {
-        quantity: true,
-        part: {
-          select: {
-            partId: true,
-            partCode: true,
-            partName: true,
-            status: true,
-            totalQuantity: true,
-            isSubassembly: true,
-            readyForMainFlow: true,
-            size: true,
-            material: {
-              select: {
-                materialId: true,
-                materialName: true,
-                article: true,
-                unit: true,
+
+    const productionPackagePartsRaw =
+      await this.prisma.productionPackagePart.findMany({
+        where: whereClause,
+        orderBy: { partId: 'asc' },
+        select: {
+          quantity: true,
+          part: {
+            select: {
+              partId: true,
+              partCode: true,
+              partName: true,
+              status: true,
+              totalQuantity: true,
+              isSubassembly: true,
+              readyForMainFlow: true,
+              size: true,
+              material: {
+                select: {
+                  materialId: true,
+                  materialName: true,
+                  article: true,
+                  unit: true,
+                },
               },
-            },
-            route: {
-              select: {
-                routeId: true,
-                routeName: true,
+              route: {
+                select: {
+                  routeId: true,
+                  routeName: true,
+                },
               },
-            },
-            pallets: {
-              select: {
-                palletId: true,
-                palletName: true,
+              pallets: {
+                select: {
+                  palletId: true,
+                  palletName: true,
+                },
               },
-            },
-            partRouteProgress: {
-              select: {
-                routeStageId: true,
-                status: true,
-                completedAt: true,
-                routeStage: {
-                  select: {
-                    stage: {
-                      select: {
-                        stageName: true,
+              partRouteProgress: {
+                select: {
+                  routeStageId: true,
+                  status: true,
+                  completedAt: true,
+                  routeStage: {
+                    select: {
+                      stage: {
+                        select: {
+                          stageName: true,
+                        },
                       },
                     },
                   },
                 },
-              },
-              orderBy: {
-                routeStageId: 'asc',
+                orderBy: {
+                  routeStageId: 'asc',
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
     // Получаем общее количество деталей для пагинации
     const totalParts = await this.prisma.productionPackagePart.count({
@@ -113,37 +128,39 @@ export class PackagePartsService {
     });
 
     // Преобразуем данные
-    const parts: PackagePartDetailDto[] = productionPackagePartsRaw.map(ppp => ({
-      partId: ppp.part.partId,
-      partCode: ppp.part.partCode,
-      partName: ppp.part.partName,
-      status: ppp.part.status as string,
-      totalQuantity: ppp.part.totalQuantity.toNumber(),
-      requiredQuantity: ppp.quantity.toNumber(),
-      isSubassembly: ppp.part.isSubassembly,
-      readyForMainFlow: ppp.part.readyForMainFlow,
-      size: ppp.part.size,
-      material: {
-        materialId: ppp.part.material.materialId,
-        materialName: ppp.part.material.materialName,
-        article: ppp.part.material.article,
-        unit: ppp.part.material.unit,
-      },
-      route: {
-        routeId: ppp.part.route.routeId,
-        routeName: ppp.part.route.routeName,
-      },
-      pallets: ppp.part.pallets.map(pallet => ({
-        palletId: pallet.palletId,
-        palletName: pallet.palletName,
-      })),
-      routeProgress: ppp.part.partRouteProgress.map(progress => ({
-        routeStageId: progress.routeStageId,
-        stageName: progress.routeStage.stage.stageName,
-        status: progress.status as string,
-        completedAt: progress.completedAt,
-      })),
-    }));
+    const parts: PackagePartDetailDto[] = productionPackagePartsRaw.map(
+      (ppp) => ({
+        partId: ppp.part.partId,
+        partCode: ppp.part.partCode,
+        partName: ppp.part.partName,
+        status: ppp.part.status as string,
+        totalQuantity: ppp.part.totalQuantity.toNumber(),
+        requiredQuantity: ppp.quantity.toNumber(),
+        isSubassembly: ppp.part.isSubassembly,
+        readyForMainFlow: ppp.part.readyForMainFlow,
+        size: ppp.part.size,
+        material: {
+          materialId: ppp.part.material.materialId,
+          materialName: ppp.part.material.materialName,
+          article: ppp.part.material.article,
+          unit: ppp.part.material.unit,
+        },
+        route: {
+          routeId: ppp.part.route.routeId,
+          routeName: ppp.part.route.routeName,
+        },
+        pallets: ppp.part.pallets.map((pallet) => ({
+          palletId: pallet.palletId,
+          palletName: pallet.palletName,
+        })),
+        routeProgress: ppp.part.partRouteProgress.map((progress) => ({
+          routeStageId: progress.routeStageId,
+          stageName: progress.routeStage.stage.stageName,
+          status: progress.status as string,
+          completedAt: progress.completedAt,
+        })),
+      }),
+    );
 
     return {
       packageInfo: {
@@ -169,70 +186,76 @@ export class PackagePartsService {
   }
 
   // Получение конкретной детали из упаковки
-  async getPartFromPackage(packageId: number, partId: number): Promise<PackagePartDetailDto> {
-    const productionPackagePartRaw = await this.prisma.productionPackagePart.findFirst({
-      where: {
-        packageId,
-        partId,
-      },
-      select: {
-        quantity: true,
-        part: {
-          select: {
-            partId: true,
-            partCode: true,
-            partName: true,
-            status: true,
-            totalQuantity: true,
-            isSubassembly: true,
-            readyForMainFlow: true,
-            size: true,
-            material: {
-              select: {
-                materialId: true,
-                materialName: true,
-                article: true,
-                unit: true,
+  async getPartFromPackage(
+    packageId: number,
+    partId: number,
+  ): Promise<PackagePartDetailDto> {
+    const productionPackagePartRaw =
+      await this.prisma.productionPackagePart.findFirst({
+        where: {
+          packageId,
+          partId,
+        },
+        select: {
+          quantity: true,
+          part: {
+            select: {
+              partId: true,
+              partCode: true,
+              partName: true,
+              status: true,
+              totalQuantity: true,
+              isSubassembly: true,
+              readyForMainFlow: true,
+              size: true,
+              material: {
+                select: {
+                  materialId: true,
+                  materialName: true,
+                  article: true,
+                  unit: true,
+                },
               },
-            },
-            route: {
-              select: {
-                routeId: true,
-                routeName: true,
+              route: {
+                select: {
+                  routeId: true,
+                  routeName: true,
+                },
               },
-            },
-            pallets: {
-              select: {
-                palletId: true,
-                palletName: true,
+              pallets: {
+                select: {
+                  palletId: true,
+                  palletName: true,
+                },
               },
-            },
-            partRouteProgress: {
-              select: {
-                routeStageId: true,
-                status: true,
-                completedAt: true,
-                routeStage: {
-                  select: {
-                    stage: {
-                      select: {
-                        stageName: true,
+              partRouteProgress: {
+                select: {
+                  routeStageId: true,
+                  status: true,
+                  completedAt: true,
+                  routeStage: {
+                    select: {
+                      stage: {
+                        select: {
+                          stageName: true,
+                        },
                       },
                     },
                   },
                 },
-              },
-              orderBy: {
-                routeStageId: 'asc',
+                orderBy: {
+                  routeStageId: 'asc',
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
     if (!productionPackagePartRaw) {
-      throw new NotFoundException(`Деталь с ID ${partId} не найдена в упаковке с ID ${packageId}`);
+      throw new NotFoundException(
+        `Деталь с ID ${partId} не найдена в упаковке с ID ${packageId}`,
+      );
     }
 
     return {
@@ -255,16 +278,18 @@ export class PackagePartsService {
         routeId: productionPackagePartRaw.part.route.routeId,
         routeName: productionPackagePartRaw.part.route.routeName,
       },
-      pallets: productionPackagePartRaw.part.pallets.map(pallet => ({
+      pallets: productionPackagePartRaw.part.pallets.map((pallet) => ({
         palletId: pallet.palletId,
         palletName: pallet.palletName,
       })),
-      routeProgress: productionPackagePartRaw.part.partRouteProgress.map(progress => ({
-        routeStageId: progress.routeStageId,
-        stageName: progress.routeStage.stage.stageName,
-        status: progress.status as string,
-        completedAt: progress.completedAt,
-      })),
+      routeProgress: productionPackagePartRaw.part.partRouteProgress.map(
+        (progress) => ({
+          routeStageId: progress.routeStageId,
+          stageName: progress.routeStage.stage.stageName,
+          status: progress.status as string,
+          completedAt: progress.completedAt,
+        }),
+      ),
     };
   }
 
@@ -314,7 +339,7 @@ export class PackagePartsService {
       readyForMainFlow: 0,
     };
 
-    detailedStats.forEach(item => {
+    detailedStats.forEach((item) => {
       const status = item.part.status as string;
       if (stats.byStatus[status] !== undefined) {
         stats.byStatus[status]++;

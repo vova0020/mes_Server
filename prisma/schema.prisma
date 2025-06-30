@@ -185,23 +185,34 @@ model Order {
 /// Таблица packages: упаковочные единицы в составе заказа
 model Package {
   /// Первичный ключ упаковки
-  packageId            Int     @id @default(autoincrement()) @map("package_id")
+  packageId            Int               @id @default(autoincrement()) @map("package_id")
   /// Внешний ключ на заказ
-  orderId              Int     @map("order_id")
+  orderId              Int               @map("order_id")
   /// Уникальный код упаковки
-  packageCode          String  @map("package_code")
+  packageCode          String            @map("package_code")
   /// Название упаковки
-  packageName          String  @map("package_name")
+  packageName          String            @map("package_name")
   /// Процент готовности упаковки
-  completionPercentage Decimal @map("completion_percentage")
+  completionPercentage Decimal           @map("completion_percentage")
   /// Количество упаковок в заказе
   quantity             Decimal
+
+  // === Новые поля для этапа упаковки ===
+  /// Статус финальной упаковки (NOT_PROCESSED, PENDING, IN_PROGRESS, COMPLETED)
+  packingStatus        PackageStatus     @default(NOT_PROCESSED) @map("packing_status")
+  /// Когда упаковка была назначена
+  packingAssignedAt    DateTime?         @map("packing_assigned_at")
+  /// Когда упаковка была завершена
+  packingCompletedAt   DateTime?         @map("packing_completed_at")
 
   // связи:
   /// Ссылка на родительский заказ
   order                  Order                   @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
-  /// Детали, входящие в состав упаковки
+  /// Детали, входящие в состав упаковки (производственные)
   productionPackageParts ProductionPackagePart[]
+
+  /// Задачи упаковки, назначенные на эту упаковочную единицу
+  packingTasks         PackingTask[]     @relation("AssignedPackage")
 
   @@map("packages")
 }
@@ -273,8 +284,7 @@ model Part {
   partRouteProgress      PartRouteProgress[]
   /// Связи с упаковочными деталями
   productionPackageParts ProductionPackagePart[]
-  /// Связи с частями упаковок
-  packageParts           PackagePart[]
+
   /// Связи для составления спецификаций
   parentBillOfMaterials  BillOfMaterial[]        @relation("ParentPart")
   childBillOfMaterials   BillOfMaterial[]        @relation("ChildPart")
@@ -755,6 +765,10 @@ model PickerTask {
 
 // Возможные статусы упаковочных пакетов
 enum PackageStatus {
+    /// Заглушка, поскольку статус обязателен
+  NOT_PROCESSED
+     /// Задача готова к обработке но еще не обрабатывалась
+  READY_PROCESSED
   /// Ждёт начала упаковки
   PENDING
   /// В процессе упаковки
@@ -763,44 +777,10 @@ enum PackageStatus {
   COMPLETED
 }
 
-// Основная таблица упаковочных пакетов (корзин или ящиков для деталей)
-model PackingPackage {
-  /// Уникальный идентификатор упаковочного пакета
-  packageId   Int           @id @default(autoincrement()) @map("package_id")
-  /// Название или код пакета
-  packageName String        @map("package_name")
-  /// Текущий статус пакета
-  status      PackageStatus
-  /// Дата и время создания пакета
-  createdAt   DateTime      @default(now()) @map("created_at")
-  /// Дата и время завершения упаковки (если есть)
-  completedAt DateTime?     @map("completed_at")
-
-  // связи: задачи упаковки и детали внутри пакета
-  packingTasks PackingTask[]
-  packageParts PackagePart[]
-
-  @@map("packing_packages")
-}
-
-// Список деталей, вложенных в упаковочный пакет
-model PackagePart {
-  /// Уникальный идентификатор связи «пакет ⇄ деталь»
-  packagePartId Int @id @default(autoincrement()) @map("package_part_id")
-  /// Ссылка на упаковочный пакет
-  packageId     Int @map("package_id")
-  /// Ссылка на деталь
-  partId        Int @map("part_id")
-
-  // связи: навигация к пакету и детали
-  package PackingPackage @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
-  part    Part           @relation(fields: [partId], references: [partId], onDelete: Cascade)
-
-  @@map("package_parts")
-}
-
 // Возможные статусы задач упаковки
 enum PackingTaskStatus {
+    /// Задача поставлена в очередь но не делается ничего с ней
+  NOT_PROCESSED
   /// Ждёт начала упаковки
   PENDING
   /// Упаковка в процессе
@@ -815,14 +795,14 @@ enum PackingTaskStatus {
 model PackingTask {
   /// Уникальный идентификатор задачи
   taskId      Int               @id @default(autoincrement()) @map("task_id")
-  /// Ссылка на упаковочный пакет
+  /// Ссылка на производственную упаковочную единицу
   packageId   Int               @map("package_id")
   /// Станок или место упаковки
   machineId   Int               @map("machine_id")
   /// Пользователь, ответственный за выполнение задачи
   assignedTo  Int?              @map("assigned_to")
   /// Статус задачи упаковки
-  status      PackingTaskStatus
+  status      PackingTaskStatus @default(NOT_PROCESSED)
   /// Приоритет задачи (числовое значение)
   priority    Decimal
   /// Время назначения задачи
@@ -830,10 +810,13 @@ model PackingTask {
   /// Время завершения задачи (если есть)
   completedAt DateTime?         @map("completed_at")
 
-  // связи: навигация к пакету, станку и пользователю
-  package      PackingPackage @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
-  machine      Machine        @relation(fields: [machineId], references: [machineId])
-  assignedUser User?          @relation("AssignedUser", fields: [assignedTo], references: [userId])
+  // связи:
+  /// Ссылка на упаковочную единицу заказа
+  package      Package   @relation("AssignedPackage", fields: [packageId], references: [packageId], onDelete: Cascade)
+  /// Станок или место упаковки
+  machine      Machine    @relation(fields: [machineId], references: [machineId])
+  /// Пользователь-упаковщик
+  assignedUser User?      @relation("AssignedUser", fields: [assignedTo], references: [userId])
 
   @@map("packing_tasks")
 }
@@ -844,6 +827,8 @@ model PackingTask {
 
 // Возможные статусы сборки полуфабрикатов
 enum SubassemblyStatus {
+    /// Задача поставлена в очередь но не делается ничего с ней
+  NOT_PROCESSED
   /// Ждёт начала сборки
   PENDING
   /// Сборка в процессе

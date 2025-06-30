@@ -22,6 +22,30 @@ export interface PackageDto {
   completionPercentage: number;
   order: PackageOrderDto;
   parts: PackagePartDto[];
+  readyForPackaging?: number;
+  assembled?: number;
+  distributed?: number;
+  packaged?: number;
+  tasks?: {
+    taskId: number;
+    status: string;
+    priority: number;
+    assignedAt: Date;
+    completedAt?: Date | null;
+    machine: {
+      machineId: number;
+      machineName: string;
+      status: string;
+    };
+    assignedUser?: {
+      userId: number;
+      login: string;
+      userDetail?: {
+        firstName: string;
+        lastName: string;
+      } | null;
+    } | null;
+  }[];
 }
 
 export interface PackagesResponseDto {

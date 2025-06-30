@@ -43,22 +43,4 @@ export class PackagingController {
       packages,
     };
   }
-
-  // Получение упаковки по ID
-  @Get(':id')
-  async getPackageById(@Param('id') id: string) {
-    const packageId = Number(id);
-
-    if (isNaN(packageId) || packageId <= 0) {
-      throw new BadRequestException('Некорректный ID упаковки');
-    }
-
-    const packageData = await this.packagingService.getPackageById(packageId);
-
-    if (!packageData) {
-      throw new NotFoundException(`Упаковка с ID ${id} не найдена`);
-    }
-
-    return packageData;
-  }
 }
