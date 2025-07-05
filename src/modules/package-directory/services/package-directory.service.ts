@@ -1,0 +1,142 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../../shared/prisma.service';
+import {
+  CreatePackageDirectoryDto,
+  UpdatePackageDirectoryDto,
+} from './../dto/package-directory.dto';
+
+@Injectable()
+export class PackageDirectoryService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Создание новой упаковки
+   */
+  async create(createDto: CreatePackageDirectoryDto) {
+    try {
+      // Проверяем, что упаковка с таким кодом не существует
+      const existingPackage = await this.prisma.packageDirectory.findUnique({
+        where: { packageCode: createDto.packageCode },
+      });
+
+      if (existingPackage) {
+        throw new BadRequestException(
+          `Упаковка с кодом ${createDto.packageCode} уже существует`,
+        );
+      }
+
+      // Создаем упаковку с деталями
+      const packageDirectory = await this.prisma.packageDirectory.create({
+        data: {
+          packageCode: createDto.packageCode,
+          packageName: createDto.packageName,
+        },
+      });
+
+      return packageDirectory;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Ошибка при создании упаковки');
+    }
+  }
+
+  /**
+   * Получение всех упаковок
+   */
+  async findAll() {
+    return this.prisma.packageDirectory.findMany({
+      orderBy: {
+        packageCode: 'asc',
+      },
+    });
+  }
+
+  /**
+   * Получение упаковки по ID
+   */
+  async findOne(id: number) {
+    const packageDirectory = await this.prisma.packageDirectory.findUnique({
+      where: { packageId: id },
+    });
+
+    if (!packageDirectory) {
+      throw new NotFoundException(`Упаковка с ID ${id} не найдена`);
+    }
+
+    return packageDirectory;
+  }
+
+  /**
+   * Обновление упаковки
+   */
+  async update(id: number, updateDto: UpdatePackageDirectoryDto) {
+    try {
+      // Проверяем существование упаковки
+      const existingPackage = await this.findOne(id);
+
+      // Если обновляется код, проверяем уникальность
+      if (
+        updateDto.packageCode &&
+        updateDto.packageCode !== existingPackage.packageCode
+      ) {
+        const packageWithSameCode =
+          await this.prisma.packageDirectory.findUnique({
+            where: { packageCode: updateDto.packageCode },
+          });
+
+        if (packageWithSameCode) {
+          throw new BadRequestException(
+            `Упаковка с кодом ${updateDto.packageCode} уже существует`,
+          );
+        }
+      }
+
+      // Обновляем упаковку
+      const updatedPackage = await this.prisma.packageDirectory.update({
+        where: { packageId: id },
+        data: {
+          ...(updateDto.packageCode && { packageCode: updateDto.packageCode }),
+          ...(updateDto.packageName && { packageName: updateDto.packageName }),
+        },
+      });
+
+      return updatedPackage;
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException('Ошибка при обновлении упаковки');
+    }
+  }
+
+  /**
+   * Удаление упаковки
+   */
+  async remove(id: number) {
+    try {
+      // Проверяем существование упаковки
+      await this.findOne(id);
+
+      // Удаляем упаковку (связанные записи удалятся каскадно)
+      await this.prisma.packageDirectory.delete({
+        where: { packageId: id },
+      });
+
+      return { message: `Упаковка с ID ${id} успешно удалена` };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Ошибка при удалении упаковки');
+    }
+  } 
+}

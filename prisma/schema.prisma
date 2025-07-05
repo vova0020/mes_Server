@@ -858,6 +858,107 @@ model SubassemblyProgress {
   @@map("subassembly_progress")
 }
 
+
+// ========================================
+// 11. Модуль справочников упаковок и деталей
+// ========================================
+
+/// Таблица с справочником упаковок
+model PackageDirectory {
+  /// PK
+  packageId      Int               @id @default(autoincrement()) @map("package_id")
+  /// Уникальный артикул/код упаковки
+  packageCode    String            @unique @map("package_code")
+  /// Название упаковки
+  packageName    String            @map("package_name")
+
+  /// Связь «многие-ко-многим» через промежуточную таблицу
+  packageDetails PackageDetailDirectory[]
+
+  @@map("package_directory")
+}
+
+/// Таблица с справочника деталями
+model DetailDirectory {
+  /// PK
+  id                       Int               @id @default(autoincrement()) @map("detail_id")
+  /// Уникальный артикул детали
+  partSku                  String            @unique @map("part_sku")
+  /// Наименование детали
+  partName                 String            @map("part_name")
+  /// Наименование материала
+  materialName             String            @map("material_name")
+  /// Артикул материала
+  materialSku              String            @map("material_sku")
+  /// Толщина детали
+  thickness                Float?            @map("thickness")
+  /// Толщина с учетом облицовки пласти
+  thicknessWithEdging      Float?            @map("thickness_with_edging")
+  /// Готовая деталь [L]
+  finishedLength           Float?            @map("finished_length")
+  /// Готовая деталь [W]
+  finishedWidth            Float?            @map("finished_width")
+  /// Паз
+  groove                   String?           @map("groove")
+  /// Артикул облицовки кромки [L1]
+  edgingSkuL1              String?           @map("edging_sku_l1")
+  /// Наименование облицовки кромки [L1]
+  edgingNameL1             String?           @map("edging_name_l1")
+  /// Артикул облицовки кромки [L2]
+  edgingSkuL2              String?           @map("edging_sku_l2")
+  /// Наименование облицовки кромки [L2]
+  edgingNameL2             String?           @map("edging_name_l2")
+  /// Артикул облицовки кромки [W1]
+  edgingSkuW1              String?           @map("edging_sku_w1")
+  /// Наименование облицовки кромки [W1]
+  edgingNameW1             String?           @map("edging_name_w1")
+  /// Артикул облицовки кромки [W2]
+  edgingSkuW2              String?           @map("edging_sku_w2")
+  /// Наименование облицовки кромки [W2]
+  edgingNameW2             String?           @map("edging_name_w2")
+  /// Пластик (лицевая)
+  plasticFace              String?           @map("plastic_face")
+  /// Пластик (лицевая) артикул
+  plasticFaceSku           String?           @map("plastic_face_sku")
+  /// Пластик (нелицевая)
+  plasticBack              String?           @map("plastic_back")
+  /// Пластик (нелицевая) артикул
+  plasticBackSku           String?           @map("plastic_back_sku")
+  /// ПФ
+  pf                       Boolean?           @map("pf")
+  /// Артикул ПФ (для детали)
+  pfSku                    String?           @map("pf_sku")
+  /// СБ деталь
+  sbPart                   Boolean?           @map("sb_part")
+  /// ПФ СБ
+  pfSb                     Boolean?           @map("pf_sb")
+  /// Артикул СБ детали (для ПФ СБ)
+  sbPartSku                String?           @map("sb_part_sku")
+
+  /// Связь «многие-ко-многим» через промежуточную таблицу
+  packageDetails           PackageDetailDirectory[]
+
+  @@map("detail_directory")
+}
+
+/// Промежуточная таблица для «многие-ко-многим»
+model PackageDetailDirectory {
+  /// FK на упаковку
+  packageId Int
+  /// FK на деталь
+  detailId  Int
+
+  /// Количество деталей в упаковке
+  quantity  Int
+
+  package   PackageDirectory @relation(fields: [packageId], references: [packageId])
+  detail    DetailDirectory           @relation(fields: [detailId],  references: [id])
+
+  @@id([packageId, detailId])
+  @@map("package_detail_directory")
+}
+
+
 // ========================================
 // Дополнительные модели для отслеживания прогресса
 // ========================================
