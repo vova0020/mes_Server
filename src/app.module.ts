@@ -17,6 +17,7 @@ import { PackagingModule } from './modules/packaging/packaging.module';
 import { PackagingProductModule } from './modules/packagingProduct/packagingProduct.module';
 import { NavbarModule } from './modules/navbar/navbar.module';
 import { PackageDirectoryModule } from './modules/package-directory';
+import { DetailsDirectoryModule } from './modules/detailsDirectory/details-directory.module';
 
 @Module({
   imports: [
@@ -33,6 +34,8 @@ import { PackageDirectoryModule } from './modules/package-directory';
     PackagingModule,
     NavbarModule,
     PackageDirectoryModule,
+    DetailsDirectoryModule,
+    
     // MachinNoSmenModule,
     // MachinModule,
     // YpakModule,

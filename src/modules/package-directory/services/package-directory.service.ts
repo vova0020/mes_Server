@@ -47,29 +47,54 @@ export class PackageDirectoryService {
   }
 
   /**
-   * Получение всех упаковок
+   * Получение всех упаковок с отдельным полем detailsCount
    */
   async findAll() {
-    return this.prisma.packageDirectory.findMany({
-      orderBy: {
-        packageCode: 'asc',
-      },
+    // 1) Забираем все упаковки без _count
+    const packages = await this.prisma.packageDirectory.findMany({
+      orderBy: { packageCode: 'asc' },
     });
+
+    // 2) Считаем количество деталей для каждой упаковки
+    const packagesWithCount = await Promise.all(
+      packages.map(async (pkg) => {
+        const detailsCount = await this.prisma.packageDetailDirectory.count({
+          where: { packageId: pkg.packageId },
+        });
+        return {
+          ...pkg,
+          detailsCount,
+        };
+      }),
+    );
+
+    return packagesWithCount;
   }
 
   /**
-   * Получение упаковки по ID
+   * Получение упаковки по ID с отдельным полем detailsCount
    */
   async findOne(id: number) {
+    // 1) Получаем сами данные упаковки
     const packageDirectory = await this.prisma.packageDirectory.findUnique({
       where: { packageId: id },
+      // убрали include: { _count: … }
     });
 
     if (!packageDirectory) {
       throw new NotFoundException(`Упаковка с ID ${id} не найдена`);
     }
 
-    return packageDirectory;
+    // 2) Считаем количество связанных packageDetails
+    const detailsCount = await this.prisma.packageDetailDirectory.count({
+      where: { packageId: id },
+    });
+
+    // 3) Возвращаем объединённый объект
+    return {
+      ...packageDirectory,
+      detailsCount, // здесь новое поле
+    };
   }
 
   /**
@@ -138,5 +163,5 @@ export class PackageDirectoryService {
       }
       throw new BadRequestException('Ошибка при удалении упаковки');
     }
-  } 
+  }
 }

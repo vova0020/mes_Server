@@ -1,7 +1,7 @@
 // src/validation/validation.service.ts
 
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../shared/prisma.service'; // настройте импорт под ваш путь и setup
+import { PrismaService } from '../../../shared/prisma.service'; // настройте импорт под ваш путь и setup
 
 export interface Diff {
   field: string;
@@ -36,11 +36,17 @@ export interface ValidatedPart {
   sbPart?: boolean;
   pfSb?: boolean;
   sbPartSku?: string;
+  conveyorPosition?: number;
 
   // наша обертка
   detailExists: boolean;
   packages?: { packageCode: string; packageName: string; quantity: number }[];
   diffs?: Diff[];
+  // Поля для связи с упаковкой (из файла)
+  packageId?: number;
+  quantity?: number;
+  // Флаг связи с указанной упаковкой
+  hasPackageConnection?: boolean;
 }
 
 @Injectable()
@@ -50,7 +56,20 @@ export class ValidationService {
   /**
    * Проверяет каждый объект по partSku, находит в БД, собирает пакеты и diff’ы.
    */
-  async checkAndEnhance(items: ValidatedPart[]): Promise<ValidatedPart[]> {
+  async checkAndEnhance(
+    items: ValidatedPart[], 
+    packageId?: number, 
+    // quantity?: number
+  ): Promise<ValidatedPart[]> {
+    // Если указан packageId, проверяем существование упаковки
+    if (packageId) {
+      const targetPackage = await this.prisma.packageDirectory.findUnique({
+        where: { packageId },
+      });
+      if (!targetPackage) {
+        throw new Error(`Упаковка с ID ${packageId} не найдена`);
+      }
+    }
     return Promise.all(
       items.map(async (parsed) => {
         const dbDetail = await this.prisma.detailDirectory.findUnique({
@@ -63,10 +82,13 @@ export class ValidationService {
         });
 
         if (!dbDetail) {
-          // Детальа нет в каталоге
+          // Детали нет в каталоге
           return {
             ...parsed,
             detailExists: false,
+            packageId,
+           quantity:parsed.quantity,
+            hasPackageConnection: false,
           };
         }
 
@@ -76,6 +98,14 @@ export class ValidationService {
           packageName: pd.package.packageName,
           quantity: pd.quantity,
         }));
+
+        // Проверяем связь с указанной упаковкой
+        let hasPackageConnection = false;
+        if (packageId) {
+          hasPackageConnection = dbDetail.packageDetails.some(
+            (pd) => pd.packageId === packageId
+          );
+        }
 
         // Смотрим отличия по каждому полю (кроме partSku)
         const diffs: Diff[] = [];
@@ -88,6 +118,7 @@ export class ValidationService {
           'thicknessWithEdging',
           'finishedLength',
           'finishedWidth',
+          'quantity',
           'groove',
           'edgingSkuL1',
           'edgingNameL1',
@@ -106,6 +137,7 @@ export class ValidationService {
           'sbPart',
           'pfSb',
           'sbPartSku',
+          'conveyorPosition',
         ];
 
         for (const field of fieldsToCheck) {
@@ -122,6 +154,9 @@ export class ValidationService {
           detailExists: true,
           packages,
           diffs: diffs.length ? diffs : undefined,
+          packageId,
+          // quantity:,
+          hasPackageConnection,
         };
       }),
     );
