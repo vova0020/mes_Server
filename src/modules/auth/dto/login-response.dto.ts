@@ -23,6 +23,7 @@ export class LoginResponseDto {
     machines?: {
       id: number;
       name: string;
+      noSmenTask?: boolean;
     }[];
 
     pickers?: {

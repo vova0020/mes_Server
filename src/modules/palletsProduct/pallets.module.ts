@@ -6,19 +6,27 @@ import { PalletMachinController } from './controllers/palletsMachin.controller';
 import { PalletMachineService } from './services/pallets-Machine.service';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { PalletsMachineTaskService } from './services/pallets-Machine-task.service';
+import { PalletsMachinsNoSmenController } from './controllers/palletsMachinsNoSmen.controller';
+import { PalletMachineNoSmenService } from './services/pallets-MachineNoSmen.service';
 
 @Module({
   imports: [SharedModule, WebsocketModule],
-  controllers: [PalletsMasterController, PalletMachinController],
+  controllers: [
+    PalletsMasterController,
+    PalletMachinController,
+    PalletsMachinsNoSmenController,
+  ],
   providers: [
     PalletsMasterService,
     PalletMachineService,
     PalletsMachineTaskService,
+    PalletMachineNoSmenService,
   ],
   exports: [
     PalletsMasterService,
     PalletMachineService,
     PalletsMachineTaskService,
+    PalletMachineNoSmenService,
   ],
 })
 export class PalletsModule {}

@@ -179,6 +179,7 @@ export class AuthService {
         select: {
           machineId: true,
           machineName: true,
+          noSmenTask: true,
           machinesStages: {
             select: {
               stage: {
@@ -196,6 +197,7 @@ export class AuthService {
       assignments.machines = machines.map((machine) => ({
         id: machine.machineId,
         name: machine.machineName,
+        noSmenTask: machine.noSmenTask,
         stages: machine.machinesStages.map((ms) => ({
           id: ms.stage.stageId,
           name: ms.stage.stageName,
