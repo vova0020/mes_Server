@@ -18,6 +18,8 @@ import { PackagingProductModule } from './modules/packagingProduct/packagingProd
 import { NavbarModule } from './modules/navbar/navbar.module';
 import { PackageDirectoryModule } from './modules/package-directory';
 import { DetailsDirectoryModule } from './modules/detailsDirectory/details-directory.module';
+import { ProductionOrdersModule } from './modules/production-orders/production-orders.module';
+import { RouteManagementModule } from './modules/route-management/route-management.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { DetailsDirectoryModule } from './modules/detailsDirectory/details-direc
     NavbarModule,
     PackageDirectoryModule,
     DetailsDirectoryModule,
+    ProductionOrdersModule,
+    RouteManagementModule,
     
     // MachinNoSmenModule,
     // MachinModule,

@@ -156,6 +156,15 @@ model LoginLog {
 // 2. Модуль производства
 // ========================================
 
+/// Перечисление OrderStatus: статусы заказов
+enum OrderStatus {
+  PRELIMINARY // Предварительный
+  APPROVED // Утверждено
+  LAUNCH_PERMITTED // Разрешено к запуску
+  IN_PROGRESS // В работе
+  COMPLETED // Завершен
+}
+
 /// Таблица orders: заказы на производство
 model Order {
   /// Первичный ключ заказа
@@ -174,6 +183,10 @@ model Order {
   launchPermission     Boolean   @map("launch_permission")
   /// Флаг завершённости заказа
   isCompleted          Boolean   @map("is_completed")
+  /// Требуемая дата выполнения заказа
+  requiredDate         DateTime  @map("required_date")
+  /// Статус заказа
+  status               OrderStatus @default(PRELIMINARY)
 
   // связи:
   /// Упаковочные единицы, связанные с заказом

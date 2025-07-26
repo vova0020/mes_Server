@@ -19,6 +19,8 @@ export enum WebSocketRooms {
 
   // Комнаты производственных модулей
   PRODUCT_MACHINES = 'product-machines',
+  PRODUCTION_ORDERS = 'production-orders',
+  ROUTE_MANAGEMENT = 'route-management',
   
 }
 
@@ -26,7 +28,7 @@ export enum WebSocketRooms {
  * Типы событий для каждой комнаты
  */
 export interface RoomEvents {
-  // События буферов настроек (src/modules/settings/services/buffers)
+  // События ��уферов настроек (src/modules/settings/services/buffers)
   [WebSocketRooms.SETTINGS_BUFFERS]: {
     bufferCreated: {
       buffer: any;
@@ -447,6 +449,46 @@ export interface RoomEvents {
         noShiftAssignment?: boolean;
         segmentId?: number | null;
         segmentName?: string | null;
+      };
+      timestamp: string;
+    };
+  };
+
+  // События заказов производства
+  [WebSocketRooms.PRODUCTION_ORDERS]: {
+    orderCreated: {
+      order: any;
+      timestamp: string;
+    };
+    orderUpdated: {
+      order: any;
+      timestamp: string;
+    };
+    orderDeleted: {
+      orderId: number;
+      batchNumber: string;
+      timestamp: string;
+    };
+    orderStatusChanged: {
+      order: any;
+      previousStatus: string;
+      newStatus: string;
+      timestamp: string;
+    };
+  };
+
+  // События управления маршрутами
+  [WebSocketRooms.ROUTE_MANAGEMENT]: {
+    partRouteUpdated: {
+      orderId: number;
+      batchNumber: string;
+      partRouteUpdate: {
+        partId: number;
+        partCode: string;
+        partName: string;
+        previousRoute: any;
+        newRoute: any;
+        updatedAt: string;
       };
       timestamp: string;
     };
