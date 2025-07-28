@@ -138,6 +138,17 @@ export class UpdateProductionOrderDto {
   @IsBoolean()
   @IsOptional()
   isCompleted?: boolean;
+
+  @ApiProperty({
+    description: 'Упаковки в заказе (если указано, то полностью заменит существующие упаковки)',
+    type: [CreatePackageDto],
+    required: false,
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreatePackageDto)
+  @IsOptional()
+  packages?: CreatePackageDto[];
 }
 
 export class PackageResponseDto {
@@ -204,7 +215,7 @@ export class ProductionOrderResponseDto {
   batchNumber: string;
 
   @ApiProperty({
-    description: 'На��вание заказа',
+    description: 'Название заказа',
     example: 'Заказ на производство мебели',
   })
   orderName: string;
@@ -258,4 +269,49 @@ export class ProductionOrderResponseDto {
     type: [PackageResponseDto],
   })
   packages?: PackageResponseDto[];
+}
+
+// DTO для справочника упаковок
+export class PackageDirectoryResponseDto {
+  @ApiProperty({
+    description: 'ID упаковки в справочнике',
+    example: 1,
+  })
+  packageId: number;
+
+  @ApiProperty({
+    description: 'Код упаковки',
+    example: 'PKG-001',
+  })
+  packageCode: string;
+
+  @ApiProperty({
+    description: 'Название упаковки',
+    example: 'Упаковка стульев',
+  })
+  packageName: string;
+
+  @ApiProperty({
+    description: 'Количество деталей в упаковке',
+    example: 4,
+  })
+  detailsCount: number;
+
+  @ApiProperty({
+    description: 'Детали в упаковке из справочника',
+    example: [
+      {
+        detailId: 1,
+        partSku: 'PART-001',
+        partName: 'Ножка стула',
+        quantity: 4,
+      },
+    ],
+  })
+  details?: {
+    detailId: number;
+    partSku: string;
+    partName: string;
+    quantity: number;
+  }[];
 }

@@ -10,6 +10,7 @@ import {
   UpdateProductionOrderDto,
   ProductionOrderResponseDto,
   OrderStatus,
+  PackageDirectoryResponseDto,
 } from '../dto/production-order.dto';
 import { EventsService } from '../../websocket/services/events.service';
 import { WebSocketRooms } from '../../websocket/types/rooms.types';
@@ -58,7 +59,7 @@ export class ProductionOrdersService {
     for (const pkg of existingPackages) {
       if (!pkg.packageDetails || pkg.packageDetails.length === 0) {
         throw new BadRequestException(
-          `Упаковка "${pkg.packageName}" (ID: ${pkg.packageId}) не содержит деталей в справочнике`,
+          `Упаковка "${pkg.packageName}" (ID: ${pkg.packageId}) не содержит деталей в справо��нике`,
         );
       }
     }
@@ -101,7 +102,7 @@ export class ProductionOrdersService {
           },
         });
 
-        // Автоматически соз��аем детали из справочника упаковки
+        // Автоматически создаем детали из справочника упаковки
         for (const packageDetail of packageDirectory.packageDetails) {
           const detailDirectory = packageDetail.detail;
 
@@ -117,7 +118,7 @@ export class ProductionOrdersService {
               size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
               totalQuantity: totalQuantity,
               status: 'PENDING',
-              routeId: 1, // Временно используем ID 1, нужно будет определить маршрут
+              routeId: packageDetail.routeId!, // Временно используем ID 1, нужно будет определить маршрут
             },
           });
 
@@ -198,10 +199,24 @@ export class ProductionOrdersService {
   ): Promise<ProductionOrderResponseDto> {
     const existingOrder = await this.prismaService.order.findUnique({
       where: { orderId: id },
+      include: {
+        packages: {
+          include: {
+            productionPackageParts: true,
+          },
+        },
+      },
     });
 
     if (!existingOrder) {
       throw new NotFoundException(`Заказ с ID ${id} не найден`);
+    }
+
+    // Проверяем, можно ли изменять заказ (например, если он не в работе)
+    if (existingOrder.status === OrderStatus.IN_PROGRESS && updateOrderDto.packages) {
+      throw new ConflictException(
+        'Нельзя изменять упаковки заказа, который находится в работе',
+      );
     }
 
     // Проверяем уникальность нового номера партии (если он изменяется)
@@ -223,21 +238,135 @@ export class ProductionOrdersService {
       }
     }
 
-    // Обновляем заказ
-    await this.prismaService.order.update({
-      where: { orderId: id },
-      data: {
-        batchNumber: updateOrderDto.batchNumber,
-        orderName: updateOrderDto.orderName,
-        requiredDate: updateOrderDto.requiredDate
-          ? new Date(updateOrderDto.requiredDate)
-          : undefined,
-        status: updateOrderDto.status,
-        launchPermission: updateOrderDto.launchPermission,
-        isCompleted: updateOrderDto.isCompleted,
-        completedAt:
-          updateOrderDto.isCompleted === true ? new Date() : undefined,
-      },
+    // Если указаны новые упаковки, проверяем их существование в справочнике
+    let existingPackages: any[] = [];
+    if (updateOrderDto.packages && updateOrderDto.packages.length > 0) {
+      const packageDirectoryIds = updateOrderDto.packages.map(
+        (pkg) => pkg.packageDirectoryId,
+      );
+      existingPackages = await this.prismaService.packageDirectory.findMany({
+        where: { packageId: { in: packageDirectoryIds } },
+        include: {
+          packageDetails: {
+            include: {
+              detail: true,
+            },
+          },
+        },
+      });
+
+      if (existingPackages.length !== packageDirectoryIds.length) {
+        throw new NotFoundException(
+          'Одна или несколько указанных упаковок не найдены в справочнике',
+        );
+      }
+
+      // Проверяем, что у всех упаковок есть детали
+      for (const pkg of existingPackages) {
+        if (!pkg.packageDetails || pkg.packageDetails.length === 0) {
+          throw new BadRequestException(
+            `Упаковка "${pkg.packageName}" (ID: ${pkg.packageId}) не содержит деталей в справочнике`,
+          );
+        }
+      }
+    }
+
+    // Обновляем заказ в транзакции
+    await this.prismaService.$transaction(async (prisma) => {
+      // Обновляем основные поля заказа
+      await prisma.order.update({
+        where: { orderId: id },
+        data: {
+          batchNumber: updateOrderDto.batchNumber,
+          orderName: updateOrderDto.orderName,
+          requiredDate: updateOrderDto.requiredDate
+            ? new Date(updateOrderDto.requiredDate)
+            : undefined,
+          status: updateOrderDto.status,
+          launchPermission: updateOrderDto.launchPermission,
+          isCompleted: updateOrderDto.isCompleted,
+          completedAt:
+            updateOrderDto.isCompleted === true ? new Date() : undefined,
+        },
+      });
+
+      // Если указаны новые упаковки, з��меняем существующие
+      if (updateOrderDto.packages) {
+        // Удаляем старые упаковки и их детали
+        for (const pkg of existingOrder.packages) {
+          // Удаляем связи упаковок с деталями
+          await prisma.productionPackagePart.deleteMany({
+            where: { packageId: pkg.packageId },
+          });
+
+          // Удаляем детали, созданные для этого заказа
+          const partIds = pkg.productionPackageParts.map((ppp) => ppp.partId);
+          if (partIds.length > 0) {
+            await prisma.part.deleteMany({
+              where: { partId: { in: partIds } },
+            });
+          }
+        }
+
+        // Удаляем упаковки
+        await prisma.package.deleteMany({
+          where: { orderId: id },
+        });
+
+        // Создаем новые упаковки и их детали
+        for (const packageDto of updateOrderDto.packages) {
+          const packageDirectory = existingPackages.find(
+            (pkg) => pkg.packageId === packageDto.packageDirectoryId,
+          );
+
+          if (!packageDirectory) {
+            throw new NotFoundException(
+              `Упаковка с ID ${packageDto.packageDirectoryId} не найдена`,
+            );
+          }
+
+          // Создаем упаковку
+          const newPackage = await prisma.package.create({
+            data: {
+              orderId: id,
+              packageCode: packageDirectory.packageCode,
+              packageName: packageDirectory.packageName,
+              quantity: packageDto.quantity,
+              completionPercentage: 0,
+            },
+          });
+
+          // Автоматически создаем детали из справочника упаковки
+          for (const packageDetail of packageDirectory.packageDetails) {
+            const detailDirectory = packageDetail.detail;
+
+            // Рассчитываем общее количество: количество в справочнике * количество упаковок
+            const totalQuantity = packageDetail.quantity * packageDto.quantity;
+
+            // Создаем деталь в производстве
+            const newPart = await prisma.part.create({
+              data: {
+                partCode: detailDirectory.partSku,
+                partName: detailDirectory.partName,
+                materialId: 1, // Временно используем ID 1, нужно будет связать с материалом из справочника
+                size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
+                totalQuantity: totalQuantity,
+                status: 'PENDING',
+                routeId: 1, // Временно используем ID 1, нужно будет определить маршрут
+              },
+            });
+
+            // Связываем деталь с упаковкой
+            await prisma.productionPackagePart.create({
+              data: {
+                packageId: newPackage.packageId,
+                partId: newPart.partId,
+                quantity: packageDetail.quantity, // Количество деталей в одной упаковке (из справочника)
+              },
+            });
+          }
+        }
+      }
     });
 
     const updatedOrder = await this.findOne(id);
@@ -371,6 +500,33 @@ export class ProductionOrdersService {
         `Недопустимый переход статуса с ${currentStatus} на ${newStatus}`,
       );
     }
+  }
+
+  // Метод для получения списка упаковок из справочника
+  async getPackageDirectory(): Promise<PackageDirectoryResponseDto[]> {
+    const packages = await this.prismaService.packageDirectory.findMany({
+      include: {
+        packageDetails: {
+          include: {
+            detail: true,
+          },
+        },
+      },
+      orderBy: { packageCode: 'asc' },
+    });
+
+    return packages.map((pkg) => ({
+      packageId: pkg.packageId,
+      packageCode: pkg.packageCode,
+      packageName: pkg.packageName,
+      detailsCount: pkg.packageDetails.length,
+      details: pkg.packageDetails.map((detail) => ({
+        detailId: detail.detail.id,
+        partSku: detail.detail.partSku,
+        partName: detail.detail.partName,
+        quantity: detail.quantity,
+      })),
+    }));
   }
 
   private mapOrderToResponse(order: any): ProductionOrderResponseDto {

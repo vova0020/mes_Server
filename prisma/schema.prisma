@@ -625,8 +625,9 @@ model Route {
   routeName String @map("route_name")
 
   // связи: какие этапы и какие детали связаны с этим маршрутом
-  routeStages RouteStage[] // все этапы и подэтапы в рамках этого маршрута
-  parts       Part[] // детали, которым присвоен этот маршрут
+  routeStages           RouteStage[] // все этапы и подэтапы в рамках этого маршрута
+  parts                 Part[] // детали, которым присвоен этот маршрут
+  packageDetailRoutes   PackageDetailDirectory[] // связи с деталями в упаковках
 
   @@map("routes")
 }
@@ -962,12 +963,15 @@ model PackageDetailDirectory {
   packageId Int
   /// FK на деталь
   detailId  Int
+  /// FK на маршрут обработки (может отличаться для одной детали в разных упаковках)
+  routeId   Int?
 
   /// Количество деталей в упаковке
   quantity  Int
 
   package   PackageDirectory @relation(fields: [packageId], references: [packageId])
-  detail    DetailDirectory           @relation(fields: [detailId],  references: [id])
+  detail    DetailDirectory  @relation(fields: [detailId],  references: [id])
+  route     Route?           @relation(fields: [routeId], references: [routeId])
 
   @@id([packageId, detailId])
   @@map("package_detail_directory")

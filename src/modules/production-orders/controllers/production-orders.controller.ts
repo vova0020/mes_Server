@@ -24,6 +24,7 @@ import {
   UpdateProductionOrderDto,
   ProductionOrderResponseDto,
   OrderStatus,
+  PackageDirectoryResponseDto,
 } from '../dto/production-order.dto';
 
 @ApiTags('Заказы производства')
@@ -52,6 +53,20 @@ export class ProductionOrdersController {
     @Body() createOrderDto: CreateProductionOrderDto,
   ): Promise<ProductionOrderResponseDto> {
     return this.productionOrdersService.create(createOrderDto);
+  }
+
+  @Get('package-directory')
+  @ApiOperation({ 
+    summary: 'Получить список упаковок из справочника',
+    description: 'Возвращает все доступные упаковки из справочника с их деталями для создания производственных заказов'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Список упаковок из справочника',
+    type: [PackageDirectoryResponseDto],
+  })
+  async getPackageDirectory(): Promise<PackageDirectoryResponseDto[]> {
+    return this.productionOrdersService.getPackageDirectory();
   }
 
   @Get()
@@ -116,7 +131,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Изменить статус зак��за' })
+  @ApiOperation({ summary: 'Изменить статус заказа' })
   @ApiParam({ name: 'id', description: 'ID заказа' })
   @ApiResponse({
     status: HttpStatus.OK,

@@ -325,6 +325,10 @@ export class RouteManagementService {
     return result;
   }
 
+  async getAllRoutes(): Promise<RouteInfoDto[]> {
+    return this.getAvailableRoutes();
+  }
+
   private async getAvailableRoutes(): Promise<RouteInfoDto[]> {
     const routes = await this.prismaService.route.findMany({
       include: {

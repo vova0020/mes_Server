@@ -14,6 +14,7 @@ import {
   OrderPartsForRoutesResponseDto,
   PartRouteUpdateResponseDto,
   UpdatePartRouteDto,
+  RouteInfoDto,
 } from '../dto/route-management.dto';
 
 @ApiTags('Управление маршрутами')
@@ -22,6 +23,20 @@ export class RouteManagementController {
   constructor(
     private readonly routeManagementService: RouteManagementService,
   ) {}
+
+  @Get('routes')
+  @ApiOperation({
+    summary: 'Получить список всех доступных маршрутов',
+    description: 'Возвращает список всех маршрутов с их этапами для выбора пользователем',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Список всех доступных маршрутов',
+    type: [RouteInfoDto],
+  })
+  async getAllRoutes(): Promise<RouteInfoDto[]> {
+    return this.routeManagementService.getAllRoutes();
+  }
 
   @Get('orders')
   @ApiOperation({
