@@ -48,6 +48,9 @@ export class PalletDto {
 export class PalletsResponseDto {
   pallets: PalletDto[];
   total: number;
+  
+  @ApiProperty({ description: 'Количество нераспределенных деталей по поддонам' })
+  unallocatedQuantity: number;
 }
 
 // DTO для назначения поддона на станок
@@ -308,6 +311,47 @@ export class RouteInfoDto {
     isCurrent: boolean;
   }[];
 }
+
+// DTO для создания по��дона
+export class CreatePalletDto {
+  @ApiProperty({ description: 'ID детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  partId: number;
+
+  @ApiProperty({ description: 'Количество деталей на поддоне', example: 100 })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiPropertyOptional({ description: 'Название поддона (опционально)', example: 'Поддон-001' })
+  @IsOptional()
+  palletName?: string;
+}
+
+// DTO для ответа на создание поддона
+export class CreatePalletResponseDto {
+  @ApiProperty({ description: 'Сообщение о результате операции' })
+  message: string;
+
+  @ApiProperty({ description: 'Информация о созданном поддоне' })
+  pallet: {
+    id: number;
+    name: string;
+    partId: number;
+    quantity: number;
+    createdAt: Date;
+    part?: {
+      id: number;
+      code: string;
+      name: string;
+      material: string;
+      totalQuantity: number;
+      availableQuantity: number;
+    };
+  };
+}
+
 
 // DTO для получения подробной информации о поддоне
 export class DetailedPalletDto extends PalletDto {

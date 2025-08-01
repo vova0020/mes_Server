@@ -78,7 +78,13 @@ export class PalletMachineNoSmenService {
       },
     });
 
-    // 4. Преобразуем в DTO
+    // 4. Рассчитываем количество нераспределенных деталей
+    const totalPalletQuantity = pallets.reduce((sum, pallet) => {
+      return sum + Number(pallet.quantity);
+    }, 0);
+    const unallocatedQuantity = Number(part.totalQuantity) - totalPalletQuantity;
+
+    // 5. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
       const currentBuffer = pallet.palletBufferCells[0];
       const currentMachine = pallet.machineAssignments[0];
@@ -129,13 +135,14 @@ export class PalletMachineNoSmenService {
     return {
       pallets: palletDtos,
       total: palletDtos.length,
+      unallocatedQuantity: Math.max(0, unallocatedQuantity), // Не может быть отрицательным
     };
   }
   /**
    * Взять поддон в работу (станок сам назначает себе поддон)
    * Здесь создается запись в сменном задании и обновляется статус
    * @param palletId ID поддона
-   * @param machineId ID станка
+   * @param machineId ID ст��нка
    * @param operatorId ID оператора (опционально)
    */
   async takePalletToWork(
@@ -163,14 +170,10 @@ export class PalletMachineNoSmenService {
             },
           },
           palletStageProgress: {
-            where: {
-              status: { in: [TaskStatus.PENDING, TaskStatus.NOT_PROCESSED] },
-            },
             include: {
               routeStage: { include: { stage: true, substage: true } },
             },
             orderBy: { pspId: 'desc' },
-            take: 1,
           },
         },
       });
@@ -179,7 +182,60 @@ export class PalletMachineNoSmenService {
         throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
       }
 
+      // Если у поддона нет записей прогресса, ��оздаем их для всех этапов маршрута
       if (pallet.palletStageProgress.length === 0) {
+        this.logger.log(`Создание записей прогресса для поддона ${palletId}`);
+        
+        for (const routeStage of pallet.part.route.routeStages) {
+          await prisma.palletStageProgress.create({
+            data: {
+              palletId,
+              routeStageId: routeStage.routeStageId,
+              status: TaskStatus.NOT_PROCESSED,
+            },
+          });
+        }
+
+        // Перезагружаем поддон с созданными записями прогресса
+        const updatedPallet = await prisma.pallet.findUnique({
+          where: { palletId },
+          include: {
+            part: {
+              include: {
+                route: {
+                  include: {
+                    routeStages: {
+                      include: { stage: true, substage: true },
+                      orderBy: { sequenceNumber: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
+            palletStageProgress: {
+              include: {
+                routeStage: { include: { stage: true, substage: true } },
+              },
+              orderBy: { pspId: 'desc' },
+            },
+          },
+        });
+        
+        if (updatedPallet) {
+          Object.assign(pallet, updatedPallet);
+        }
+      }
+
+      // Находим первый незавершенный этап в правильной последовательности
+      const sortedStageProgress = pallet.palletStageProgress.sort((a, b) => 
+        Number(a.routeStage.sequenceNumber) - Number(b.routeStage.sequenceNumber)
+      );
+      
+      const nextStageProgress = sortedStageProgress.find(
+        progress => progress.status === TaskStatus.NOT_PROCESSED || progress.status === TaskStatus.PENDING
+      );
+
+      if (!nextStageProgress) {
         throw new Error(
           `У поддона ${palletId} нет доступных этапов для обработки`,
         );
@@ -210,7 +266,7 @@ export class PalletMachineNoSmenService {
         );
       }
 
-      const currentStageProgress = pallet.palletStageProgress[0];
+      const currentStageProgress = nextStageProgress;
       const routeStage = currentStageProgress.routeStage;
 
       // 3. Проверяем, может ли станок выполнять этот этап
@@ -363,7 +419,7 @@ export class PalletMachineNoSmenService {
 
   /**
    * Завершить обработку поддона на станке без сменного задания
-   * Логика аналогична обычному станку
+   * Логика аналогична обычному ��танку
    */
   async completePalletProcessing(
     palletId: number,
@@ -432,13 +488,13 @@ export class PalletMachineNoSmenService {
     return this.prisma.$transaction(async (prisma) => {
       const completedAt = new Date();
 
-      // Завершаем назначение станка
+      // Завершаем н��значение станка
       await prisma.machineAssignment.update({
         where: { assignmentId: assignment.assignmentId },
         data: { completedAt },
       });
 
-      // Завершаем текущий прогресс этапа
+      // Зав��ршаем текущий прогресс этапа
       await prisma.palletStageProgress.update({
         where: { pspId: currentProgress.pspId },
         data: {
@@ -697,6 +753,118 @@ export class PalletMachineNoSmenService {
   }
 
   /**
+   * Создать новый поддон по ID детали
+   * @param partId ID детали
+   * @param quantity Количество деталей на поддоне
+   * @param palletName Название поддона (опционально)
+   */
+  async createPalletByPartId(
+    partId: number,
+    quantity: number,
+    palletName?: string,
+  ) {
+    this.logger.log(
+      `Создание поддона для детали ${partId} с количеством ${quantity}`,
+    );
+
+    try {
+      // 1. Проверяем существование детали
+      const part = await this.prisma.part.findUnique({
+        where: { partId },
+        include: {
+          material: true,
+          pallets: true, // Получаем существующие поддоны для расчета
+        },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Рассчитываем количество уже распределенных деталей
+      const allocatedQuantity = part.pallets.reduce((sum, pallet) => {
+        return sum + Number(pallet.quantity);
+      }, 0);
+
+      const availableQuantity = Number(part.totalQuantity) - allocatedQuantity;
+
+      // 3. Проверяем, достаточно ли деталей для создания поддона
+      if (quantity > availableQuantity) {
+        throw new Error(
+          `Недостаточно деталей для созд��ния поддона. ` +
+          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+          `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
+        );
+      }
+
+      if (quantity <= 0) {
+        throw new Error('Количество деталей должно быть больше нуля');
+      }
+
+      // 4. Генерируем название поддона, если не указано
+      const finalPalletName = palletName || `Поддон-${part.partCode}-${Date.now()}`;
+
+      // 5. Создаем поддон в транзакции
+      const newPallet = await this.prisma.$transaction(async (prisma) => {
+        return await prisma.pallet.create({
+          data: {
+            partId,
+            palletName: finalPalletName,
+            quantity,
+          },
+          include: {
+            part: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        });
+      });
+
+      this.logger.log(
+        `Поддон ${newPallet.palletId} успешно создан для детали ${partId}`,
+      );
+
+      return {
+        message: 'Поддон успешно создан',
+        pallet: {
+          id: newPallet.palletId,
+          name: newPallet.palletName,
+          partId: newPallet.partId,
+          quantity: Number(newPallet.quantity),
+          createdAt: new Date(),
+          part: {
+            id: newPallet.part.partId,
+            code: newPallet.part.partCode,
+            name: newPallet.part.partName,
+            material: newPallet.part.material.materialName,
+            totalQuantity: Number(newPallet.part.totalQuantity),
+            availableQuantity: availableQuantity - quantity, // Обновленное доступное количество
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при создании поддона для детали ${partId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Создать новый поддон (существующий метод для совместимости)
+   */
+  async createPallet(
+    partId: number,
+    quantity: number,
+    palletName?: string,
+  ) {
+    // Используем новый метод для создания поддона
+    return this.createPalletByPartId(partId, quantity, palletName);
+  }
+
+  /**
    * Проверяет, завершили ли все поддоны детали все этапы маршрута
    */
   private async checkAllStagesCompleted(
@@ -766,7 +934,7 @@ export class PalletMachineNoSmenService {
 
         if (existingPackingTask) {
           this.logger.log(
-            `Задача упаковки для упаков��и ${packageToProcess.packageId} уже существует`,
+            `Задача упаковки для упаковки ${packageToProcess.packageId} уже существует`,
           );
           continue;
         }

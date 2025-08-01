@@ -79,7 +79,13 @@ export class PalletsMasterService {
       },
     });
 
-    // 4. Преобразуем в DTO
+    // 4. Рассчитываем количество нераспределенных деталей
+    const totalPalletQuantity = pallets.reduce((sum, pallet) => {
+      return sum + Number(pallet.quantity);
+    }, 0);
+    const unallocatedQuantity = Number(part.totalQuantity) - totalPalletQuantity;
+
+    // 5. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
       const currentBuffer = pallet.palletBufferCells[0];
       const currentMachine = pallet.machineAssignments[0];
@@ -130,6 +136,7 @@ export class PalletsMasterService {
     return {
       pallets: palletDtos,
       total: palletDtos.length,
+      unallocatedQuantity: Math.max(0, unallocatedQuantity), // Не может быть отрицательным
     };
   }
 
@@ -808,6 +815,118 @@ export class PalletsMasterService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Создать новый поддон по ID детали
+   * @param partId ID детали
+   * @param quantity Количество деталей на поддоне
+   * @param palletName Название поддона (опционально)
+   */
+  async createPalletByPartId(
+    partId: number,
+    quantity: number,
+    palletName?: string,
+  ) {
+    this.logger.log(
+      `Создание поддона для детали ${partId} с количеством ${quantity}`,
+    );
+
+    try {
+      // 1. Проверяем существование детали
+      const part = await this.prisma.part.findUnique({
+        where: { partId },
+        include: {
+          material: true,
+          pallets: true, // Получаем существующие поддоны для расчета
+        },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Рассчитываем количество уже распределенных деталей
+      const allocatedQuantity = part.pallets.reduce((sum, pallet) => {
+        return sum + Number(pallet.quantity);
+      }, 0);
+
+      const availableQuantity = Number(part.totalQuantity) - allocatedQuantity;
+
+      // 3. Проверяем, достаточно ли деталей для создания поддона
+      if (quantity > availableQuantity) {
+        throw new Error(
+          `Недостаточно деталей для создания поддона. ` +
+          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+          `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
+        );
+      }
+
+      if (quantity <= 0) {
+        throw new Error('Количество деталей должно быть больше нуля');
+      }
+
+      // 4. Генерируем название поддона, если не указано
+      const finalPalletName = palletName || `Поддон-${part.partCode}-${Date.now()}`;
+
+      // 5. Создаем поддон в транзакции
+      const newPallet = await this.prisma.$transaction(async (prisma) => {
+        return await prisma.pallet.create({
+          data: {
+            partId,
+            palletName: finalPalletName,
+            quantity,
+          },
+          include: {
+            part: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        });
+      });
+
+      this.logger.log(
+        `Поддон ${newPallet.palletId} успешно создан для детали ${partId}`,
+      );
+
+      return {
+        message: 'Поддон успешно создан',
+        pallet: {
+          id: newPallet.palletId,
+          name: newPallet.palletName,
+          partId: newPallet.partId,
+          quantity: Number(newPallet.quantity),
+          createdAt: new Date(),
+          part: {
+            id: newPallet.part.partId,
+            code: newPallet.part.partCode,
+            name: newPallet.part.partName,
+            material: newPallet.part.material.materialName,
+            totalQuantity: Number(newPallet.part.totalQuantity),
+            availableQuantity: availableQuantity - quantity, // Обновленное доступное количество
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при создании поддона для детали ${partId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Создать новый поддон (существующий метод для совместимости)
+   */
+  async createPallet(
+    partId: number,
+    quantity: number,
+    palletName?: string,
+  ) {
+    // Используем новый метод для создания поддона
+    return this.createPalletByPartId(partId, quantity, palletName);
   }
 
   /**

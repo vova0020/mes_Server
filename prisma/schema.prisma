@@ -177,6 +177,8 @@ model Order {
   completionPercentage Decimal   @map("completion_percentage")
   /// Дата создания заказа
   createdAt            DateTime  @default(now()) @map("created_at")
+  /// Дата последнего обновления заказа
+  updatedAt            DateTime?  @updatedAt @map("updated_at")
   /// Дата завершения заказа (если есть)
   completedAt          DateTime? @map("completed_at")
   /// Флаг, разрешён ли запуск заказа в производство

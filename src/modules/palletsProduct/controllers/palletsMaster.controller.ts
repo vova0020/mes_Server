@@ -24,6 +24,8 @@ import {
 import { PalletsMasterService } from '../services/pallets-Master.service';
 import {
   AssignPalletToMachineDto,
+  CreatePalletDto,
+  CreatePalletResponseDto,
   MovePalletToBufferDto,
   PalletOperationResponseDto,
   PalletsResponseDto,
@@ -37,7 +39,7 @@ import {
 @ApiTags('master pallets')
 @Controller('master')
 export class PalletsMasterController {
-  // создаём собственный логгер с именем контроллера
+  // соз��аём собственный логгер с именем контроллера
   private readonly logger = new Logger(PalletsMasterController.name);
 
   // инжектим PalletsMasterService, но называем параметр palletOperationsService,
@@ -141,7 +143,7 @@ export class PalletsMasterController {
 
   @Post('update-status')
   @ApiOperation({
-    summary: 'Обновить статус операции (готово/в работе/выполнено частично)',
+    summary: 'Обно��ить статус операции (готово/в работе/выполнено частично)',
   })
   @ApiBody({ type: UpdateOperationStatusDto })
   @ApiResponse({
@@ -174,6 +176,106 @@ export class PalletsMasterController {
       );
       throw new InternalServerErrorException(
         'Произошла ошибка при обновлении статуса операции',
+      );
+    }
+  }
+
+  @Post('create-pallet')
+  @ApiOperation({ summary: 'Создать новый поддон для детали' })
+  @ApiBody({ type: CreatePalletDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Поддон успешно создан',
+    type: CreatePalletResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Деталь не найдена',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Недостаточно деталей для создания поддона',
+  })
+  async createPallet(@Body() createDto: CreatePalletDto): Promise<CreatePalletResponseDto> {
+    this.logger.log(
+      `Получен запрос на создание поддона для детали ${createDto.partId} с количеством ${createDto.quantity}`,
+    );
+
+    try {
+      return await this.palletOperationsService.createPallet(
+        createDto.partId,
+        createDto.quantity,
+        createDto.palletName,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+
+      this.logger.error(
+        `Ошибка при создании поддона: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Произошла ошибка при создании поддона',
+      );
+    }
+  }
+
+  @Post('create-pallet-by-part')
+  @ApiOperation({ summary: 'Создать новый поддон по ID детали' })
+  @ApiBody({ 
+    schema: {
+      type: 'object',
+      properties: {
+        partId: { type: 'number', description: 'ID детали', example: 1 },
+        quantity: { type: 'number', description: 'Количество деталей на поддоне', example: 100 },
+        palletName: { type: 'string', description: 'Название поддона (опционально)', example: 'Поддон-001' }
+      },
+      required: ['partId', 'quantity']
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Поддон усп��шно создан',
+    type: CreatePalletResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Деталь не найдена',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Недостаточно деталей для создания поддона',
+  })
+  async createPalletByPartId(@Body() body: { partId: number; quantity: number; palletName?: string }): Promise<CreatePalletResponseDto> {
+    this.logger.log(
+      `Получен запрос на создание поддона для детали ${body.partId} с количеством ${body.quantity}`,
+    );
+
+    try {
+      return await this.palletOperationsService.createPalletByPartId(
+        body.partId,
+        body.quantity,
+        body.palletName,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+
+      this.logger.error(
+        `Ошибка при создании поддона: ${error.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Произошла ошибка при создании поддона',
       );
     }
   }

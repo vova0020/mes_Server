@@ -21,6 +21,7 @@ export enum WebSocketRooms {
   PRODUCT_MACHINES = 'product-machines',
   PRODUCTION_ORDERS = 'production-orders',
   ROUTE_MANAGEMENT = 'route-management',
+  ORDER_MANAGEMENT = 'order-management',
   
 }
 
@@ -490,6 +491,27 @@ export interface RoomEvents {
         newRoute: any;
         updatedAt: string;
       };
+      timestamp: string;
+    };
+  };
+
+  // События управления заказами
+  [WebSocketRooms.ORDER_MANAGEMENT]: {
+    orderStatusChanged: {
+      orderId: number;
+      previousStatus: string;
+      newStatus: string;
+      launchPermission: boolean;
+      timestamp: string;
+    };
+    orderDetailsRequested: {
+      orderId: number;
+      batchNumber: string;
+      requestedBy: string;
+      timestamp: string;
+    };
+    orderListUpdated: {
+      totalOrders: number;
       timestamp: string;
     };
   };

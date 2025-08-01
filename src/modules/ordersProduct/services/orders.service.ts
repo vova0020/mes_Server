@@ -11,17 +11,20 @@ export class OrdersService {
     const { active, showAll = false } = query;
 
     // Определяем условие фильтрации
-    let whereClause = {};
+    let whereClause: any = {
+      // Фильтруем только заказы со статусом "разрешен к запуску"
+      status: 'LAUNCH_PERMITTED'
+    };
 
-    // Если параметр active явно передан, используем его
+    // Есл�� параметр active явно передан, используем его
     if (active !== undefined) {
-      whereClause = { isCompleted: active ? false : true };
+      whereClause.isCompleted = active ? false : true;
     }
     // Если showAll не установлен в true, показываем только незавершенные по умолчанию
     else if (!showAll) {
-      whereClause = { isCompleted: false };
+      whereClause.isCompleted = false;
     }
-    // Если showAll = true, возвращаем все заказы (whereClause остаётся пустым)
+    // Если showAll = true, не добавляем фильтр по isCompleted
 
     // 1) Получаем «сырые» заказы с Decimal
     const ordersRaw = await this.prisma.order.findMany({
@@ -33,6 +36,7 @@ export class OrdersService {
         orderName: true,
         completionPercentage: true, // <-- Decimal здесь
         isCompleted: true,
+        status: true, // Добавляем статус в ответ
       },
     });
 
@@ -43,6 +47,7 @@ export class OrdersService {
       orderName: o.orderName,
       completionPercentage: o.completionPercentage.toNumber(),  // конвертация!
       isCompleted: o.isCompleted,
+      status: o.status, // Добавляем статус в результат
     }));
 
     return orders;

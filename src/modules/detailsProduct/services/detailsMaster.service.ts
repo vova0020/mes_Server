@@ -457,15 +457,16 @@ export class DetailsMasterService {
             name: part.partName,
             material: part.material.materialName,
             size: part.size,
-            totalQuantity: Number(packagePart.quantity),
+            totalQuantity: Number(part.totalQuantity),
             readyForProcessing,
             distributed,
             completed,
           });
         } else {
-          // Учитываем количество из пакета в общем количестве
+          // Деталь уже есть в карте, просто обновляем ссылку
+          // totalQuantity берется из part.totalQuantity, а не суммируется из пакетов
           const currentDetail = detailsMap.get(part.partId);
-          currentDetail.totalQuantity += Number(packagePart.quantity);
+          // Не изменяем totalQuantity, так как это общее количество детали из БД
           detailsMap.set(part.partId, currentDetail);
         }
       }

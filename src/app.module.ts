@@ -20,6 +20,7 @@ import { PackageDirectoryModule } from './modules/package-directory';
 import { DetailsDirectoryModule } from './modules/detailsDirectory/details-directory.module';
 import { ProductionOrdersModule } from './modules/production-orders/production-orders.module';
 import { RouteManagementModule } from './modules/route-management/route-management.module';
+import { OrderManagementModule } from './modules/order-management/order-management.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RouteManagementModule } from './modules/route-management/route-manageme
     DetailsDirectoryModule,
     ProductionOrdersModule,
     RouteManagementModule,
+    OrderManagementModule,
     
     // MachinNoSmenModule,
     // MachinModule,
