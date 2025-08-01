@@ -290,7 +290,7 @@ export class MachinMasterService {
             packagePart?.package.order.orderName || 'Неизвестный заказ',
           detailArticle: assignment.pallet.part.partCode,
           detailName: assignment.pallet.part.partName,
-          detailMaterial: assignment.pallet.part.material.materialName,
+          detailMaterial: assignment.pallet.part.material?.materialName || 'Не указан',
           detailSize: assignment.pallet.part.size,
           palletName: assignment.pallet.palletName,
           quantity: Number(assignment.pallet.quantity),

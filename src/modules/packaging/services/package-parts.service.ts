@@ -139,11 +139,16 @@ export class PackagePartsService {
         isSubassembly: ppp.part.isSubassembly,
         readyForMainFlow: ppp.part.readyForMainFlow,
         size: ppp.part.size,
-        material: {
+        material: ppp.part.material ? {
           materialId: ppp.part.material.materialId,
           materialName: ppp.part.material.materialName,
           article: ppp.part.material.article,
           unit: ppp.part.material.unit,
+        } : {
+          materialId: 0,
+          materialName: 'Не указан',
+          article: 'Не указан',
+          unit: 'шт',
         },
         route: {
           routeId: ppp.part.route.routeId,
@@ -268,11 +273,16 @@ export class PackagePartsService {
       isSubassembly: productionPackagePartRaw.part.isSubassembly,
       readyForMainFlow: productionPackagePartRaw.part.readyForMainFlow,
       size: productionPackagePartRaw.part.size,
-      material: {
+      material: productionPackagePartRaw.part.material ? {
         materialId: productionPackagePartRaw.part.material.materialId,
         materialName: productionPackagePartRaw.part.material.materialName,
         article: productionPackagePartRaw.part.material.article,
         unit: productionPackagePartRaw.part.material.unit,
+      } : {
+        materialId: 0,
+        materialName: 'Не указан',
+        article: 'Не указан',
+        unit: 'шт',
       },
       route: {
         routeId: productionPackagePartRaw.part.route.routeId,

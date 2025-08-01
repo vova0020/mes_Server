@@ -455,7 +455,7 @@ export class DetailsMasterService {
             id: part.partId,
             articleNumber: part.partCode,
             name: part.partName,
-            material: part.material.materialName,
+            material: part.material?.materialName || 'Не указан',
             size: part.size,
             totalQuantity: Number(part.totalQuantity),
             readyForProcessing,

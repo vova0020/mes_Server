@@ -164,7 +164,7 @@ export class RouteManagementService {
             status: part.status,
             currentRoute,
             size: part.size,
-            materialName: part.material.materialName,
+            materialName: part.material?.materialName || 'Не указан',
             packages: [packageInfo],
           });
         }

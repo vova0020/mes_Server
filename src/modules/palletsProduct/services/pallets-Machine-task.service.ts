@@ -157,7 +157,7 @@ export class PalletsMachineTaskService {
             id: pallet.part.partId,
             article: pallet.part.partCode,
             name: pallet.part.partName,
-            material: pallet.part.material.materialName,
+            material: pallet.part.material?.materialName || 'Не указан',
             size: pallet.part.size,
             totalNumber: Number(pallet.quantity),
             status: pallet.part.status,

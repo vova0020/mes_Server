@@ -838,7 +838,7 @@ export class PalletMachineNoSmenService {
             id: newPallet.part.partId,
             code: newPallet.part.partCode,
             name: newPallet.part.partName,
-            material: newPallet.part.material.materialName,
+            material: newPallet.part.material?.materialName || 'Не указан',
             totalQuantity: Number(newPallet.part.totalQuantity),
             availableQuantity: availableQuantity - quantity, // Обновленное доступное количество
           },

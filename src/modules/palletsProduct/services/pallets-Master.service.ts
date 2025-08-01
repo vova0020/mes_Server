@@ -795,7 +795,7 @@ export class PalletsMasterService {
           orderName: order?.orderName || 'Неизвестный заказ',
           detailArticle: part.partCode,
           detailName: part.partName,
-          detailMaterial: part.material.materialName,
+          detailMaterial: part.material?.materialName || 'Не указан',
           detailSize: part.size,
           palletName: pallet.palletName,
           quantity: Number(pallet.quantity),
@@ -903,7 +903,7 @@ export class PalletsMasterService {
             id: newPallet.part.partId,
             code: newPallet.part.partCode,
             name: newPallet.part.partName,
-            material: newPallet.part.material.materialName,
+            material: newPallet.part.material?.materialName || 'Не указан',
             totalQuantity: Number(newPallet.part.totalQuantity),
             availableQuantity: availableQuantity - quantity, // Обновленное доступное количество
           },

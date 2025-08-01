@@ -189,7 +189,7 @@ export class DetailsMachinNoSmenService {
             id: part.partId,
             article: part.partCode,
             name: part.partName,
-            material: part.material.materialName,
+            material: part.material?.materialName || 'Не указан',
             size: part.size,
             totalNumber: Number(packagePart.quantity),
             isCompletedForSegment: completed === pallets.length && pallets.length > 0,

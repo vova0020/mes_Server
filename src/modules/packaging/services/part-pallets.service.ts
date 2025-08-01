@@ -203,10 +203,10 @@ export class PartPalletsService {
       readyForMainFlow: partInfo.readyForMainFlow,
       size: partInfo.size,
       material: {
-        materialId: partInfo.material.materialId,
-        materialName: partInfo.material.materialName,
-        article: partInfo.material.article,
-        unit: partInfo.material.unit,
+        materialId: partInfo.material?.materialId || 0,
+        materialName: partInfo.material?.materialName || 'Не указан',
+        article: partInfo.material?.article || 'Не указан',
+        unit: partInfo.material?.unit || 'шт',
       },
       route: {
         routeId: partInfo.route.routeId,
