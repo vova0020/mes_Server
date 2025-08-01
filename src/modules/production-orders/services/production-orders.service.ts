@@ -114,7 +114,7 @@ export class ProductionOrdersService {
             data: {
               partCode: detailDirectory.partSku,
               partName: detailDirectory.partName,
-              materialId: 1, // Временно используем ID 1, нужно будет связать с материалом из справочника
+              materialId: null, // Пока не связываем с материалом
               size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
               totalQuantity: totalQuantity,
               status: 'PENDING',
@@ -348,7 +348,7 @@ export class ProductionOrdersService {
               data: {
                 partCode: detailDirectory.partSku,
                 partName: detailDirectory.partName,
-                materialId: 1, // Временно используем ID 1, нужно будет связать с материалом из справочника
+                materialId: null, // Пока не связываем с материалом
                 size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
                 totalQuantity: totalQuantity,
                 status: 'PENDING',

@@ -270,7 +270,7 @@ model Part {
   /// Название детали
   partName         String     @map("part_name")
   /// Внешний ключ на материал
-  materialId       Int        @map("material_id")
+  materialId       Int?       @map("material_id")
   /// Размеры или спецификации детали
   size             String
   /// Общее количество деталей
@@ -288,7 +288,7 @@ model Part {
 
   // связи:
   /// Ссылка на материал
-  material               Material                @relation(fields: [materialId], references: [materialId])
+  material               Material?               @relation(fields: [materialId], references: [materialId])
   /// Ссылка на маршрут обработки
   route                  Route                   @relation(fields: [routeId], references: [routeId])
   /// Этап возврата детали (опционально)
