@@ -17,6 +17,11 @@ export class CreateRouteDto {
   routeName: string;
 
   @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  lineId?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateRouteStageDto)
@@ -25,9 +30,15 @@ export class CreateRouteDto {
 
 // DTO для обновления маршрута
 export class UpdateRouteDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  routeName: string;
+  routeName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  lineId?: number;
 }
 
 // DTO для создания этапа маршрута

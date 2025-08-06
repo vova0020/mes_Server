@@ -64,6 +64,32 @@ export class RoutesController {
     }
   }
 
+  @Get('production-lines')
+  @ApiOperation({ summary: 'Получить все производственные линии' })
+  @ApiResponse({ status: 200, description: 'Список всех производственных линий' })
+  async getAllProductionLines() {
+    const startTime = Date.now();
+    this.logger.log(
+      'GET /settings/routes/production-lines - Запрос на получение всех производственных линий',
+    );
+
+    try {
+      const result = await this.routesService.getAllProductionLines();
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `GET /settings/routes/production-lines - Успешно возвращено ${result.length} производственных линий за ${executionTime}ms`,
+      );
+      return result;
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `GET /settings/routes/production-lines - Ошибка при получении производственных линий за ${executionTime}ms`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Получить маршрут по ID' })
   @ApiParam({ name: 'id', description: 'ID маршрута' })
@@ -283,32 +309,32 @@ export class RoutesController {
     }
   }
 
-  @Delete('stages/:stageId')
-  @ApiOperation({ summary: 'Удалить этап маршрута' })
-  @ApiParam({ name: 'stageId', description: 'ID этапа маршрута' })
-  @ApiResponse({ status: 200, description: 'Этап успешно удален' })
-  @ApiResponse({ status: 404, description: 'Этап не найден' })
+  @Delete(':routeId/stages')
+  @ApiOperation({ summary: 'Удалить все этапы из маршрута и связь с линией' })
+  @ApiParam({ name: 'routeId', description: 'ID маршрута' })
+  @ApiResponse({ status: 200, description: 'Все этапы успешно удалены из маршрута' })
+  @ApiResponse({ status: 404, description: 'Маршрут не найден' })
   @ApiResponse({
     status: 400,
-    description: 'Этап используется и не может быть удален',
+    description: 'Этапы используются и не могут быть удалены',
   })
-  async deleteRouteStage(@Param('stageId', ParseIntPipe) stageId: number) {
+  async deleteAllRouteStages(@Param('routeId', ParseIntPipe) routeId: number) {
     const startTime = Date.now();
     this.logger.log(
-      `DELETE /settings/routes/stages/${stageId} - Запрос на удаление этапа с ID: ${stageId}`,
+      `DELETE /settings/routes/${routeId}/stages - Запрос на удаление всех этапов из маршрута с ID: ${routeId}`,
     );
 
     try {
-      const result = await this.routeStagesService.deleteRouteStage(stageId);
+      const result = await this.routeStagesService.deleteAllRouteStages(routeId);
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `DELETE /settings/routes/stages/${stageId} - Успешно удален этап за ${executionTime}ms`,
+        `DELETE /settings/routes/${routeId}/stages - Успешно удалены все этапы из маршрута за ${executionTime}ms`,
       );
       return result;
     } catch (error) {
       const executionTime = Date.now() - startTime;
       this.logger.error(
-        `DELETE /settings/routes/stages/${stageId} - Ошибка при удалении этапа маршрута за ${executionTime}ms`,
+        `DELETE /settings/routes/${routeId}/stages - Ошибка при удалении всех этапов маршрута за ${executionTime}ms`,
         error.stack,
       );
       throw error;
@@ -392,63 +418,35 @@ export class RoutesController {
   // Вспомогательные методы
   // ================================
 
-  @Get('available-stages/level1')
-  @ApiOperation({ summary: 'Получить доступные этапы уровня 1' })
-  @ApiResponse({ status: 200, description: 'Список доступных этапов уровня 1' })
-  async getAvailableStagesLevel1() {
+  @Get('line/:lineId/stages')
+  @ApiOperation({ summary: 'Получить все связанные этапы по ID производственной линии' })
+  @ApiParam({ name: 'lineId', description: 'ID производственной линии' })
+  @ApiResponse({ status: 200, description: 'Список этапов 1 и 2 уровня для производственной линии' })
+  @ApiResponse({ status: 404, description: 'Производственная линия не найдена' })
+  async getLineStages(@Param('lineId', ParseIntPipe) lineId: number) {
     const startTime = Date.now();
     this.logger.log(
-      'GET /settings/routes/available-stages/level1 - Запрос на получение доступных этапов уровня 1',
+      `GET /settings/routes/line/${lineId}/stages - Запрос на получение этапов для производственной линии с ID: ${lineId}`,
     );
 
     try {
-      const result = await this.routeStagesService.getAvailableStagesLevel1();
+      const result = await this.routeStagesService.getLineStages(lineId);
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `GET /settings/routes/available-stages/level1 - Успешно возвращено ${result.length} этапов уровня 1 за ${executionTime}ms`,
+        `GET /settings/routes/line/${lineId}/stages - Успешно возвращены этапы для производственной линии за ${executionTime}ms`,
       );
       return result;
     } catch (error) {
       const executionTime = Date.now() - startTime;
       this.logger.error(
-        `GET /settings/routes/available-stages/level1 - Ошибка при получении доступных этапов уровня 1 за ${executionTime}ms`,
+        `GET /settings/routes/line/${lineId}/stages - Ошибка при получении этапов производственной линии за ${executionTime}ms`,
         error.stack,
       );
       throw error;
     }
   }
 
-  @Get('available-stages/level2/:stageId')
-  @ApiOperation({
-    summary: 'Получить доступные этапы уровня 2 для этапа уровня 1',
-  })
-  @ApiParam({ name: 'stageId', description: 'ID этапа уровня 1' })
-  @ApiResponse({ status: 200, description: 'Список доступных этапов уровня 2' })
-  async getAvailableStagesLevel2(
-    @Param('stageId', ParseIntPipe) stageId: number,
-  ) {
-    const startTime = Date.now();
-    this.logger.log(
-      `GET /settings/routes/available-stages/level2/${stageId} - Запрос на получение доступных этапов уровня 2 для этапа: ${stageId}`,
-    );
-
-    try {
-      const result = await this.routeStagesService.getAvailableStagesLevel2(stageId);
-      const executionTime = Date.now() - startTime;
-      this.logger.log(
-        `GET /settings/routes/available-stages/level2/${stageId} - Успешно возвращено ${result.length} этапов уровня 2 за ${executionTime}ms`,
-      );
-      return result;
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      this.logger.error(
-        `GET /settings/routes/available-stages/level2/${stageId} - Ошибка при получении доступных этапов уровня 2 за ${executionTime}ms`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-
+  
   @Post(':id/copy')
   @ApiOperation({ summary: 'Скопировать маршрут' })
   @ApiParam({ name: 'id', description: 'ID маршрута для копирования' })
@@ -482,4 +480,5 @@ export class RoutesController {
       throw error;
     }
   }
-}
+
+  }

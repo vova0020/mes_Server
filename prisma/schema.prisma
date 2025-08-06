@@ -476,6 +476,7 @@ model ProductionLine {
   // связи: какие этапы и материалы относятся к этой линии
   linesStages LineStage[] // этапы 1-го уровня, на которых задействована эта линия
   materials   LineMaterial[] // материалы, используемые на этой линии
+  routes      Route[] // маршруты, которые относятся к этой линии
 
   @@map("production_lines")
 }
@@ -625,8 +626,11 @@ model Route {
   routeId   Int    @id @default(autoincrement()) @map("route_id")
   /// Название маршрута (например, «Сборка корпуса → Сварка → Покраска»)
   routeName String @map("route_name")
+  /// Внешний ключ на производственную линию (одна линия - много маршрутов)
+  lineId    Int?   @map("line_id")
 
   // связи: какие этапы и какие детали связаны с этим маршрутом
+  productionLine        ProductionLine?          @relation(fields: [lineId], references: [lineId])
   routeStages           RouteStage[] // все этапы и подэтапы в рамках этого маршрута
   parts                 Part[] // детали, которым присвоен этот маршрут
   packageDetailRoutes   PackageDetailDirectory[] // связи с деталями в упаковках

@@ -29,11 +29,12 @@ export class RoutesService {
    */
   async getAllRoutes() {
     const startTime = Date.now();
-    this.logger.log('Запрос на получение всех маршрутов');
+    this.logger.log('��апрос на получение всех маршрутов');
 
     try {
       const routes = await this.prisma.route.findMany({
         include: {
+          productionLine: true,
           routeStages: {
             include: {
               stage: true,
@@ -78,6 +79,7 @@ export class RoutesService {
       const route = await this.prisma.route.findUnique({
         where: { routeId },
         include: {
+          productionLine: true,
           routeStages: {
             include: {
               stage: true,
@@ -134,7 +136,22 @@ export class RoutesService {
     );
 
     try {
-      const { routeName, stages } = createRouteDto;
+      const { routeName, lineId, stages } = createRouteDto;
+
+      // Если указан lineId, проверяем существование производственной линии
+      if (lineId) {
+        const productionLine = await this.prisma.productionLine.findUnique({
+          where: { lineId },
+        });
+
+        if (!productionLine) {
+          const executionTime = Date.now() - startTime;
+          this.logger.warn(
+            `Производственная линия с ID ${lineId} не найдена за ${executionTime}ms`,
+          );
+          throw new NotFoundException(`Производственная линия с ID ${lineId} не найдена`);
+        }
+      }
 
       // Создаем маршрут и этапы в транзакции
       const createdRouteId = await this.prisma.$transaction(async (prisma) => {
@@ -142,11 +159,12 @@ export class RoutesService {
         const route = await prisma.route.create({
           data: {
             routeName,
+            lineId,
           },
         });
 
         this.logger.log(
-          `Создан маршрут с ID: ${route.routeId}, название: "${routeName}"`,
+          `Создан маршрут с ID: ${route.routeId}, название: "${routeName}"${lineId ? `, линия ID: ${lineId}` : ''}`,
         );
 
         // Если переданы этапы, создаем их
@@ -157,12 +175,41 @@ export class RoutesService {
             stages,
             prisma,
           );
+
+          // Если указана производственная линия, создаем связи этапов с линией
+          if (lineId) {
+            const stageIds = stages.map(stage => stage.stageId);
+            const uniqueStageIds = [...new Set(stageIds)];
+
+            this.logger.log(
+              `Соз��ание связей ${uniqueStageIds.length} этапов с производственной линией ID: ${lineId}`,
+            );
+
+            // Создаем связи только для тех этапов, которые еще не связаны с линией
+            for (const stageId of uniqueStageIds) {
+              const existingLink = await prisma.lineStage.findFirst({
+                where: {
+                  lineId: lineId,
+                  stageId: stageId,
+                },
+              });
+
+              if (!existingLink) {
+                await prisma.lineStage.create({
+                  data: {
+                    lineId: lineId,
+                    stageId: stageId,
+                  },
+                });
+              }
+            }
+          }
         }
 
         return route.routeId;
       });
 
-      // Получаем созданны�� маршрут со всеми связанными данными после коммита транзакции
+      // Получаем созданный маршрут со всеми связанными данными после коммита транзакции
       const newRoute = await this.getRouteById(createdRouteId);
 
       // Отправляем событие о создании маршрута в комнату производственных линий
@@ -183,6 +230,9 @@ export class RoutesService {
       return newRoute;
     } catch (error) {
       const executionTime = Date.now() - startTime;
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       this.logger.error(
         `Ошибка при создании маршрута "${createRouteDto.routeName}" за ${executionTime}ms`,
         error.stack,
@@ -213,13 +263,96 @@ export class RoutesService {
         throw new NotFoundException(`Маршрут с ID ${routeId} не найден`);
       }
 
-      const oldName = route.routeName;
+      // Если указан новый lineId, проверяем существование производственной линии
+      if (updateRouteDto.lineId !== undefined) {
+        if (updateRouteDto.lineId !== null) {
+          const productionLine = await this.prisma.productionLine.findUnique({
+            where: { lineId: updateRouteDto.lineId },
+          });
 
-      await this.prisma.route.update({
-        where: { routeId },
-        data: {
-          routeName: updateRouteDto.routeName,
-        },
+          if (!productionLine) {
+            const executionTime = Date.now() - startTime;
+            this.logger.warn(
+              `Производственная линия с ID ${updateRouteDto.lineId} не найдена за ${executionTime}ms`,
+            );
+            throw new NotFoundException(`Производственная линия с ID ${updateRouteDto.lineId} не найдена`);
+          }
+        }
+      }
+
+      const oldName = route.routeName;
+      const oldLineId = route.lineId;
+      const lineIdChanged = updateRouteDto.lineId !== undefined && updateRouteDto.lineId !== oldLineId;
+
+      // Выполняем обновление в транзакции
+      await this.prisma.$transaction(async (prisma) => {
+        // Если изменилась производственная линия, нужно обработать связи с этапами
+        if (lineIdChanged) {
+          this.logger.log(
+            `Изменение производственной линии маршрута ID: ${routeId} с ${oldLineId} на ${updateRouteDto.lineId}`,
+          );
+
+          // Получаем этапы маршрута для обработки связей
+          const routeStages = await prisma.routeStage.findMany({
+            where: { routeId },
+            select: { stageId: true },
+          });
+
+          // Если у маршрута есть этапы, нужно удалить старые связи с линией и создать новые
+          if (routeStages.length > 0) {
+            const stageIds = routeStages.map(rs => rs.stageId);
+            const uniqueStageIds = [...new Set(stageIds)];
+
+            // Удаляем старые связи этапов с предыдущей линией (если она была)
+            if (oldLineId) {
+              this.logger.log(
+                `Удаление связей ${uniqueStageIds.length} этапов со старой линией ID: ${oldLineId}`,
+              );
+
+              await prisma.lineStage.deleteMany({
+                where: {
+                  lineId: oldLineId,
+                  stageId: { in: uniqueStageIds },
+                },
+              });
+            }
+
+            // Создаем новые связи этапов с новой линией (если она указана)
+            if (updateRouteDto.lineId) {
+              this.logger.log(
+                `Создание связей ${uniqueStageIds.length} этапов с новой линией ID: ${updateRouteDto.lineId}`,
+              );
+
+              // Создаем связи только для тех этапов, которые еще не связаны с новой линией
+              for (const stageId of uniqueStageIds) {
+                const existingLink = await prisma.lineStage.findFirst({
+                  where: {
+                    lineId: updateRouteDto.lineId,
+                    stageId: stageId,
+                  },
+                });
+
+                if (!existingLink) {
+                  await prisma.lineStage.create({
+                    data: {
+                      lineId: updateRouteDto.lineId,
+                      stageId: stageId,
+                    },
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        // Обновляем сам маршрут
+        await prisma.route.update({
+          where: { routeId },
+          data: {
+            routeName: updateRouteDto.routeName,
+            lineId: updateRouteDto.lineId,
+          },
+        });
       });
 
       const updatedRoute = await this.getRouteById(routeId);
@@ -236,7 +369,11 @@ export class RoutesService {
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Маршрут ID: ${routeId} успешно обновлен с "${oldName}" на "${updateRouteDto.routeName}" за ${executionTime}ms`,
+        `Маршрут ID: ${routeId} успешно обновлен с "${oldName}" на "${updateRouteDto.routeName || oldName}"${
+          updateRouteDto.lineId !== undefined 
+            ? `, линия изменена с ${oldLineId} на ${updateRouteDto.lineId}` 
+            : ''
+        } за ${executionTime}ms`,
       );
 
       return updatedRoute;
@@ -341,6 +478,7 @@ export class RoutesService {
         const newRoute = await prisma.route.create({
           data: {
             routeName: newRouteName,
+            lineId: originalRoute.lineId,
           },
         });
 
@@ -363,6 +501,35 @@ export class RoutesService {
         this.logger.log(
           `Скопировано ${originalRoute.routeStages.length} этапов в новый маршрут`,
         );
+
+        // Если у оригинального маршрута есть производственная линия и этапы, создаем связи
+        if (originalRoute.lineId && originalRoute.routeStages.length > 0) {
+          const stageIds = originalRoute.routeStages.map(stage => stage.stageId);
+          const uniqueStageIds = [...new Set(stageIds)];
+
+          this.logger.log(
+            `Создание связей ${uniqueStageIds.length} этапов с производственной линией ID: ${originalRoute.lineId} для скопированного маршрута`,
+          );
+
+          // Создаем связи только для тех этапов, которые еще не связаны с линией
+          for (const stageId of uniqueStageIds) {
+            const existingLink = await prisma.lineStage.findFirst({
+              where: {
+                lineId: originalRoute.lineId,
+                stageId: stageId,
+              },
+            });
+
+            if (!existingLink) {
+              await prisma.lineStage.create({
+                data: {
+                  lineId: originalRoute.lineId,
+                  stageId: stageId,
+                },
+              });
+            }
+          }
+        }
 
         return newRoute.routeId;
       });
@@ -390,6 +557,56 @@ export class RoutesService {
       const executionTime = Date.now() - startTime;
       this.logger.error(
         `Ошибка при копировании маршрута ID: ${routeId} за ${executionTime}ms`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Получить все потоки с информацией о занятости
+   */
+  async getAllProductionLines() {
+    const startTime = Date.now();
+    this.logger.log('Запрос на получение всех производственных линий');
+
+    try {
+      const productionLines = await this.prisma.productionLine.findMany({
+        include: {
+          _count: {
+            select: {
+              routes: true,
+            },
+          },
+          routes: {
+            select: {
+              routeId: true,
+              routeName: true,
+            },
+          },
+        },
+        orderBy: {
+          lineName: 'asc',
+        },
+      });
+
+      // Добавляем информацию о занятости линии
+      const linesWithStatus = productionLines.map(line => ({
+        ...line,
+        isOccupied: line._count.routes > 0, // Линия занята, если есть связанные маршруты
+        routesCount: line._count.routes,
+      }));
+
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `Успешно получено ${productionLines.length} производственных линий за ${executionTime}ms`,
+      );
+
+      return linesWithStatus;
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `Ошибка при получении производственных линий за ${executionTime}ms`,
         error.stack,
       );
       throw error;
