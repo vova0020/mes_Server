@@ -622,20 +622,44 @@ export class ProductionLinesService {
       }
     }
 
-    // Удаляем все существующие связи
-    await this.prismaService.lineStage.deleteMany({
+    // Получаем текущие связи
+    const currentStages = await this.prismaService.lineStage.findMany({
       where: { lineId },
     });
+    
+    const currentStageIds = currentStages.map((stage) => stage.stageId);
+    const newStageIds = updateDto.stageIds;
+    
+    // Находим этапы для удаления и добавления
+    const stageIdsToRemove = currentStageIds.filter(
+      (id) => !newStageIds.includes(id),
+    );
+    const stageIdsToAdd = newStageIds.filter(
+      (id) => !currentStageIds.includes(id),
+    );
 
-    // Создаем новые связи
-    if (updateDto.stageIds.length > 0) {
-      await this.prismaService.lineStage.createMany({
-        data: updateDto.stageIds.map((stageId) => ({
-          lineId,
-          stageId,
-        })),
-      });
-    }
+    // Выполняем изменения в транзакции
+    await this.prismaService.$transaction(async (prisma) => {
+      // Удаляем ненужные связи
+      if (stageIdsToRemove.length > 0) {
+        await prisma.lineStage.deleteMany({
+          where: {
+            lineId,
+            stageId: { in: stageIdsToRemove },
+          },
+        });
+      }
+      
+      // Добавляем новые связи
+      if (stageIdsToAdd.length > 0) {
+        await prisma.lineStage.createMany({
+          data: stageIdsToAdd.map((stageId) => ({
+            lineId,
+            stageId,
+          })),
+        });
+      }
+    });
 
     const updatedStages = await this.getStagesInLine(lineId);
 

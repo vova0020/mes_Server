@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Get,
@@ -66,7 +65,10 @@ export class RoutesController {
 
   @Get('production-lines')
   @ApiOperation({ summary: 'Получить все производственные линии' })
-  @ApiResponse({ status: 200, description: 'Список всех производственных линий' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список всех производственных линий',
+  })
   async getAllProductionLines() {
     const startTime = Date.now();
     this.logger.log(
@@ -309,10 +311,52 @@ export class RoutesController {
     }
   }
 
+  @Delete(':routeId/stages/:stageId')
+  @ApiOperation({ summary: 'Удалить определенный этап из маршрута' })
+  @ApiParam({ name: 'routeId', description: 'ID маршрута' })
+  @ApiParam({ name: 'stageId', description: 'ID этапа маршрута' })
+  @ApiResponse({ status: 200, description: 'Этап успешно удален из маршрута' })
+  @ApiResponse({ status: 404, description: 'Этап не найден' })
+  @ApiResponse({
+    status: 400,
+    description: 'Этап используется и не может быть удален',
+  })
+  async deleteRouteStage(
+    @Param('routeId', ParseIntPipe) routeId: number,
+    @Param('stageId', ParseIntPipe) stageId: number,
+  ) {
+    const startTime = Date.now();
+    this.logger.log(
+      `DELETE /settings/routes/${routeId}/stages/${stageId} - Запрос на удаление этапа маршрута`,
+    );
+
+    try {
+      const result = await this.routeStagesService.deleteRouteStage(
+        routeId,
+        stageId,
+      );
+      const executionTime = Date.now() - startTime;
+      this.logger.log(
+        `DELETE /settings/routes/${routeId}/stages/${stageId} - Этап успешно удален за ${executionTime}ms`,
+      );
+      return result;
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      this.logger.error(
+        `DELETE /settings/routes/${routeId}/stages/${stageId} - Ошибка при удалении этапа за ${executionTime}ms`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
   @Delete(':routeId/stages')
   @ApiOperation({ summary: 'Удалить все этапы из маршрута и связь с линией' })
   @ApiParam({ name: 'routeId', description: 'ID маршрута' })
-  @ApiResponse({ status: 200, description: 'Все этапы успешно удалены из маршрута' })
+  @ApiResponse({
+    status: 200,
+    description: 'Все этапы успешно удалены из маршрута',
+  })
   @ApiResponse({ status: 404, description: 'Маршрут не найден' })
   @ApiResponse({
     status: 400,
@@ -325,7 +369,8 @@ export class RoutesController {
     );
 
     try {
-      const result = await this.routeStagesService.deleteAllRouteStages(routeId);
+      const result =
+        await this.routeStagesService.deleteAllRouteStages(routeId);
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `DELETE /settings/routes/${routeId}/stages - Успешно удалены все этапы из маршрута за ${executionTime}ms`,
@@ -419,10 +464,18 @@ export class RoutesController {
   // ================================
 
   @Get('line/:lineId/stages')
-  @ApiOperation({ summary: 'Получить все связанные этапы по ID производственной линии' })
+  @ApiOperation({
+    summary: 'Получить все связанные этапы по ID производственной линии',
+  })
   @ApiParam({ name: 'lineId', description: 'ID производственной линии' })
-  @ApiResponse({ status: 200, description: 'Список этапов 1 и 2 уровня для производственной линии' })
-  @ApiResponse({ status: 404, description: 'Производственная линия не найдена' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список этапов 1 и 2 уровня для производственной линии',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Производственная линия не найдена',
+  })
   async getLineStages(@Param('lineId', ParseIntPipe) lineId: number) {
     const startTime = Date.now();
     this.logger.log(
@@ -446,7 +499,6 @@ export class RoutesController {
     }
   }
 
-  
   @Post(':id/copy')
   @ApiOperation({ summary: 'Скопировать маршрут' })
   @ApiParam({ name: 'id', description: 'ID маршрута для копирования' })
@@ -480,5 +532,4 @@ export class RoutesController {
       throw error;
     }
   }
-
-  }
+}

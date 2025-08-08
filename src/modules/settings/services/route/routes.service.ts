@@ -149,7 +149,9 @@ export class RoutesService {
           this.logger.warn(
             `Производственная линия с ID ${lineId} не найдена за ${executionTime}ms`,
           );
-          throw new NotFoundException(`Производственная линия с ID ${lineId} не найдена`);
+          throw new NotFoundException(
+            `Производственная линия с ID ${lineId} не найдена`,
+          );
         }
       }
 
@@ -178,11 +180,11 @@ export class RoutesService {
 
           // Если указана производственная линия, создаем связи этапов с линией
           if (lineId) {
-            const stageIds = stages.map(stage => stage.stageId);
+            const stageIds = stages.map((stage) => stage.stageId);
             const uniqueStageIds = [...new Set(stageIds)];
 
             this.logger.log(
-              `Соз��ание связей ${uniqueStageIds.length} этапов с производственной линией ID: ${lineId}`,
+              `Создание связей ${uniqueStageIds.length} этапов с производственной линией ID: ${lineId}`,
             );
 
             // Создаем связи только для тех этапов, которые еще не связаны с линией
@@ -275,77 +277,50 @@ export class RoutesService {
             this.logger.warn(
               `Производственная линия с ID ${updateRouteDto.lineId} не найдена за ${executionTime}ms`,
             );
-            throw new NotFoundException(`Производственная линия с ID ${updateRouteDto.lineId} не найдена`);
+            throw new NotFoundException(
+              `Производственная линия с ID ${updateRouteDto.lineId} не найдена`,
+            );
+          }
+        }
+      }
+
+      // Валидация этапов, если они переданы и есть линия
+      if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
+        const targetLineId =
+          updateRouteDto.lineId !== undefined
+            ? updateRouteDto.lineId
+            : route.lineId;
+
+        if (targetLineId !== null) {
+          // Проверяем, что все переданные этапы действительно связаны с линией
+          const validStages = await this.prisma.lineStage.findMany({
+            where: {
+              lineId: targetLineId,
+              stageId: { in: updateRouteDto.stageIds },
+            },
+          });
+
+          if (validStages.length !== updateRouteDto.stageIds.length) {
+            const invalidStageIds = updateRouteDto.stageIds.filter(
+              (stageId) => !validStages.some((vs) => vs.stageId === stageId),
+            );
+            throw new BadRequestException(
+              `Этапы с ID [${invalidStageIds.join(', ')}] не связаны с линией ID: ${targetLineId}`,
+            );
           }
         }
       }
 
       const oldName = route.routeName;
       const oldLineId = route.lineId;
-      const lineIdChanged = updateRouteDto.lineId !== undefined && updateRouteDto.lineId !== oldLineId;
+      const lineIdChanged =
+        updateRouteDto.lineId !== undefined &&
+        updateRouteDto.lineId !== oldLineId;
+      const stagesChanged = updateRouteDto.stageIds !== undefined;
 
       // Выполняем обновление в транзакции
       await this.prisma.$transaction(async (prisma) => {
-        // Если изменилась производственная линия, нужно обработать связи с этапами
-        if (lineIdChanged) {
-          this.logger.log(
-            `Изменение производственной линии маршрута ID: ${routeId} с ${oldLineId} на ${updateRouteDto.lineId}`,
-          );
-
-          // Получаем этапы маршрута для обработки связей
-          const routeStages = await prisma.routeStage.findMany({
-            where: { routeId },
-            select: { stageId: true },
-          });
-
-          // Если у маршрута есть этапы, нужно удалить старые связи с линией и создать новые
-          if (routeStages.length > 0) {
-            const stageIds = routeStages.map(rs => rs.stageId);
-            const uniqueStageIds = [...new Set(stageIds)];
-
-            // Удаляем старые связи этапов с предыдущей линией (если она была)
-            if (oldLineId) {
-              this.logger.log(
-                `Удаление связей ${uniqueStageIds.length} этапов со старой линией ID: ${oldLineId}`,
-              );
-
-              await prisma.lineStage.deleteMany({
-                where: {
-                  lineId: oldLineId,
-                  stageId: { in: uniqueStageIds },
-                },
-              });
-            }
-
-            // Создаем новые связи этапов с новой линией (если она указана)
-            if (updateRouteDto.lineId) {
-              this.logger.log(
-                `Создание связей ${uniqueStageIds.length} этапов с новой линией ID: ${updateRouteDto.lineId}`,
-              );
-
-              // Создаем связи только для тех этапов, которые еще не связаны с новой линией
-              for (const stageId of uniqueStageIds) {
-                const existingLink = await prisma.lineStage.findFirst({
-                  where: {
-                    lineId: updateRouteDto.lineId,
-                    stageId: stageId,
-                  },
-                });
-
-                if (!existingLink) {
-                  await prisma.lineStage.create({
-                    data: {
-                      lineId: updateRouteDto.lineId,
-                      stageId: stageId,
-                    },
-                  });
-                }
-              }
-            }
-          }
-        }
-
-        // Обновляем сам маршрут
+        // Обновляем основную информацию маршрута
         await prisma.route.update({
           where: { routeId },
           data: {
@@ -353,6 +328,37 @@ export class RoutesService {
             lineId: updateRouteDto.lineId,
           },
         });
+
+        // Обновляем этапы, если они переданы или изменилась линия
+        if (stagesChanged || lineIdChanged) {
+          this.logger.log(
+            `Обновление этапов маршрута ID: ${routeId}${lineIdChanged ? ` (линия изменена с ${oldLineId} на ${updateRouteDto.lineId})` : ''}`,
+          );
+
+          // Удаляем все существующие связи маршрута с этапами
+          await prisma.routeStage.deleteMany({
+            where: { routeId },
+          });
+
+          // Добавляем новые этапы, если они переданы
+          if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
+            for (let i = 0; i < updateRouteDto.stageIds.length; i++) {
+              await prisma.routeStage.create({
+                data: {
+                  routeId,
+                  stageId: updateRouteDto.stageIds[i],
+                  sequenceNumber: i + 1, // Порядковый номер по порядку в массиве
+                },
+              });
+            }
+
+            this.logger.log(
+              `Добавлено ${updateRouteDto.stageIds.length} этапов к маршруту ID: ${routeId}: [${updateRouteDto.stageIds.join(', ')}]`,
+            );
+          } else {
+            this.logger.log(`Все этапы удалены из маршрута ID: ${routeId}`);
+          }
+        }
       });
 
       const updatedRoute = await this.getRouteById(routeId);
@@ -370,8 +376,8 @@ export class RoutesService {
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Маршрут ID: ${routeId} успешно обновлен с "${oldName}" на "${updateRouteDto.routeName || oldName}"${
-          updateRouteDto.lineId !== undefined 
-            ? `, линия изменена с ${oldLineId} на ${updateRouteDto.lineId}` 
+          updateRouteDto.lineId !== undefined
+            ? `, линия изменена с ${oldLineId} на ${updateRouteDto.lineId}`
             : ''
         } за ${executionTime}ms`,
       );
@@ -384,7 +390,7 @@ export class RoutesService {
       }
       this.logger.error(
         `Ошибка при обновлении маршрута ID: ${routeId} за ${executionTime}ms`,
-        error.stack,
+        error instanceof Error ? error.stack : String(error),
       );
       throw error;
     }
@@ -504,7 +510,9 @@ export class RoutesService {
 
         // Если у оригинального маршрута есть производственная линия и этапы, создаем связи
         if (originalRoute.lineId && originalRoute.routeStages.length > 0) {
-          const stageIds = originalRoute.routeStages.map(stage => stage.stageId);
+          const stageIds = originalRoute.routeStages.map(
+            (stage) => stage.stageId,
+          );
           const uniqueStageIds = [...new Set(stageIds)];
 
           this.logger.log(
@@ -591,7 +599,7 @@ export class RoutesService {
       });
 
       // Добавляем информацию о занятости линии
-      const linesWithStatus = productionLines.map(line => ({
+      const linesWithStatus = productionLines.map((line) => ({
         ...line,
         isOccupied: line._count.routes > 0, // Линия занята, если есть связанные маршруты
         routesCount: line._count.routes,

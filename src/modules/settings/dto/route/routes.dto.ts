@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
 // DTO для создания маршрута
 export class CreateRouteDto {
@@ -30,15 +31,27 @@ export class CreateRouteDto {
 
 // DTO для обновления маршрута
 export class UpdateRouteDto {
+  @ApiProperty({ required: false, description: 'Новое имя маршрута' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   routeName?: string;
 
+  @ApiProperty({ required: false, description: 'ID производственной линии' })
   @IsOptional()
   @IsNumber()
   @IsPositive()
   lineId?: number;
+
+  @ApiProperty({
+    required: false,
+    type: [Number],
+    description: 'Идентификаторы этапов в порядке их следования',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  stageIds?: number[];
 }
 
 // DTO для создания этапа маршрута

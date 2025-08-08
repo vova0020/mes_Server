@@ -383,94 +383,73 @@ export class RouteStagesService {
   }
 
   /**
-   * Удалить этап маршрута
+   * Удалить этап маршрута с проверкой принадлежности к маршруту
+   * @param routeId ID маршрута
+   * @param routeStageId ID этапа маршрута
    */
-  async deleteRouteStage(routeStageId: number) {
+  async deleteRouteStage(routeId: number, routeStageId: number) {
     const startTime = Date.now();
-    this.logger.log(`Запрос на удаление этапа маршрута с ID: ${routeStageId}`);
+    this.logger.log(
+      `Запрос на удаление этапа ${routeStageId} из маршрута ${routeId}`,
+    );
 
     try {
-      const routeStage = await this.prisma.routeStage.findUnique({
-        where: { routeStageId },
+      // Проверяем существование маршрута
+      const route = await this.prisma.route.findUnique({
+        where: { routeId },
+      });
+
+      if (!route) {
+        throw new NotFoundException(`Маршрут с ID ${routeId} не найден`);
+      }
+
+      // Находим этап с проверкой принадлежности к маршруту
+      const routeStage = await this.prisma.routeStage.findFirst({
+        where: {
+          routeStageId,
+          routeId, // Важно: проверяем принадлежность к указанному маршруту
+        },
         include: {
-          route: true,
           stage: true,
           substage: true,
-          partRouteProgress: true,
-          palletStageProgress: true,
-          subassemblyProgress: true,
-          returnStageParts: true,
+          route: true,
         },
       });
 
       if (!routeStage) {
-        const executionTime = Date.now() - startTime;
-        this.logger.warn(
-          `Попытка удаления несуществующего этапа маршрута с ID ${routeStageId} за ${executionTime}ms`,
-        );
         throw new NotFoundException(
-          `Этап маршрута с ID ${routeStageId} не найден`,
+          `Этап с ID ${routeStageId} не найден в маршруте ${routeId}`,
         );
       }
 
-      // Проверяем, не используется ли этап в других таблицах
-      const usageCount =
-        routeStage.partRouteProgress.length +
-        routeStage.palletStageProgress.length +
-        routeStage.subassemblyProgress.length +
-        routeStage.returnStageParts.length;
-
-      if (usageCount > 0) {
-        const executionTime = Date.now() - startTime;
-        this.logger.warn(
-          `Попытка удаления используемого этапа маршрута "${routeStage.stage.stageName}" (ID: ${routeStageId}), используется в ${usageCount} записях за ${executionTime}ms`,
-        );
-        throw new BadRequestException(
-          `Невозможно удалить этап маршрута. Он используется в ${usageCount} записях`,
-        );
-      }
-
-      await this.prisma.$transaction(async (prisma) => {
-        // Удаляем этап маршрута
-        await prisma.routeStage.delete({
-          where: { routeStageId },
-        });
-
-        // Проверяем, остались ли другие маршруты с этим этапом на той же производственной линии
-        if (routeStage.route.lineId) {
-          const otherRoutesWithStage = await prisma.routeStage.findFirst({
-            where: {
-              stageId: routeStage.stageId,
-              route: {
-                lineId: routeStage.route.lineId,
-              },
-            },
-          });
-
-          // Если других маршрутов с этим этапом на этой линии нет, удаляем связь
-          if (!otherRoutesWithStage) {
-            await prisma.lineStage.deleteMany({
-              where: {
-                lineId: routeStage.route.lineId,
-                stageId: routeStage.stageId,
-              },
-            });
-
-            this.logger.log(
-              `Удалена связь этапа "${routeStage.stage.stageName}" с производственной линией ID: ${routeStage.route.lineId}, так как этап больше не используется в маршрутах этой линии`,
-            );
-          }
-        }
+      // Проверяем, не используется ли этап
+      const usageCount = await this.prisma.partRouteProgress.count({
+        where: {
+          routeStageId,
+        },
       });
 
-      // Отправляем событие об отвязке этапа от линии в комнату производственных линий
+      if (usageCount > 0) {
+        throw new BadRequestException(
+          `Этап с ID ${routeStageId} используется в процессе производства и не может быть удален`,
+        );
+      }
+
+      // Удаляем этап
+      await this.prisma.routeStage.delete({
+        where: {
+          routeStageId,
+        },
+      });
+
+      // Отправляем событие об удалении этапа
       this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'stageUnlinkedFromLine',
+        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
+        'stageLevel1Deleted',
         {
-          lineId: routeStage.routeId,
           stageId: routeStage.stageId,
-          lineName: routeStage.route.routeName,
+          routeId: routeStage.routeId,
+          routeName: routeStage.route.routeName,
           stageName: routeStage.stage.stageName,
           timestamp: new Date().toISOString(),
         },
@@ -478,14 +457,12 @@ export class RouteStagesService {
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Удален этап маршрута "${routeStage.stage.stageName}${
-          routeStage.substage ? ` > ${routeStage.substage.substageName}` : ''
-        }" (ID: ${routeStageId}) из маршрута "${
-          routeStage.route.routeName
-        }" за ${executionTime}ms`,
+        `Этап "${routeStage.stage.stageName}"${
+          routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
+        } успешно удален из маршрута "${route.routeName}" за ${executionTime}ms`,
       );
 
-      return { message: 'Этап маршрута успешно удален' };
+      return routeStage;
     } catch (error) {
       const executionTime = Date.now() - startTime;
       if (
@@ -495,8 +472,8 @@ export class RouteStagesService {
         throw error;
       }
       this.logger.error(
-        `Ошибка при удалении этапа маршрута ID: ${routeStageId} за ${executionTime}ms`,
-        error.stack,
+        `Ошибка при удалении этапа ${routeStageId} из маршрута ${routeId} за ${executionTime}ms`,
+        error instanceof Error ? error.stack : undefined,
       );
       throw error;
     }
@@ -507,7 +484,9 @@ export class RouteStagesService {
    */
   async deleteAllRouteStages(routeId: number) {
     const startTime = Date.now();
-    this.logger.log(`Запрос на удаление всех этапов из маршрута с ID: ${routeId}`);
+    this.logger.log(
+      `Запрос на удаление всех этапов из маршрута с ID: ${routeId}`,
+    );
 
     try {
       const route = await this.prisma.route.findUnique({
@@ -557,7 +536,9 @@ export class RouteStagesService {
           totalUsageCount += usageCount;
           usageDetails.push(
             `"${routeStage.stage.stageName}${
-              routeStage.substage ? ` > ${routeStage.substage.substageName}` : ''
+              routeStage.substage
+                ? ` > ${routeStage.substage.substageName}`
+                : ''
             }" (${usageCount} записей)`,
           );
         }
@@ -574,7 +555,7 @@ export class RouteStagesService {
       }
 
       const deletedStagesCount = route.routeStages.length;
-      const stageIds = [...new Set(route.routeStages.map(rs => rs.stageId))];
+      const stageIds = [...new Set(route.routeStages.map((rs) => rs.stageId))];
 
       await this.prisma.$transaction(async (prisma) => {
         // Удаляем все этапы маршрута
@@ -626,15 +607,14 @@ export class RouteStagesService {
         );
       });
 
-      // Отправляем событие об удалении всех этапов из маршр��та
+      // Отправляем событие об обновлении этапов линии (все этапы удалены)
       this.eventsService.emitToRoom(
         WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'allStagesRemovedFromRoute',
+        'lineStagesUpdated',
         {
-          routeId: routeId,
-          routeName: route.routeName,
-          lineId: route.lineId,
-          deletedStagesCount: deletedStagesCount,
+          lineId: routeId,
+          lineName: route.routeName,
+          stages: [], // Пустой массив, так как все этапы удалены
           timestamp: new Date().toISOString(),
         },
       );
@@ -644,7 +624,7 @@ export class RouteStagesService {
         `Успешно удалены все ${deletedStagesCount} этапов из маршрута "${route.routeName}" (ID: ${routeId}) и отключена связь с производственной линией за ${executionTime}ms`,
       );
 
-      return { 
+      return {
         message: `Успешно удалены все ${deletedStagesCount} этапов из маршрута и отключена связь с производственной линией`,
         deletedStagesCount: deletedStagesCount,
       };
@@ -929,7 +909,9 @@ export class RouteStagesService {
         this.logger.warn(
           `Производственная линия с ID ${lineId} не найдена за ${executionTime}ms`,
         );
-        throw new NotFoundException(`Производственная линия с ID ${lineId} не найдена`);
+        throw new NotFoundException(
+          `Производственная линия с ID ${lineId} не найдена`,
+        );
       }
 
       // Получаем этапы, связанные с производственной линией через таблицу lines_stages
@@ -945,7 +927,7 @@ export class RouteStagesService {
       });
 
       // Собираем этапы 1 уровня
-      const stagesLevel1 = lineStages.map(lineStage => ({
+      const stagesLevel1 = lineStages.map((lineStage) => ({
         stageId: lineStage.stage.stageId,
         stageName: lineStage.stage.stageName,
         description: lineStage.stage.description,
@@ -956,8 +938,8 @@ export class RouteStagesService {
 
       // Собираем все этапы 2 уровня для найденных этапов 1 уровня
       const stagesLevel2Map = new Map();
-      lineStages.forEach(lineStage => {
-        lineStage.stage.productionStagesLevel2.forEach(substage => {
+      lineStages.forEach((lineStage) => {
+        lineStage.stage.productionStagesLevel2.forEach((substage) => {
           if (!stagesLevel2Map.has(substage.substageId)) {
             stagesLevel2Map.set(substage.substageId, {
               substageId: substage.substageId,
