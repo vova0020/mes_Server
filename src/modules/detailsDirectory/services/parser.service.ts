@@ -71,15 +71,16 @@ export class ParserService {
       const row = rows[i].map((cell) =>
         (cell || '').toString().trim().toLowerCase(),
       );
-      if (wantedLower.every((want) => row.includes(want))) {
+      // Ищем строку с максимальным количеством совпадений
+      const matches = wantedLower.filter(want => row.includes(want)).length;
+      if (matches > 0 && (headerRowIdx === null || matches > wantedLower.filter(want => headerRow.includes(want)).length)) {
         headerRowIdx = i;
         headerRow = row;
-        break;
       }
     }
     if (headerRowIdx === null) {
       throw new BadRequestException(
-        `Не найдена строка с заголовками: ${this.wantedColumns.join(', ')}`,
+        'Не найдена строка с заголовками',
       );
     }
 
@@ -88,6 +89,14 @@ export class ParserService {
     headerRow.forEach((h, idx) => {
       if (h) colIndexMap[h] = idx;
     });
+    
+    // Проверяем какие колонки отсутствуют (для информации)
+    const missingColumns = this.wantedColumns.filter(col => 
+      !colIndexMap.hasOwnProperty(col.toLowerCase())
+    );
+    if (missingColumns.length > 0) {
+      console.warn(`Отсутствующие колонки (будут заполнены пустыми значениями): ${missingColumns.join(', ')}`);
+    }
 
     // 5. Парсим строки до первой полностью пустой
     const result: any[] = [];
@@ -111,11 +120,40 @@ export class ParserService {
       const obj: Record<string, any> = {};
       for (const [rusName, engName] of Object.entries(this.columnMap)) {
         const idx = colIndexMap[rusName.toLowerCase()];
-        obj[engName] = row[idx] ?? null;
+        let value = (idx !== undefined && row[idx] !== undefined) ? row[idx] : null;
+        
+        // Преобразуем типы данных
+        value = this.convertValue(engName, value);
+        
+        obj[engName] = value;
       }
       result.push(obj);
     }
 
     return result;
+  }
+
+  /**
+   * Преобразует значение в нужный тип в зависимости от поля
+   */
+  private convertValue(fieldName: string, value: any): any {
+    // Преобразуем boolean поля
+    if (['pf', 'sbPart', 'pfSb'].includes(fieldName)) {
+      if (value === null || value === undefined || value === '') return false;
+      if (typeof value === 'boolean') return value;
+      const str = String(value).toLowerCase().trim();
+      return str === 'true' || str === '1' || str === 'да' || str === 'yes';
+    }
+    
+    // Преобразуем числовые поля
+    if (['thickness', 'thicknessWithEdging', 'finishedLength', 'finishedWidth', 'conveyorPosition', 'quantity', 'routeId'].includes(fieldName)) {
+      if (value === null || value === undefined || value === '') return 0;
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    }
+    
+    // Все остальные поля как строки
+    if (value === null || value === undefined || value === '') return '';
+    return String(value).trim();
   }
 }

@@ -7,6 +7,7 @@ import { PrismaService } from '../../../shared/prisma.service';
 import { DetailDirectory, PackageDetailDirectory } from '@prisma/client';
 import { CreateDetailWithPackageDto } from '../dto/create-detail-with-package.dto';
 import { DetailFromFileDto } from '../dto/save-details-from-file.dto';
+import { RouteDto } from '../dto/route.dto';
 
 export interface DetailWithPackages extends DetailDirectory {
   packageDetails: Array<
@@ -29,7 +30,7 @@ export class DetailsService {
    */
   private cleanData<T extends Record<string, any>>(data: T): Partial<T> {
     const cleaned = Object.fromEntries(
-      Object.entries(data).filter(([_, value]) => value !== undefined)
+      Object.entries(data).filter(([_, value]) => value !== undefined),
     );
     return cleaned as Partial<T>;
   }
@@ -39,10 +40,12 @@ export class DetailsService {
    */
   private prepareDetailData(data: any) {
     const cleanedData = this.cleanData(data);
-    
+
     // Убеждаемся, что обязательные поля присутствуют
     if (!cleanedData.partSku || !cleanedData.partName) {
-      throw new BadRequestException('Обязательные поля partSku и partName должны быть заполнены');
+      throw new BadRequestException(
+        'Обязательные поля partSku и partName должны быть заполнены',
+      );
     }
 
     // Создаем объект с правильными типами дл�� Prisma
@@ -54,29 +57,47 @@ export class DetailsService {
     };
 
     // Добавляем опциональные поля только если они определены
-    if (cleanedData.thickness !== undefined) result.thickness = cleanedData.thickness;
-    if (cleanedData.thicknessWithEdging !== undefined) result.thicknessWithEdging = cleanedData.thicknessWithEdging;
-    if (cleanedData.finishedLength !== undefined) result.finishedLength = cleanedData.finishedLength;
-    if (cleanedData.finishedWidth !== undefined) result.finishedWidth = cleanedData.finishedWidth;
+    if (cleanedData.thickness !== undefined)
+      result.thickness = cleanedData.thickness;
+    if (cleanedData.thicknessWithEdging !== undefined)
+      result.thicknessWithEdging = cleanedData.thicknessWithEdging;
+    if (cleanedData.finishedLength !== undefined)
+      result.finishedLength = cleanedData.finishedLength;
+    if (cleanedData.finishedWidth !== undefined)
+      result.finishedWidth = cleanedData.finishedWidth;
     if (cleanedData.groove !== undefined) result.groove = cleanedData.groove;
-    if (cleanedData.edgingSkuL1 !== undefined) result.edgingSkuL1 = cleanedData.edgingSkuL1;
-    if (cleanedData.edgingNameL1 !== undefined) result.edgingNameL1 = cleanedData.edgingNameL1;
-    if (cleanedData.edgingSkuL2 !== undefined) result.edgingSkuL2 = cleanedData.edgingSkuL2;
-    if (cleanedData.edgingNameL2 !== undefined) result.edgingNameL2 = cleanedData.edgingNameL2;
-    if (cleanedData.edgingSkuW1 !== undefined) result.edgingSkuW1 = cleanedData.edgingSkuW1;
-    if (cleanedData.edgingNameW1 !== undefined) result.edgingNameW1 = cleanedData.edgingNameW1;
-    if (cleanedData.edgingSkuW2 !== undefined) result.edgingSkuW2 = cleanedData.edgingSkuW2;
-    if (cleanedData.edgingNameW2 !== undefined) result.edgingNameW2 = cleanedData.edgingNameW2;
-    if (cleanedData.plasticFace !== undefined) result.plasticFace = cleanedData.plasticFace;
-    if (cleanedData.plasticFaceSku !== undefined) result.plasticFaceSku = cleanedData.plasticFaceSku;
-    if (cleanedData.plasticBack !== undefined) result.plasticBack = cleanedData.plasticBack;
-    if (cleanedData.plasticBackSku !== undefined) result.plasticBackSku = cleanedData.plasticBackSku;
+    if (cleanedData.edgingSkuL1 !== undefined)
+      result.edgingSkuL1 = cleanedData.edgingSkuL1;
+    if (cleanedData.edgingNameL1 !== undefined)
+      result.edgingNameL1 = cleanedData.edgingNameL1;
+    if (cleanedData.edgingSkuL2 !== undefined)
+      result.edgingSkuL2 = cleanedData.edgingSkuL2;
+    if (cleanedData.edgingNameL2 !== undefined)
+      result.edgingNameL2 = cleanedData.edgingNameL2;
+    if (cleanedData.edgingSkuW1 !== undefined)
+      result.edgingSkuW1 = cleanedData.edgingSkuW1;
+    if (cleanedData.edgingNameW1 !== undefined)
+      result.edgingNameW1 = cleanedData.edgingNameW1;
+    if (cleanedData.edgingSkuW2 !== undefined)
+      result.edgingSkuW2 = cleanedData.edgingSkuW2;
+    if (cleanedData.edgingNameW2 !== undefined)
+      result.edgingNameW2 = cleanedData.edgingNameW2;
+    if (cleanedData.plasticFace !== undefined)
+      result.plasticFace = cleanedData.plasticFace;
+    if (cleanedData.plasticFaceSku !== undefined)
+      result.plasticFaceSku = cleanedData.plasticFaceSku;
+    if (cleanedData.plasticBack !== undefined)
+      result.plasticBack = cleanedData.plasticBack;
+    if (cleanedData.plasticBackSku !== undefined)
+      result.plasticBackSku = cleanedData.plasticBackSku;
     if (cleanedData.pf !== undefined) result.pf = cleanedData.pf;
     if (cleanedData.pfSku !== undefined) result.pfSku = cleanedData.pfSku;
     if (cleanedData.sbPart !== undefined) result.sbPart = cleanedData.sbPart;
     if (cleanedData.pfSb !== undefined) result.pfSb = cleanedData.pfSb;
-    if (cleanedData.sbPartSku !== undefined) result.sbPartSku = cleanedData.sbPartSku;
-    if (cleanedData.conveyorPosition !== undefined) result.conveyorPosition = cleanedData.conveyorPosition;
+    if (cleanedData.sbPartSku !== undefined)
+      result.sbPartSku = cleanedData.sbPartSku;
+    if (cleanedData.conveyorPosition !== undefined)
+      result.conveyorPosition = cleanedData.conveyorPosition;
 
     return result;
   }
@@ -90,12 +111,18 @@ export class DetailsService {
     const packageWithDetails = await this.prisma.packageDirectory.findUnique({
       where: { packageId },
       include: {
+        // Берём все записи из `package_detail_directory`
         packageDetails: {
           include: {
+            // Данные о маршруте обработки каждой детали
+            route: true, // ← вот эта строка!
+            // Данные о самой детали
             detail: {
               include: {
+                // Для каждой детали — список её вхождений в другие пакеты
                 packageDetails: {
                   include: {
+                    // И у каждого — код и имя пакета
                     package: {
                       select: {
                         packageCode: true,
@@ -118,6 +145,7 @@ export class DetailsService {
     return packageWithDetails.packageDetails.map((pd) => ({
       ...pd.detail,
       quantity: pd.quantity, // Добавляем количество деталей в упаковке
+      route: pd.route,
     }));
   }
 
@@ -160,31 +188,69 @@ export class DetailsService {
   }
 
   /**
-   * Удалить деталь
+   * Удалить деталь из упаковки (или полностью, если больше нет связей)
    */
-  async deleteDetail(id: number): Promise<void> {
+  async deleteDetailFromPackage(
+    detailId: number,
+    packageId: number,
+  ): Promise<{ detailDeleted: boolean; connectionDeleted: boolean }> {
     // Проверяем существование детали
     const existingDetail = await this.prisma.detailDirectory.findUnique({
-      where: { id },
+      where: { id: detailId },
       include: {
         packageDetails: true,
       },
     });
 
     if (!existingDetail) {
-      throw new NotFoundException(`Деталь с ID ${id} не найдена`);
+      throw new NotFoundException(`Деталь с ID ${detailId} не найдена`);
     }
 
-    // Проверяем, есть ли связи с упаковками
-    if (existingDetail.packageDetails.length > 0) {
-      throw new BadRequestException(
-        `Нельзя удалить деталь, так как она связана с ${existingDetail.packageDetails.length} упаковками. Сначала удалите связи.`,
+    // Проверяем существование связи с упаковкой
+    const connection = await this.prisma.packageDetailDirectory.findUnique({
+      where: {
+        packageId_detailId: {
+          packageId,
+          detailId,
+        },
+      },
+    });
+
+    if (!connection) {
+      throw new NotFoundException(
+        `Связь между деталью ${detailId} и упаковкой ${packageId} не найдена`,
       );
     }
 
-    await this.prisma.detailDirectory.delete({
-      where: { id },
+    // Удаляем связь с упаковкой
+    await this.prisma.packageDetailDirectory.delete({
+      where: {
+        packageId_detailId: {
+          packageId,
+          detailId,
+        },
+      },
     });
+
+    // Проверяем, остались ли другие связи с упаковками
+    const remainingConnections = existingDetail.packageDetails.filter(
+      (pd) => pd.packageId !== packageId,
+    );
+
+    let detailDeleted = false;
+
+    // Если больше нет связей с упаковками, удаляем деталь полностью
+    if (remainingConnections.length === 0) {
+      await this.prisma.detailDirectory.delete({
+        where: { id: detailId },
+      });
+      detailDeleted = true;
+    }
+
+    return {
+      detailDeleted,
+      connectionDeleted: true,
+    };
   }
 
   /**
@@ -193,7 +259,7 @@ export class DetailsService {
   async createDetailWithPackage(
     createDetailDto: CreateDetailWithPackageDto,
   ): Promise<DetailDirectory> {
-    const { packageId, quantity, ...detailData } = createDetailDto;
+    const { packageId, quantity, routeId, ...detailData } = createDetailDto;
 
     // Проверяем существование упаковки
     const packageExists = await this.prisma.packageDirectory.findUnique({
@@ -211,14 +277,15 @@ export class DetailsService {
 
     if (existingDetail) {
       // Если деталь уже существует, проверяем связь с упаковкой
-      const existingConnection = await this.prisma.packageDetailDirectory.findUnique({
-        where: {
-          packageId_detailId: {
-            packageId,
-            detailId: existingDetail.id,
+      const existingConnection =
+        await this.prisma.packageDetailDirectory.findUnique({
+          where: {
+            packageId_detailId: {
+              packageId,
+              detailId: existingDetail.id,
+            },
           },
-        },
-      });
+        });
 
       if (existingConnection) {
         throw new BadRequestException(
@@ -232,6 +299,7 @@ export class DetailsService {
           packageId,
           detailId: existingDetail.id,
           quantity,
+          routeId,
         },
       });
 
@@ -249,6 +317,7 @@ export class DetailsService {
           packageId,
           detailId: newDetail.id,
           quantity,
+          routeId,
         },
       });
 
@@ -261,7 +330,7 @@ export class DetailsService {
    */
   async saveDetailsFromFile(
     packageId: number,
-    details: DetailFromFileDto[]
+    details: DetailFromFileDto[],
   ): Promise<{
     created: number;
     updated: number;
@@ -281,7 +350,7 @@ export class DetailsService {
     }
 
     for (const detailData of details) {
-      const { quantity, ...detailFields } = detailData;
+      const { quantity, routeId, ...detailFields } = detailData;
 
       // Ищем существующую деталь
       const existingDetail = await this.prisma.detailDirectory.findUnique({
@@ -290,14 +359,15 @@ export class DetailsService {
 
       if (existingDetail) {
         // Проверяем связь с упаковкой
-        const existingConnection = await this.prisma.packageDetailDirectory.findUnique({
-          where: {
-            packageId_detailId: {
-              packageId,
-              detailId: existingDetail.id,
+        const existingConnection =
+          await this.prisma.packageDetailDirectory.findUnique({
+            where: {
+              packageId_detailId: {
+                packageId,
+                detailId: existingDetail.id,
+              },
             },
-          },
-        });
+          });
 
         if (!existingConnection) {
           // Создаем новую связь с упаковкой
@@ -306,6 +376,7 @@ export class DetailsService {
               packageId,
               detailId: existingDetail.id,
               quantity,
+              routeId,
             },
           });
           connected++;
@@ -318,7 +389,10 @@ export class DetailsService {
                 detailId: existingDetail.id,
               },
             },
-            data: { quantity },
+            data: {
+              quantity,
+              routeId, // ← можно обновить и маршрут, если нужно
+            },
           });
         }
 
@@ -346,6 +420,7 @@ export class DetailsService {
               packageId,
               detailId: newDetail.id,
               quantity,
+              routeId,
             },
           });
         });
@@ -354,5 +429,18 @@ export class DetailsService {
     }
 
     return { created, updated, connected };
+  }
+
+  /**
+   * Получить список маршрутов
+   */
+  async getRoutesList(): Promise<RouteDto[]> {
+    const routes = await this.prisma.route.findMany();
+    return routes.map((route) => {
+      const dto = new RouteDto();
+      dto.routeId = route.routeId;
+      dto.routeName = route.routeName;
+      return dto;
+    });
   }
 }

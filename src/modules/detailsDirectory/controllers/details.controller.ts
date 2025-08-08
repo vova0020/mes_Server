@@ -11,10 +11,25 @@ import {
 import { DetailsService } from '../services/details.service';
 import { CreateDetailWithPackageDto } from '../dto/create-detail-with-package.dto';
 import { SaveDetailsFromFileDto } from '../dto/save-details-from-file.dto';
+import { RouteDto } from '../dto/route.dto';
 
 @Controller('details')
 export class DetailsController {
   constructor(private readonly detailsService: DetailsService) {}
+
+
+  /**
+   * GET /details/routes
+   * Получить список всех маршрутов
+   */
+  @Get('routes')
+  async getRoutesList(): Promise<{ message: string; data: RouteDto[] }> {
+    const routes = await this.detailsService.getRoutesList();
+    return {
+      message: 'Список маршрутов успешно получен',
+      data: routes,
+    };
+  }
 
   /**
    * GET /details/package/:packageId
@@ -48,14 +63,20 @@ export class DetailsController {
   }
 
   /**
-   * DELETE /details/:id
-   * Удалить деталь
+   * DELETE /details/:id/package/:packageId
+   * Удалить деталь из упаковки (или полностью, если больше нет связей)
    */
-  @Delete(':id')
-  async deleteDetail(@Param('id', ParseIntPipe) id: number) {
-    await this.detailsService.deleteDetail(id);
+  @Delete(':id/package/:packageId')
+  async deleteDetailFromPackage(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('packageId', ParseIntPipe) packageId: number,
+  ) {
+    const result = await this.detailsService.deleteDetailFromPackage(id, packageId);
     return {
-      message: 'Деталь успешно удалена',
+      message: result.detailDeleted 
+        ? 'Деталь полностью удалена' 
+        : 'Связь детали с упаковкой удалена',
+      data: result,
     };
   }
 

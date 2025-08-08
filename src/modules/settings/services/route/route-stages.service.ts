@@ -865,8 +865,8 @@ export class RouteStagesService {
         await prisma.routeStage.create({
           data: {
             routeId,
-            stageId: stage.stageId,
-            substageId: stage.substageId,
+            stageId: Number(stage.stageId),
+            substageId: stage.substageId ? Number(stage.substageId) : undefined,
             sequenceNumber: new Decimal(stage.sequenceNumber || i + 1),
           },
         });

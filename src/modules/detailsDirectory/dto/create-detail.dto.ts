@@ -106,4 +106,7 @@ export class CreateDetailDto {
   @IsOptional()
   @IsNumber()
   conveyorPosition?: number;
+
+  @IsNumber()
+  routeId: number;
 }

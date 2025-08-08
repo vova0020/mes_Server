@@ -108,6 +108,10 @@ export class DetailFromFileDto {
   @IsNumber()
   conveyorPosition?: number;
 
+  @IsOptional()
+  @IsNumber()
+  routeId?: number;
+
   // Количество деталей в упаковке (передается вместе с деталью)
   @IsInt()
   @Min(1)

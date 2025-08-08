@@ -136,7 +136,7 @@ export class RoutesService {
     );
 
     try {
-      const { routeName, lineId, stages } = createRouteDto;
+      const { routeName, lineId } = createRouteDto;
 
       // Если указан lineId, проверяем существование производственной линии
       if (lineId) {
@@ -155,64 +155,20 @@ export class RoutesService {
         }
       }
 
-      // Создаем маршрут и этапы в транзакции
-      const createdRouteId = await this.prisma.$transaction(async (prisma) => {
-        // Создаем маршрут
-        const route = await prisma.route.create({
-          data: {
-            routeName,
-            lineId,
-          },
-        });
-
-        this.logger.log(
-          `Создан маршрут с ID: ${route.routeId}, название: "${routeName}"${lineId ? `, линия ID: ${lineId}` : ''}`,
-        );
-
-        // Если переданы этапы, создаем их
-        if (stages && stages.length > 0) {
-          this.logger.log(`Создание ${stages.length} этапов для маршрута`);
-          await this.routeStagesService.createRouteStages(
-            route.routeId,
-            stages,
-            prisma,
-          );
-
-          // Если указана производственная линия, создаем связи этапов с линией
-          if (lineId) {
-            const stageIds = stages.map((stage) => stage.stageId);
-            const uniqueStageIds = [...new Set(stageIds)];
-
-            this.logger.log(
-              `Создание связей ${uniqueStageIds.length} этапов с производственной линией ID: ${lineId}`,
-            );
-
-            // Создаем связи только для тех этапов, которые еще не связаны с линией
-            for (const stageId of uniqueStageIds) {
-              const existingLink = await prisma.lineStage.findFirst({
-                where: {
-                  lineId: lineId,
-                  stageId: stageId,
-                },
-              });
-
-              if (!existingLink) {
-                await prisma.lineStage.create({
-                  data: {
-                    lineId: lineId,
-                    stageId: stageId,
-                  },
-                });
-              }
-            }
-          }
-        }
-
-        return route.routeId;
+      // Создаем маршрут
+      const route = await this.prisma.route.create({
+        data: {
+          routeName,
+          lineId,
+        },
       });
 
-      // Получаем созданный маршрут со всеми связанными данными после коммита транзакции
-      const newRoute = await this.getRouteById(createdRouteId);
+      this.logger.log(
+        `Создан маршрут с ID: ${route.routeId}, название: "${routeName}"${lineId ? `, линия ID: ${lineId}` : ''}`,
+      );
+
+      // Получаем созданный маршрут со всеми связанными данными
+      const newRoute = await this.getRouteById(route.routeId);
 
       // Отправляем событие о создании маршрута в комнату производственных линий
       this.eventsService.emitToRoom(
@@ -284,6 +240,13 @@ export class RoutesService {
         }
       }
 
+      // Преобразуем stages в stageIds, если передано поле stages
+      if (updateRouteDto.stages && updateRouteDto.stages.length > 0) {
+        updateRouteDto.stageIds = updateRouteDto.stages
+          .sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
+          .map(stage => stage.stageId);
+      }
+
       // Валидация этапов, если они переданы и есть линия
       if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
         const targetLineId =
@@ -316,7 +279,7 @@ export class RoutesService {
       const lineIdChanged =
         updateRouteDto.lineId !== undefined &&
         updateRouteDto.lineId !== oldLineId;
-      const stagesChanged = updateRouteDto.stageIds !== undefined;
+      const stagesChanged = updateRouteDto.stageIds !== undefined || updateRouteDto.stages !== undefined;
 
       // Выполняем обновление в транзакции
       await this.prisma.$transaction(async (prisma) => {
@@ -329,34 +292,78 @@ export class RoutesService {
           },
         });
 
-        // Обновляем этапы, если они переданы или изменилась линия
-        if (stagesChanged || lineIdChanged) {
+        // Обновляем этапы, если они переданы
+        if (stagesChanged) {
           this.logger.log(
-            `Обновление этапов маршрута ID: ${routeId}${lineIdChanged ? ` (линия изменена с ${oldLineId} на ${updateRouteDto.lineId})` : ''}`,
+            `Обновление этапов маршрута ID: ${routeId}`,
           );
 
-          // Удаляем все существующие связи маршрута с этапами
-          await prisma.routeStage.deleteMany({
-            where: { routeId },
-          });
-
-          // Добавляем новые этапы, если они переданы
           if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
+            // Получаем существующие этапы
+            const existingStages = await prisma.routeStage.findMany({
+              where: { routeId },
+              orderBy: { sequenceNumber: 'asc' },
+            });
+
+            // Обновляем существующие этапы или создаем новые
             for (let i = 0; i < updateRouteDto.stageIds.length; i++) {
-              await prisma.routeStage.create({
-                data: {
-                  routeId,
-                  stageId: updateRouteDto.stageIds[i],
-                  sequenceNumber: i + 1, // Порядковый номер по порядку в массиве
+              const stageId = Number(updateRouteDto.stageIds[i]);
+              const sequenceNumber = i + 1;
+
+              if (i < existingStages.length) {
+                // Обновляем существующий этап
+                await prisma.routeStage.update({
+                  where: { routeStageId: existingStages[i].routeStageId },
+                  data: {
+                    stageId,
+                    sequenceNumber,
+                  },
+                });
+              } else {
+                // Создаем новый этап
+                await prisma.routeStage.create({
+                  data: {
+                    routeId,
+                    stageId,
+                    sequenceNumber,
+                  },
+                });
+              }
+            }
+
+            // Проверяем и удаляем лишние этапы, если новых меньше чем было
+            if (existingStages.length > updateRouteDto.stageIds.length) {
+              const stagesToDelete = existingStages.slice(updateRouteDto.stageIds.length);
+              
+              // Проверяем, не используются ли этапы в производстве
+              for (const stage of stagesToDelete) {
+                const usageCount = await prisma.partRouteProgress.count({
+                  where: { routeStageId: stage.routeStageId },
+                });
+                
+                if (usageCount > 0) {
+                  throw new BadRequestException(
+                    `Невозможно удалить этап маршрута. Этап используется в ${usageCount} деталях на производстве`
+                  );
+                }
+              }
+              
+              // Если этапы не используются, удаляем их
+              const stageIdsToDelete = stagesToDelete.map(stage => stage.routeStageId);
+              await prisma.routeStage.deleteMany({
+                where: {
+                  routeStageId: { in: stageIdsToDelete },
                 },
               });
+              
+              this.logger.log(
+                `Удалено ${stagesToDelete.length} лишних этапов из маршрута ID: ${routeId}`
+              );
             }
 
             this.logger.log(
-              `Добавлено ${updateRouteDto.stageIds.length} этапов к маршруту ID: ${routeId}: [${updateRouteDto.stageIds.join(', ')}]`,
+              `Обновлено ${updateRouteDto.stageIds.length} этапов маршрута ID: ${routeId}: [${updateRouteDto.stageIds.join(', ')}]`,
             );
-          } else {
-            this.logger.log(`Все этапы удалены из маршрута ID: ${routeId}`);
           }
         }
       });
@@ -532,7 +539,7 @@ export class RoutesService {
               await prisma.lineStage.create({
                 data: {
                   lineId: originalRoute.lineId,
-                  stageId: stageId,
+                  stageId: Number(stageId),
                 },
               });
             }

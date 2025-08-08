@@ -110,6 +110,9 @@ export class CreateDetailWithPackageDto {
   // Поля для привязки к упаковке
   @IsInt()
   @Min(1)
+  routeId: number;
+  @IsInt()
+  @Min(1)
   packageId: number;
 
   @IsInt()
