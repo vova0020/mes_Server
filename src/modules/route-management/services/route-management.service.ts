@@ -217,9 +217,14 @@ export class RouteManagementService {
 
     // Проверяем, что деталь принадлежит заказу с подходящим статусом
     const order = currentPart.productionPackageParts[0]?.package?.order;
-    if (!order || !['PRELIMINARY', 'APPROVED'].includes(order.status)) {
+    if (!order) {
+      throw new BadRequestException('Деталь не принадлежит ни одному заказу');
+    }
+
+    // Запрещаем изменение маршрута если заказ уже в работе
+    if (['LAUNCH_PERMITTED', 'IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
       throw new BadRequestException(
-        'Можно изменять маршруты только у деталей из заказов со статусом "Предварительный" или "Утверждено"',
+        `Нельзя изменять маршруты у деталей из заказов со статусом "${order.status}". Изменение маршрутов разрешено только для заказов со статусом "Предварительный" или "Утверждено"`,
       );
     }
 
@@ -273,21 +278,7 @@ export class RouteManagementService {
         where: { partId },
       });
 
-      // Создаем новый прогресс для нового маршрута
-      const newRouteStages = await prisma.routeStage.findMany({
-        where: { routeId: updateDto.routeId },
-        orderBy: { sequenceNumber: 'asc' },
-      });
-
-      for (const routeStage of newRouteStages) {
-        await prisma.partRouteProgress.create({
-          data: {
-            partId,
-            routeStageId: routeStage.routeStageId,
-            status: 'NOT_PROCESSED',
-          },
-        });
-      }
+      // НЕ создаем прогресс автоматически - он будет создан когда начнется работа на этапе
     });
 
     const newRouteInfo: RouteInfoDto = {

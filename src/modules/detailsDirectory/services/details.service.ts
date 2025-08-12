@@ -181,10 +181,38 @@ export class DetailsService {
       }
     }
 
-    return this.prisma.detailDirectory.update({
+    // Извлекаем поля, которые не относятся к DetailDirectory
+    const { quantity, routeId, packageId, ...detailData } = updateDetailDto;
+
+    // Обновляем деталь
+    const updatedDetail = await this.prisma.detailDirectory.update({
       where: { id },
-      data: updateDetailDto,
+      data: this.prepareDetailData(detailData),
     });
+
+    // Если переданы quantity или routeId, обязательно нужен packageId
+    if ((quantity !== undefined || routeId !== undefined) && packageId === undefined) {
+      throw new BadRequestException(
+        'Для обновления quantity или routeId необходимо указать packageId',
+      );
+    }
+
+    // Обновляем связь в PackageDetailDirectory
+    if (quantity !== undefined || routeId !== undefined) {
+      const updateData: any = {};
+      if (quantity !== undefined) updateData.quantity = quantity;
+      if (routeId !== undefined) updateData.routeId = routeId;
+
+      await this.prisma.packageDetailDirectory.updateMany({
+        where: {
+          detailId: id,
+          packageId: packageId,
+        },
+        data: updateData,
+      });
+    }
+
+    return updatedDetail;
   }
 
   /**

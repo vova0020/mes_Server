@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { DetailsService } from '../services/details.service';
 import { CreateDetailWithPackageDto } from '../dto/create-detail-with-package.dto';
+import { UpdateDetailDto } from '../dto/update-detail.dto';
 import { SaveDetailsFromFileDto } from '../dto/save-details-from-file.dto';
 import { RouteDto } from '../dto/route.dto';
 
@@ -53,7 +54,7 @@ export class DetailsController {
   @Put(':id')
   async updateDetail(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateDetailDto: any,
+    @Body() updateDetailDto: UpdateDetailDto,
   ) {
     const detail = await this.detailsService.updateDetail(id, updateDetailDto);
     return {

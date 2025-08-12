@@ -66,7 +66,7 @@ export class MachinMasterService {
 
       return machineAll;
     } catch (error) {
-      this.logger.error(`Ошибка при получении станков: ${error.message}`);
+      this.logger.error(`Ошибка при получении станков: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -91,7 +91,7 @@ export class MachinMasterService {
         throw new NotFoundException(`Участок с ID ${stageId} не найден`);
       }
 
-      // Получаем все станки данного участка че��ез связь MachineStage
+      // Получаем все станки данного участка через связь MachineStage
       const machines = await this.prisma.machine.findMany({
         where: {
           machinesStages: {
@@ -187,6 +187,7 @@ export class MachinMasterService {
           id: machine.machineId,
           name: machine.machineName,
           status: machine.status,
+          load_unit: machine.loadUnit,
           recommendedLoad: Number(machine.recommendedLoad),
           plannedQuantity,
           completedQuantity,
@@ -199,7 +200,7 @@ export class MachinMasterService {
       return resultMachines;
     } catch (error) {
       this.logger.error(
-        `Ошибка при получении станков для участка с ID ${stageId}: ${error.message}`,
+        `Ошибка при получении станков для участка с ID ${stageId}: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -305,7 +306,7 @@ export class MachinMasterService {
       return tasks;
     } catch (error) {
       this.logger.error(
-        `Ошибка при получении заданий для станка с ID ${machineId}: ${error.message}`,
+        `Ошибка при получении заданий для станка с ID ${machineId}: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -381,7 +382,7 @@ export class MachinMasterService {
       return { message: `Задание с ID ${operationId} успешно удалено` };
     } catch (error) {
       this.logger.error(
-        `Ошибка при удалении задания с ID ${operationId}: ${error.message}`,
+        `Ошибка при удалении задания с ID ${operationId}: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -459,7 +460,7 @@ export class MachinMasterService {
       };
     } catch (error) {
       this.logger.error(
-        `Ошибка при перемещении задания с ID ${operationId} на станок ${targetMachineId}: ${error.message}`,
+        `Ошибка при перемещении задания с ID ${operationId} на станок ${targetMachineId}: ${(error as Error).message}`,
       );
       throw error;
     }

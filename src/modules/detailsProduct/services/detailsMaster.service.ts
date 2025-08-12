@@ -142,11 +142,28 @@ export class DetailsMasterService {
     );
     const machineIds = segmentMachines.map((machine) => machine.machineId);
 
-    // Находим все пакеты (бывшие УПАКи), связанные с заказом
+    // Получаем ID подэтапов для текущего участка
+    const currentSegmentSubstageIds = segmentExists.productionStagesLevel2.map((s) => s.substageId);
+
+    // Находим все пакеты, связанные с заказом, но фильтруем только детали, которые проходят через указанный этап
     const packages = await this.prisma.package.findMany({
       where: { orderId },
       include: {
         productionPackageParts: {
+          where: {
+            part: {
+              route: {
+                routeStages: {
+                  some: {
+                    OR: [
+                      { stageId: segmentId },
+                      { substageId: { in: currentSegmentSubstageIds } }
+                    ]
+                  }
+                }
+              }
+            }
+          },
           include: {
             part: {
               include: {
@@ -203,16 +220,19 @@ export class DetailsMasterService {
       },
     });
 
-    // Если пакетов нет, возвращаем пустой массив
-    if (packages.length === 0) {
+    // Фильтруем пакеты, оставляя только те, которые содержат детали для данного этапа
+    const filteredPackages = packages.filter(pkg => pkg.productionPackageParts.length > 0);
+    
+    // Если нет подходящих пакетов, возвращаем пустой массив
+    if (filteredPackages.length === 0) {
       return [];
     }
 
     // Формируем список деталей из всех пакетов с подсчетом количества
     const detailsMap = new Map();
 
-    // Проходим по всем пакетам и деталям в них
-    for (const packageItem of packages) {
+    // Проходим по всем отфильтрованным пакетам и деталям в них
+    for (const packageItem of filteredPackages) {
       for (const packagePart of packageItem.productionPackageParts) {
         const part = packagePart.part;
 
@@ -230,8 +250,6 @@ export class DetailsMasterService {
 
           // Определяем, какие этапы относятся к текущему участку
           const currentSegmentStageIds = [segmentId]; // основной этап
-          const currentSegmentSubstageIds =
-            segmentExists.productionStagesLevel2.map((s) => s.substageId);
 
           // Определяем предыдущие этапы в маршруте до этапов текущего участка
           let previousStageIds: number[] = [];
