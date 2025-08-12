@@ -126,15 +126,124 @@ export class OrderManagementService {
   }
 
   /**
+   * Отложить заказ
+   */
+  async postponeOrder(orderId: number): Promise<OrderStatusUpdateResponseDto> {
+    const order = await this.prismaService.order.findUnique({
+      where: { orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Заказ с ID ${orderId} не найден`);
+    }
+
+    const currentStatus = order.status as OrderStatus;
+    
+    // Можно отложить только предварительные и утвержденные заказы
+    if (![OrderStatus.PRELIMINARY, OrderStatus.APPROVED].includes(currentStatus)) {
+      throw new BadRequestException(
+        `Нельзя отложить заказ со статусом ${currentStatus}`,
+      );
+    }
+
+    const updatedOrder = await this.prismaService.order.update({
+      where: { orderId },
+      data: {
+        status: OrderStatus.POSTPONED,
+        launchPermission: false,
+      },
+    });
+
+    this.eventsService.emitToRoom(
+      WebSocketRooms.ORDER_MANAGEMENT || 'order-management',
+      'orderStatusChanged',
+      {
+        orderId,
+        previousStatus: currentStatus,
+        newStatus: OrderStatus.POSTPONED,
+        launchPermission: false,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    return {
+      orderId,
+      previousStatus: currentStatus,
+      newStatus: OrderStatus.POSTPONED,
+      launchPermission: false,
+      updatedAt: updatedOrder.updatedAt!.toISOString(),
+    };
+  }
+
+  /**
+   * Удалить заказ (только если детали не прошли этапы)
+   */
+  async deleteOrder(orderId: number): Promise<{ message: string }> {
+    const order = await this.prismaService.order.findUnique({
+      where: { orderId },
+      include: {
+        packages: {
+          include: {
+            productionPackageParts: {
+              include: {
+                part: {
+                  include: {
+                    partRouteProgress: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Заказ с ID ${orderId} не найден`);
+    }
+
+    // Проверяем, что детали не прошли этапы производства
+    const hasProgressedParts = order.packages.some(pkg =>
+      pkg.productionPackageParts.some(ppp =>
+        ppp.part.partRouteProgress.some(progress =>
+          progress.status === 'COMPLETED' || progress.status === 'IN_PROGRESS'
+        )
+      )
+    );
+
+    if (hasProgressedParts) {
+      throw new BadRequestException(
+        'Нельзя удалить заказ, так как некоторые детали уже прошли этапы производства',
+      );
+    }
+
+    await this.prismaService.order.delete({
+      where: { orderId },
+    });
+
+    this.eventsService.emitToRoom(
+      WebSocketRooms.ORDER_MANAGEMENT || 'order-management',
+      'orderDeleted',
+      {
+        orderId,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    return { message: `Заказ ${orderId} успешно удален` };
+  }
+
+  /**
    * Проверка валидности перехода между статусами
    */
   private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PRELIMINARY]: [OrderStatus.APPROVED],
-      [OrderStatus.APPROVED]: [OrderStatus.LAUNCH_PERMITTED, OrderStatus.PRELIMINARY],
+      [OrderStatus.PRELIMINARY]: [OrderStatus.APPROVED, OrderStatus.POSTPONED],
+      [OrderStatus.APPROVED]: [OrderStatus.LAUNCH_PERMITTED, OrderStatus.PRELIMINARY, OrderStatus.POSTPONED],
       [OrderStatus.LAUNCH_PERMITTED]: [OrderStatus.IN_PROGRESS, OrderStatus.APPROVED],
       [OrderStatus.IN_PROGRESS]: [OrderStatus.COMPLETED],
       [OrderStatus.COMPLETED]: [], // Завершенный заказ нельзя изменить
+      [OrderStatus.POSTPONED]: [OrderStatus.PRELIMINARY, OrderStatus.APPROVED], // Из отложенного можно вернуть
     };
 
     if (!validTransitions[currentStatus].includes(newStatus)) {

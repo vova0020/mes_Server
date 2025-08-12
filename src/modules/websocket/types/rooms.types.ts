@@ -514,6 +514,10 @@ export interface RoomEvents {
       totalOrders: number;
       timestamp: string;
     };
+    orderDeleted: {
+      orderId: number;
+      timestamp: string;
+    };
   };
 
   // События паллет

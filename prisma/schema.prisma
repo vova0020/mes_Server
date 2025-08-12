@@ -163,6 +163,7 @@ enum OrderStatus {
   LAUNCH_PERMITTED // Разрешено к запуску
   IN_PROGRESS // В работе
   COMPLETED // Завершен
+  POSTPONED // Отложен
 }
 
 /// Таблица orders: заказы на производство

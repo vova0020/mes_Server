@@ -7,6 +7,7 @@ export enum OrderStatus {
   LAUNCH_PERMITTED = 'LAUNCH_PERMITTED',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
+  POSTPONED = 'POSTPONED',
 }
 
 export class UpdateOrderStatusDto {
