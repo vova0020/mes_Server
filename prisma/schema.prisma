@@ -43,6 +43,10 @@ model User {
   packingTasks PackingTask[] @relation("AssignedUser")
   /// Привязки ролей к различным контекстам (станок, этап и т.д.)
   roleBindings RoleBinding[]
+  /// Рекламации, созданные пользователем
+  reportedReclamations Reclamation[] @relation("ReclamationReportedBy")
+  /// Рекламации, подтвержденные пользователем
+  confirmedReclamations Reclamation[] @relation("ReclamationConfirmedBy")
 
   @@map("users")
 }
@@ -309,6 +313,10 @@ model Part {
   /// Прогресс по субсборкам
   subassemblyProgress   SubassemblyProgress[]
   partMachineAssignment PartMachineAssignment[]
+  /// Рекламации по данной детали
+  reclamations          Reclamation[]
+  /// Движения запасов по данной детали
+  inventoryMovements    InventoryMovement[]
 
   @@map("parts")
 }
@@ -353,6 +361,10 @@ model Pallet {
   machineAssignments  MachineAssignment[]
   /// Прогресс этапов маршрута на поддоне
   palletStageProgress PalletStageProgress[]
+  /// Рекламации с данного поддона
+  reclamations        Reclamation[]
+  /// Движения запасов по данному поддону
+  inventoryMovements  InventoryMovement[]
 
   @@map("pallets")
 }
@@ -581,6 +593,8 @@ model Machine {
   machineAssignments    MachineAssignment[] // задания на обработку паллет на станке
   machineSubstages      MachineSubstage[] // операции 2-го уровня, которые может выполнять станок
   partMachineAssignment PartMachineAssignment[]
+  /// Рекламации на данном станке
+  reclamations          Reclamation[]
 
   @@map("machines")
 }
@@ -660,6 +674,8 @@ model RouteStage {
   palletStageProgress PalletStageProgress[] // прогресс прохождения паллет по этому этапу
   subassemblyProgress SubassemblyProgress[] // прогресс сборки полуфабрикатов на этом этапе
   returnStageParts    Part[]                 @relation("ReturnStage") // детали, возвращенные на этот этап
+  /// Рекламации на данном этапе
+  reclamations        Reclamation[]
 
   @@map("route_stages")
 }
@@ -1080,4 +1096,120 @@ model PartMachineAssignment {
   @@index([machineId])
   @@index([partId])
   @@map("part_machine_assignments")
+}
+
+// ========================================
+// 12. Модуль рекламаций
+// ========================================
+
+/// Основная запись рекламации
+model Reclamation {
+  reclamationId   Int       @id @default(autoincrement()) @map("reclamation_id")
+  partId          Int       @map("part_id")
+  quantity        Decimal   @map("quantity")
+  routeStageId    Int       @map("route_stage_id")
+  machineId       Int?       @map("machine_id")
+  palletId        Int?      @map("pallet_id")
+  reportedById    Int?      @map("reported_by_id")
+  confirmedById   Int?      @map("confirmed_by_id")
+  status          String    @default("NEW") @map("status")
+  qualityAction   String?   @map("quality_action")
+  note            String?   @map("note")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  processedAt     DateTime? @map("processed_at")
+
+  // relations
+  part         Part                    @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  routeStage   RouteStage              @relation(fields: [routeStageId], references: [routeStageId])
+  machine      Machine?                 @relation(fields: [machineId], references: [machineId])
+  pallet       Pallet?                 @relation(fields: [palletId], references: [palletId], onDelete: SetNull)
+  reportedBy   User?                   @relation("ReclamationReportedBy", fields: [reportedById], references: [userId])
+  confirmedBy  User?                   @relation("ReclamationConfirmedBy", fields: [confirmedById], references: [userId])
+  defects      ReclamationDefect[]
+  attachments  ReclamationAttachment[]
+  audits       ReclamationAudit[]
+  movements    InventoryMovement[]
+
+  @@index([partId])
+  @@index([routeStageId])
+  @@index([machineId])
+  @@index([palletId])
+  @@index([createdAt])
+  @@map("reclamations")
+}
+
+/// Справочник причин брака
+model DefectType {
+  defectTypeId Int    @id @default(autoincrement()) @map("defect_type_id")
+  code         String @unique
+  name         String
+  description  String?
+
+  reclamations ReclamationDefect[]
+  @@map("defect_types")
+}
+
+/// Связь рекламация ↔ причина
+model ReclamationDefect {
+  id            Int      @id @default(autoincrement())
+  reclamationId Int      @map("reclamation_id")
+  defectTypeId  Int      @map("defect_type_id")
+  quantity      Decimal? @map("quantity")
+
+  reclamation Reclamation @relation(fields: [reclamationId], references: [reclamationId], onDelete: Cascade)
+  defectType  DefectType  @relation(fields: [defectTypeId], references: [defectTypeId], onDelete: Restrict)
+
+  @@index([reclamationId])
+  @@index([defectTypeId])
+  @@map("reclamation_defects")
+}
+
+/// Фото/файлы к рекламации
+model ReclamationAttachment {
+  attachmentId  Int      @id @default(autoincrement()) @map("attachment_id")
+  reclamationId Int      @map("reclamation_id")
+  filePath      String   @map("file_path")
+  fileName      String   @map("file_name")
+  fileType      String?  @map("file_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reclamation Reclamation @relation(fields: [reclamationId], references: [reclamationId], onDelete: Cascade)
+  @@index([reclamationId])
+  @@map("reclamation_attachments")
+}
+
+/// Журнал изменений запасов
+model InventoryMovement {
+  movementId          Int      @id @default(autoincrement()) @map("movement_id")
+  partId              Int      @map("part_id")
+  palletId            Int?     @map("pallet_id")
+  deltaQuantity       Decimal  @map("delta_quantity")
+  reason              String   @map("reason")
+  sourceReclamationId Int?     @map("source_reclamation_id")
+  userId              Int?     @map("user_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  part           Part?        @relation(fields: [partId], references: [partId])
+  pallet         Pallet?      @relation(fields: [palletId], references: [palletId])
+  sourceReclam   Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
+
+  @@index([partId])
+  @@index([palletId])
+  @@index([sourceReclamationId])
+  @@map("inventory_movements")
+}
+
+/// Расширенный лог действий с рекламациями
+model ReclamationAudit {
+  auditId       Int      @id @default(autoincrement()) @map("audit_id")
+  reclamationId Int      @map("reclamation_id")
+  userId        Int?     @map("user_id")
+  action        String   @map("action")
+  details       String?  @map("details")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reclamation Reclamation @relation(fields: [reclamationId], references: [reclamationId], onDelete: Cascade)
+
+  @@index([reclamationId])
+  @@map("reclamation_audit")
 }

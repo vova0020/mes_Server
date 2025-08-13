@@ -44,21 +44,21 @@ export class MachinsMasterController {
   @ApiResponse({ status: 200, description: 'Список станков успешно получен' })
   @ApiResponse({ status: 404, description: 'Станки не найдены' })
   @ApiQuery({
-    name: 'segmentId',
+    name: 'stageId',
     required: false,
     type: Number,
     description: 'ID производственного участка для фильтрации станков',
   })
-  async getMachines(@Query('segmentId') segmentId?: string) {
+  async getMachines(@Query('stageId') stageId?: string) {
     this.logger.log(
-      `Получен запрос на получение станков${segmentId ? ` для участка: ${segmentId}` : ''}`,
+      `Получен запрос на получение станков${stageId ? ` для участка: ${stageId}` : ''}`,
     );
 
     try {
-      // Преобразуем segmentId в числовой тип, если параметр был передан
-      const segmentIdNumber = segmentId ? parseInt(segmentId, 10) : undefined;
+      // Преобразуем stageId в числовой тип, если параметр был передан
+      const stageIdNumber = stageId ? parseInt(stageId, 10) : undefined;
 
-      const machinsAll = await this.machinService.getMachines(segmentIdNumber);
+      const machinsAll = await this.machinService.getMachines(stageIdNumber);
 
       if (!machinsAll || machinsAll.length === 0) {
         this.logger.warn('Станки не найдены');

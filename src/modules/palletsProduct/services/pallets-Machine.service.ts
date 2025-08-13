@@ -247,6 +247,9 @@ export class PalletMachineService {
         });
       }
 
+      // Обновляем статус детали на IN_PROGRESS если еще не обновлен
+      await this.updatePartStatusIfNeeded(prisma, pallet.partId, 'IN_PROGRESS');
+
       // Получаем минимальные данные для ответа
       const optimizedAssignment = {
         assignmentId: newAssignment.assignmentId,
@@ -451,34 +454,17 @@ export class PalletMachineService {
         ),
       ).length;
 
-      // Обновляем прогресс детали по маршруту только если все поддоны завершили этап
-      const shouldCompletePartProgress =
-        completedPalletsCount === allPalletsForPart.length;
+      // Обновляем прогресс детали по маршруту
+      const shouldCompletePartProgress = await this.updatePartRouteProgress(
+        prisma,
+        assignment.pallet.partId,
+        currentProgress.routeStageId,
+        completedAt,
+      );
 
-      const existingPartProgress = await prisma.partRouteProgress.findFirst({
-        where: {
-          partId: assignment.pallet.partId,
-          routeStageId: currentProgress.routeStageId,
-        },
-      });
-
-      if (existingPartProgress) {
-        await prisma.partRouteProgress.update({
-          where: { prpId: existingPartProgress.prpId },
-          data: {
-            status: shouldCompletePartProgress ? 'COMPLETED' : 'IN_PROGRESS',
-            completedAt: shouldCompletePartProgress ? completedAt : null,
-          },
-        });
-      } else {
-        await prisma.partRouteProgress.create({
-          data: {
-            partId: assignment.pallet.partId,
-            routeStageId: currentProgress.routeStageId,
-            status: shouldCompletePartProgress ? 'COMPLETED' : 'IN_PROGRESS',
-            completedAt: shouldCompletePartProgress ? completedAt : null,
-          },
-        });
+      // Обновляем статус детали если все поддоны завершили этап
+      if (shouldCompletePartProgress) {
+        await this.updatePartStatusIfNeeded(prisma, assignment.pallet.partId, 'COMPLETED');
       }
 
       // Проверяем, является ли следующий этап финальным (упаковка)
@@ -1047,5 +1033,124 @@ export class PalletMachineService {
       this.logger.error(`Ошибка при создании задач упаковки: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Обновляет прогресс детали по маршруту и возвращает флаг завершения этапа
+   */
+  private async updatePartRouteProgress(
+    prisma: any,
+    partId: number,
+    routeStageId: number,
+    completedAt: Date,
+  ): Promise<boolean> {
+    const allPalletsForPart = await prisma.pallet.findMany({
+      where: { partId },
+      include: {
+        palletStageProgress: {
+          where: { routeStageId },
+        },
+      },
+    });
+
+    const completedPalletsCount = allPalletsForPart.filter((pallet) =>
+      pallet.palletStageProgress.some(
+        (progress) =>
+          progress.routeStageId === routeStageId &&
+          progress.status === 'COMPLETED',
+      ),
+    ).length;
+
+    const shouldCompletePartProgress = completedPalletsCount === allPalletsForPart.length;
+
+    const existingPartProgress = await prisma.partRouteProgress.findFirst({
+      where: { partId, routeStageId },
+    });
+
+    if (existingPartProgress) {
+      await prisma.partRouteProgress.update({
+        where: { prpId: existingPartProgress.prpId },
+        data: {
+          status: shouldCompletePartProgress ? 'COMPLETED' : 'IN_PROGRESS',
+          completedAt: shouldCompletePartProgress ? completedAt : null,
+        },
+      });
+    } else {
+      await prisma.partRouteProgress.create({
+        data: {
+          partId,
+          routeStageId,
+          status: shouldCompletePartProgress ? 'COMPLETED' : 'IN_PROGRESS',
+          completedAt: shouldCompletePartProgress ? completedAt : null,
+        },
+      });
+    }
+
+    return shouldCompletePartProgress;
+  }
+
+  /**
+   * Обновляет статус детали если необходимо
+   */
+  private async updatePartStatusIfNeeded(
+    prisma: any,
+    partId: number,
+    targetStatus: 'IN_PROGRESS' | 'COMPLETED',
+  ): Promise<void> {
+    const part = await prisma.part.findUnique({
+      where: { partId },
+      select: { status: true },
+    });
+
+    if (!part) return;
+
+    // Если деталь уже имеет нужный статус, не обновляем
+    if (part.status === targetStatus) return;
+
+    // Обновляем статус детали
+    if (targetStatus === 'IN_PROGRESS' && part.status === 'PENDING') {
+      await prisma.part.update({
+        where: { partId },
+        data: { status: 'IN_PROGRESS' },
+      });
+    } else if (targetStatus === 'COMPLETED' && part.status === 'IN_PROGRESS') {
+      // Проверяем, все ли этапы детали завершены
+      const allStagesCompleted = await this.checkAllPartStagesCompleted(prisma, partId);
+      if (allStagesCompleted) {
+        await prisma.part.update({
+          where: { partId },
+          data: { status: 'COMPLETED' },
+        });
+      }
+    }
+  }
+
+  /**
+   * Проверяет, завершены ли все этапы детали
+   */
+  private async checkAllPartStagesCompleted(prisma: any, partId: number): Promise<boolean> {
+    const part = await prisma.part.findUnique({
+      where: { partId },
+      include: {
+        route: {
+          include: {
+            routeStages: true,
+          },
+        },
+        partRouteProgress: {
+          where: { status: 'COMPLETED' },
+        },
+      },
+    });
+
+    if (!part?.route?.routeStages) return false;
+
+    const completedStageIds = new Set(
+      part.partRouteProgress.map((progress) => progress.routeStageId),
+    );
+
+    return part.route.routeStages.every((routeStage) =>
+      completedStageIds.has(routeStage.routeStageId),
+    );
   }
 }

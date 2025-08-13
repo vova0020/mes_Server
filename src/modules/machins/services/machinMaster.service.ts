@@ -19,29 +19,24 @@ export class MachinMasterService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Получение списка станков с включением связанных данных
-  async getMachines(segmentId?: number) {
+  async getMachines(stageId?: number) {
     this.logger.log(
-      `Запрос на получение списка станков${segmentId ? ` для участка: ${segmentId}` : ''}`,
+      `Запрос на получение списка станков${stageId ? ` для участка: ${stageId}` : ''}`,
     );
 
     try {
-      // Проверяем, есть ли записи в таблице
-      const count = await this.prisma.machine.count();
-      this.logger.log(`Найдено ${count} станков в базе данных`);
+      // Строим параметры запроса
+      const where: any = {
+        noSmenTask: false, // Исключаем станки с noSmenTask: true
+      };
 
-      // Строим параметры запроса в зависимости от наличия segmentId
-      const where: any = {};
-
-      if (segmentId) {
+      if (stageId) {
         // Если передан ID участка, фильтруем станки по участку через связь со stages
         where.machinesStages = {
           some: {
-            stageId: segmentId,
+            stageId: stageId,
           },
         };
-      } else {
-        // Если ID участка не передан, возвращаем только активные станки
-        where.status = MachineStatus.ACTIVE;
       }
 
       // Получаем станки с учетом фильтров
@@ -94,6 +89,7 @@ export class MachinMasterService {
       // Получаем все станки данного участка через связь MachineStage
       const machines = await this.prisma.machine.findMany({
         where: {
+          noSmenTask: false, // Исключаем станки с noSmenTask: true
           machinesStages: {
             some: {
               stageId: stageId,

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsPositive, IsOptional, IsEnum } from 'class-validator';
+import { IsNumber, IsPositive, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class BufferCellDto {
   id: number;
@@ -379,4 +380,130 @@ export class DetailedPalletDto extends PalletDto {
     machineName?: string;
     operatorName?: string;
   }[];
+}
+
+// DTO для создания рекламации (отбраковки деталей)
+export class CreateDefectReclamationDto {
+  @ApiProperty({ description: 'ID детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  partId: number;
+
+  @ApiProperty({ description: 'Количество отбракованных деталей', example: 5 })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiPropertyOptional({ description: 'Описание брака (опционально)', example: 'Дефект поверхности' })
+  @IsOptional()
+  description?: string;
+
+  @ApiPropertyOptional({ description: 'ID поддона, с которого списывается брак (опционально)', example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  palletId?: number;
+}
+
+// DTO для ответа на создание рекламации
+export class CreateDefectReclamationResponseDto {
+  @ApiProperty({ description: 'Сообщение о результате операции' })
+  message: string;
+
+  @ApiProperty({ description: 'Информация о созданной рекламации' })
+  reclamation: {
+    id: number;
+    partId: number;
+    quantity: number;
+    description?: string;
+    createdAt: Date;
+    part: {
+      id: number;
+      code: string;
+      name: string;
+      totalQuantity: number;
+      defectiveQuantity: number;
+    };
+  };
+}
+
+// DTO для отбраковки деталей с поддона
+export class DefectPalletPartsDto {
+  @ApiProperty({ description: 'ID поддона', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  palletId: number;
+
+  @ApiProperty({ description: 'Количество отбракованных деталей', example: 5 })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiProperty({ description: 'ID пользователя, создающего рекламацию', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  reportedById: number;
+
+  @ApiPropertyOptional({ description: 'Описание брака', example: 'Дефект поверхности' })
+  @IsOptional()
+  description?: string;
+
+  @ApiPropertyOptional({ description: 'ID станка (если брак обнаружен на станке)', example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  machineId?: number;
+
+  @ApiProperty({ description: 'ID этапа производства', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  stageId: number;
+}
+
+// DTO для перераспределения деталей между поддонами
+export class RedistributePalletPartsDto {
+  @ApiProperty({ description: 'ID исходного поддона', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  sourcePalletId: number;
+
+  @ApiProperty({ 
+    description: 'Распределение деталей по поддонам',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        targetPalletId: { type: 'number', nullable: true },
+        quantity: { type: 'number' },
+        palletName: { type: 'string', nullable: true }
+      }
+    }
+  })
+  @IsArray()
+  distributions: {
+    targetPalletId?: number;
+    quantity: number;
+    palletName?: string;
+  }[];
+}
+
+// DTO для ответа на перераспределение
+export class RedistributePalletPartsResponseDto {
+  @ApiProperty({ description: 'Сообщение о результате операции' })
+  message: string;
+
+  @ApiProperty({ description: 'Информация о результате перераспределения' })
+  result: {
+    sourcePalletDeleted: boolean;
+    createdPallets: {
+      id: number;
+      name: string;
+      quantity: number;
+    }[];
+    updatedPallets: {
+      id: number;
+      name: string;
+      newQuantity: number;
+    }[];
+  };
 }

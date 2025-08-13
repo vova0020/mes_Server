@@ -25,6 +25,9 @@ import {
   PalletsResponseDto,
   CreatePalletDto,
   CreatePalletResponseDto,
+  DefectPalletPartsDto,
+  RedistributePalletPartsDto,
+  RedistributePalletPartsResponseDto,
 } from '../dto/pallet-master.dto';
 import {
   StartPalletProcessingDto,
@@ -112,6 +115,7 @@ export class PalletsMachinsNoSmenController {
       return await this.palletMachineNoSmenService.takePalletToWork(
         dto.palletId,
         dto.machineId,
+        dto.stageId,
         dto.operatorId,
       );
     } catch (error) {
@@ -153,6 +157,7 @@ export class PalletsMachinsNoSmenController {
       return await this.palletMachineNoSmenService.completePalletProcessing(
         dto.palletId,
         dto.machineId,
+        dto.stageId,
         dto.operatorId,
       );
     } catch (error) {
@@ -312,6 +317,69 @@ export class PalletsMachinsNoSmenController {
       throw new InternalServerErrorException(
         'Произошла ошибка при создании поддона',
       );
+    }
+  }
+
+  @Post('defect-parts')
+  @ApiOperation({ summary: 'Отбраковать детали с поддона' })
+  @ApiBody({ type: DefectPalletPartsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно отбракованы',
+  })
+  async defectPalletParts(@Body() defectDto: DefectPalletPartsDto) {
+    this.logger.log(
+      `Отбраковка ${defectDto.quantity} деталей с поддона ${defectDto.palletId}`,
+    );
+
+    try {
+      return await this.palletMachineNoSmenService.defectPalletParts(
+        defectDto.palletId,
+        defectDto.quantity,
+        defectDto.reportedById,
+        defectDto.description,
+        defectDto.machineId,
+        defectDto.stageId,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при отбраковке: ${error.message}`);
+      throw new InternalServerErrorException('Ошибка при отбраковке деталей');
+    }
+  }
+
+  @Post('redistribute-parts')
+  @ApiOperation({ summary: 'Перераспределить детали между поддонами' })
+  @ApiBody({ type: RedistributePalletPartsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно перераспределены',
+    type: RedistributePalletPartsResponseDto,
+  })
+  async redistributePalletParts(@Body() redistributeDto: RedistributePalletPartsDto): Promise<RedistributePalletPartsResponseDto> {
+    this.logger.log(
+      `Перераспределение деталей с поддона ${redistributeDto.sourcePalletId}`,
+    );
+
+    try {
+      return await this.palletMachineNoSmenService.redistributePalletParts(
+        redistributeDto.sourcePalletId,
+        redistributeDto.distributions,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при перераспределении: ${error.message}`);
+      throw new InternalServerErrorException('Ошибка при перераспределении деталей');
     }
   }
 }

@@ -18,6 +18,13 @@ export class StartPalletProcessingDto {
   machineId: number;
 
   @ApiProperty({
+    description: 'ID этапа производства',
+    example: 1,
+  })
+  @IsNumber()
+  stageId: number;
+
+  @ApiProperty({
     description: 'ID оператора (опционально)',
     example: 1,
     required: false,
@@ -43,6 +50,13 @@ export class CompletePalletProcessingDto {
   machineId: number;
 
   @ApiProperty({
+    description: 'ID этапа производства',
+    example: 1,
+  })
+  @IsNumber()
+  stageId: number;
+
+  @ApiProperty({
     description: 'ID оператора, завершающего обработку',
     example: 1,
     required: false,
@@ -50,15 +64,6 @@ export class CompletePalletProcessingDto {
   @IsNumber()
   @IsOptional()
   operatorId?: number;
-
-  @ApiProperty({
-    description: 'ID этапа производства (используется как stageId)',
-    example: 1,
-    required: false,
-  })
-  @IsNumber()
-  @IsOptional()
-  stageId?: number; // переименовано с segmentId для соответствия новой схеме
 }
 
 export class MovePalletToBufferDto {
