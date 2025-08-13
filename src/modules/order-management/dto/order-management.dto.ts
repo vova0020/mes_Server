@@ -20,6 +20,15 @@ export class UpdateOrderStatusDto {
   status: OrderStatus;
 }
 
+export class UpdateOrderPriorityDto {
+  @ApiProperty({
+    description: 'Новый приоритет заказа',
+    example: 1,
+  })
+  @IsOptional()
+  priority: number;
+}
+
 export class OrderListResponseDto {
   @ApiProperty({
     description: 'ID заказа',
@@ -94,6 +103,12 @@ export class OrderListResponseDto {
     example: 45,
   })
   totalPartsCount: number;
+
+  @ApiProperty({
+    description: 'Приоритет заказа',
+    example: 1,
+  })
+  priority: number;
 }
 
 export class OrderDetailResponseDto {
@@ -111,6 +126,7 @@ export class OrderDetailResponseDto {
     status: OrderStatus;
     launchPermission: boolean;
     isCompleted: boolean;
+    priority: number;
   };
 
   @ApiProperty({

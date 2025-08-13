@@ -31,23 +31,34 @@ export class ProductionOrdersService {
     });
 
     if (existingOrder) {
-      throw new ConflictException('Заказ с таким номером партии уже существует');
+      throw new ConflictException(
+        'Заказ с таким номером партии уже существует',
+      );
     }
+
+    // Получаем максимальный приоритет для автоматического присвоения
+    const maxPriorityOrder = await this.prismaService.order.findFirst({
+      orderBy: { priority: 'desc' },
+      select: { priority: true },
+    });
+    const nextPriority = (maxPriorityOrder?.priority || 0) + 1;
 
     // Проверяем существование упаковок в справочнике и получаем их детали
     const packageDirectoryIds = createOrderDto.packages.map(
       (pkg) => pkg.packageDirectoryId,
     );
-    const existingPackages = await this.prismaService.packageDirectory.findMany({
-      where: { packageId: { in: packageDirectoryIds } },
-      include: {
-        packageDetails: {
-          include: {
-            detail: true,
+    const existingPackages = await this.prismaService.packageDirectory.findMany(
+      {
+        where: { packageId: { in: packageDirectoryIds } },
+        include: {
+          packageDetails: {
+            include: {
+              detail: true,
+            },
           },
         },
       },
-    });
+    );
 
     if (existingPackages.length !== packageDirectoryIds.length) {
       throw new NotFoundException(
@@ -76,6 +87,7 @@ export class ProductionOrdersService {
           completionPercentage: 0,
           launchPermission: false,
           isCompleted: false,
+          priority: nextPriority,
         },
       });
 
@@ -102,32 +114,18 @@ export class ProductionOrdersService {
           },
         });
 
-        // Автоматически создаем детали из справочника упаковки
+        // Создаем исходный состав упаковки для отображения
         for (const packageDetail of packageDirectory.packageDetails) {
           const detailDirectory = packageDetail.detail;
 
-          // Рассчитываем общее количество: количество в справочнике * количество упаковок
-          const totalQuantity = packageDetail.quantity * packageDto.quantity;
-
-          // Создаем деталь в производстве
-          const newPart = await prisma.part.create({
-            data: {
-              partCode: detailDirectory.partSku,
-              partName: detailDirectory.partName,
-              materialId: null, // Пока не связываем с материалом
-              size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
-              totalQuantity: totalQuantity,
-              status: 'PENDING',
-              routeId: packageDetail.routeId!, // Временно используем ID 1, нужно будет определить маршрут
-            },
-          });
-
-          // Связываем деталь с упаковкой
-          await prisma.productionPackagePart.create({
+          await prisma.packageComposition.create({
             data: {
               packageId: newPackage.packageId,
-              partId: newPart.partId,
-              quantity: packageDetail.quantity, // Количество деталей в одной упаковке (из справочника)
+              partCode: detailDirectory.partSku,
+              partName: detailDirectory.partName,
+              partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
+              routeId: packageDetail.routeId || 1, // Используем маршрут из справочника или дефолтный
+              quantity: packageDetail.quantity * packageDto.quantity, // Общее количество с учетом количества упаковок
             },
           });
         }
@@ -161,10 +159,11 @@ export class ProductionOrdersService {
                 part: true,
               },
             },
+            composition: true,
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { priority: 'asc' },
     });
 
     return orders.map((order) => this.mapOrderToResponse(order));
@@ -181,6 +180,7 @@ export class ProductionOrdersService {
                 part: true,
               },
             },
+            composition: true,
           },
         },
       },
@@ -213,7 +213,10 @@ export class ProductionOrdersService {
     }
 
     // Проверяем, можно ли изменять заказ (например, если он не в работе)
-    if (existingOrder.status === OrderStatus.IN_PROGRESS && updateOrderDto.packages) {
+    if (
+      existingOrder.status === OrderStatus.IN_PROGRESS &&
+      updateOrderDto.packages
+    ) {
       throw new ConflictException(
         'Нельзя изменять упаковки заказа, который находится в работе',
       );
@@ -336,32 +339,18 @@ export class ProductionOrdersService {
             },
           });
 
-          // Автоматически создаем детали из справочника упаковки
+          // Создаем исходный состав упаковки для отображения
           for (const packageDetail of packageDirectory.packageDetails) {
             const detailDirectory = packageDetail.detail;
 
-            // Рассчитываем общее количество: количество в справочнике * количество упаковок
-            const totalQuantity = packageDetail.quantity * packageDto.quantity;
-
-            // Создаем деталь в производстве
-            const newPart = await prisma.part.create({
-              data: {
-                partCode: detailDirectory.partSku,
-                partName: detailDirectory.partName,
-                materialId: null, // Пока не связываем с материалом
-                size: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}x${detailDirectory.thickness || 0}`,
-                totalQuantity: totalQuantity,
-                status: 'PENDING',
-                routeId: 1, // Временно используем ID 1, нужно будет определить маршрут
-              },
-            });
-
-            // Связываем деталь с упаковкой
-            await prisma.productionPackagePart.create({
+            await prisma.packageComposition.create({
               data: {
                 packageId: newPackage.packageId,
-                partId: newPart.partId,
-                quantity: packageDetail.quantity, // Количество деталей в одной упаковке (из справочника)
+                partCode: detailDirectory.partSku,
+                partName: detailDirectory.partName,
+                partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
+                routeId: packageDetail.routeId || 1, // Используем маршрут из справочника или дефолтный
+                quantity: packageDetail.quantity * packageDto.quantity, // Общее количество с учетом количества упаковок
               },
             });
           }
@@ -377,6 +366,82 @@ export class ProductionOrdersService {
       'orderUpdated',
       {
         order: updatedOrder,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    return updatedOrder;
+  }
+
+  async updatePriority(
+    id: number,
+    newPriority: number,
+  ): Promise<ProductionOrderResponseDto> {
+    const order = await this.prismaService.order.findUnique({
+      where: { orderId: id },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Заказ с ID ${id} не найден`);
+    }
+
+    const currentPriority = order.priority;
+
+    // Если приоритет не изменился, возвращаем заказ как есть
+    if (currentPriority === newPriority) {
+      return await this.findOne(id);
+    }
+
+    await this.prismaService.$transaction(async (prisma) => {
+      if (newPriority > currentPriority) {
+        // Перемещение вниз: уменьшаем приоритет заказов между текущим и новым положением
+        await prisma.order.updateMany({
+          where: {
+            priority: {
+              gt: currentPriority,
+              lte: newPriority,
+            },
+          },
+          data: {
+            priority: {
+              decrement: 1,
+            },
+          },
+        });
+      } else {
+        // Перемещение вверх: увеличиваем приоритет заказов между новым и текущим положением
+        await prisma.order.updateMany({
+          where: {
+            priority: {
+              gte: newPriority,
+              lt: currentPriority,
+            },
+          },
+          data: {
+            priority: {
+              increment: 1,
+            },
+          },
+        });
+      }
+
+      // Обновляем приоритет текущего заказа
+      await prisma.order.update({
+        where: { orderId: id },
+        data: { priority: newPriority },
+      });
+    });
+
+    const updatedOrder = await this.findOne(id);
+
+    // Отправляем событие об изменении приоритета
+    this.eventsService.emitToRoom(
+      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
+      'orderPriorityChanged',
+      {
+        order: updatedOrder,
+        previousPriority: currentPriority,
+        newPriority,
         timestamp: new Date().toISOString(),
       },
     );
@@ -447,7 +512,10 @@ export class ProductionOrdersService {
     );
   }
 
-  async updateStatus(id: number, status: OrderStatus): Promise<ProductionOrderResponseDto> {
+  async updateStatus(
+    id: number,
+    status: OrderStatus,
+  ): Promise<ProductionOrderResponseDto> {
     const order = await this.prismaService.order.findUnique({
       where: { orderId: id },
     });
@@ -463,7 +531,9 @@ export class ProductionOrdersService {
       where: { orderId: id },
       data: {
         status,
-        launchPermission: status === OrderStatus.LAUNCH_PERMITTED || status === OrderStatus.IN_PROGRESS,
+        launchPermission:
+          status === OrderStatus.LAUNCH_PERMITTED ||
+          status === OrderStatus.IN_PROGRESS,
         isCompleted: status === OrderStatus.COMPLETED,
         completedAt: status === OrderStatus.COMPLETED ? new Date() : undefined,
       },
@@ -486,11 +556,20 @@ export class ProductionOrdersService {
     return updatedOrder;
   }
 
-  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
+  private validateStatusTransition(
+    currentStatus: OrderStatus,
+    newStatus: OrderStatus,
+  ): void {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.PRELIMINARY]: [OrderStatus.APPROVED],
-      [OrderStatus.APPROVED]: [OrderStatus.LAUNCH_PERMITTED, OrderStatus.PRELIMINARY],
-      [OrderStatus.LAUNCH_PERMITTED]: [OrderStatus.IN_PROGRESS, OrderStatus.APPROVED],
+      [OrderStatus.APPROVED]: [
+        OrderStatus.LAUNCH_PERMITTED,
+        OrderStatus.PRELIMINARY,
+      ],
+      [OrderStatus.LAUNCH_PERMITTED]: [
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.APPROVED,
+      ],
       [OrderStatus.IN_PROGRESS]: [OrderStatus.COMPLETED],
       [OrderStatus.COMPLETED]: [], // Завершенный заказ нельзя изменить
     };
@@ -541,18 +620,26 @@ export class ProductionOrdersService {
       status: order.status as OrderStatus,
       launchPermission: order.launchPermission,
       isCompleted: order.isCompleted,
+      priority: order.priority,
       packages: order.packages?.map((pkg: any) => ({
         packageId: pkg.packageId,
         packageCode: pkg.packageCode,
         packageName: pkg.packageName,
         completionPercentage: Number(pkg.completionPercentage),
         quantity: Number(pkg.quantity),
-        details: pkg.productionPackageParts?.map((ppp: any) => ({
-          partId: ppp.part.partId,
-          partCode: ppp.part.partCode,
-          partName: ppp.part.partName,
-          quantity: Number(ppp.part.totalQuantity), // Показываем общее количество деталей
-        })),
+        // Если детали объединены, показываем исходный состав
+        details: order.partsConsolidated
+          ? pkg.composition?.map((comp: any) => ({
+              partCode: comp.partCode,
+              partName: comp.partName,
+              quantity: Number(comp.quantity),
+            })) || []
+          : pkg.productionPackageParts?.map((ppp: any) => ({
+              partId: ppp.part.partId,
+              partCode: ppp.part.partCode,
+              partName: ppp.part.partName,
+              quantity: Number(ppp.part.totalQuantity),
+            })) || [],
       })),
     };
   }

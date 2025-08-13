@@ -33,11 +33,7 @@ export class RouteManagementService {
       include: {
         packages: {
           include: {
-            productionPackageParts: {
-              include: {
-                part: true,
-              },
-            },
+            composition: true,
           },
         },
       },
@@ -45,10 +41,11 @@ export class RouteManagementService {
     });
 
     return orders.map((order) => {
-      // Подсчитываем общее количество деталей в заказе
-      const totalParts = order.packages.reduce((total, pkg) => {
-        return total + pkg.productionPackageParts.length;
-      }, 0);
+      // Подсчитываем общее количество всех деталей в заказе (не уникальных)
+      let totalParts = 0;
+      order.packages.forEach(pkg => {
+        totalParts += pkg.composition.length;
+      });
 
       return {
         orderId: order.orderId,
@@ -65,28 +62,23 @@ export class RouteManagementService {
   async getOrderPartsForRouteManagement(
     orderId: number,
   ): Promise<OrderPartsForRoutesResponseDto> {
-    // Получаем заказ с деталями
+    // Получаем заказ с композицией упаковок
     const order = await this.prismaService.order.findUnique({
       where: { orderId },
       include: {
         packages: {
           include: {
-            productionPackageParts: {
+            composition: {
               include: {
-                part: {
+                route: {
                   include: {
-                    route: {
+                    routeStages: {
                       include: {
-                        routeStages: {
-                          include: {
-                            stage: true,
-                            substage: true,
-                          },
-                          orderBy: { sequenceNumber: 'asc' },
-                        },
+                        stage: true,
+                        substage: true,
                       },
+                      orderBy: { sequenceNumber: 'asc' },
                     },
-                    material: true,
                   },
                 },
               },
@@ -121,18 +113,16 @@ export class RouteManagementService {
       totalParts: 0, // Будет пересчитано ниже
     };
 
-    // Собираем все детали из всех упаковок
+    // Собираем все детали из композиции упаковок (каждая деталь отдельно)
     const parts: PartForRouteManagementDto[] = [];
     
     for (const pkg of order.packages) {
-      for (const ppp of pkg.productionPackageParts) {
-        const part = ppp.part;
-        
+      for (const comp of pkg.composition) {
         // Формируем информацию о текущем маршруте
         const currentRoute: RouteInfoDto = {
-          routeId: part.route.routeId,
-          routeName: part.route.routeName,
-          stages: part.route.routeStages.map((rs) => ({
+          routeId: comp.route.routeId,
+          routeName: comp.route.routeName,
+          stages: comp.route.routeStages.map((rs) => ({
             routeStageId: rs.routeStageId,
             stageName: rs.stage.stageName,
             substageName: rs.substage?.substageName,
@@ -140,34 +130,23 @@ export class RouteManagementService {
           })),
         };
 
-        // Собираем информацию об упаковках, где используется эта деталь
-        const packageInfo = {
-          packageId: pkg.packageId,
-          packageCode: pkg.packageCode,
-          packageName: pkg.packageName,
-          quantity: Number(ppp.quantity),
-        };
-
-        // Проверяем, есть ли уже эта деталь в списке (может быть в нескольких упаковках)
-        const existingPartIndex = parts.findIndex(p => p.partId === part.partId);
-        
-        if (existingPartIndex >= 0) {
-          // Добавляем упаковку к существующей детали
-          parts[existingPartIndex].packages.push(packageInfo);
-        } else {
-          // Добавляем новую деталь
-          parts.push({
-            partId: part.partId,
-            partCode: part.partCode,
-            partName: part.partName,
-            totalQuantity: Number(part.totalQuantity),
-            status: part.status,
-            currentRoute,
-            size: part.size,
-            materialName: part.material?.materialName || 'Не указан',
-            packages: [packageInfo],
-          });
-        }
+        // Каждая деталь из каждой упаковки - отдельная запись
+        parts.push({
+          partId: comp.compositionId, // Используем compositionId как ID
+          partCode: comp.partCode,
+          partName: comp.partName,
+          totalQuantity: Number(comp.quantity),
+          status: 'PENDING',
+          currentRoute,
+          size: comp.partSize,
+          materialName: 'Не указан',
+          packages: [{
+            packageId: pkg.packageId,
+            packageCode: pkg.packageCode,
+            packageName: pkg.packageName,
+            quantity: Number(comp.quantity),
+          }],
+        });
       }
     }
 
@@ -184,9 +163,9 @@ export class RouteManagementService {
     partId: number,
     updateDto: UpdatePartRouteDto,
   ): Promise<PartRouteUpdateResponseDto> {
-    // Получаем текущую деталь с маршрутом
-    const currentPart = await this.prismaService.part.findUnique({
-      where: { partId },
+    // Получаем композицию по ID (partId здесь это compositionId)
+    const composition = await this.prismaService.packageComposition.findUnique({
+      where: { compositionId: partId },
       include: {
         route: {
           include: {
@@ -199,27 +178,19 @@ export class RouteManagementService {
             },
           },
         },
-        productionPackageParts: {
+        package: {
           include: {
-            package: {
-              include: {
-                order: true,
-              },
-            },
+            order: true,
           },
         },
       },
     });
 
-    if (!currentPart) {
+    if (!composition) {
       throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
     }
 
-    // Проверяем, что деталь принадлежит заказу с подходящим статусом
-    const order = currentPart.productionPackageParts[0]?.package?.order;
-    if (!order) {
-      throw new BadRequestException('Деталь не принадлежит ни одному заказу');
-    }
+    const order = composition.package.order;
 
     // Запрещаем изменение маршрута если заказ уже в работе
     if (['LAUNCH_PERMITTED', 'IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
@@ -247,15 +218,15 @@ export class RouteManagementService {
     }
 
     // Проверяем, что маршрут действительно изменяется
-    if (currentPart.routeId === updateDto.routeId) {
+    if (composition.routeId === updateDto.routeId) {
       throw new BadRequestException('Новый маршрут совпадает с текущим');
     }
 
     // Сохраняем информацию о предыдущем маршруте
     const previousRoute: RouteInfoDto = {
-      routeId: currentPart.route.routeId,
-      routeName: currentPart.route.routeName,
-      stages: currentPart.route.routeStages.map((rs) => ({
+      routeId: composition.route.routeId,
+      routeName: composition.route.routeName,
+      stages: composition.route.routeStages.map((rs) => ({
         routeStageId: rs.routeStageId,
         stageName: rs.stage.stageName,
         substageName: rs.substage?.substageName,
@@ -263,22 +234,17 @@ export class RouteManagementService {
       })),
     };
 
-    // Обновляем маршрут детали в транзакции
-    await this.prismaService.$transaction(async (prisma) => {
-      // Обновляем маршрут детали
-      await prisma.part.update({
-        where: { partId },
-        data: {
-          routeId: updateDto.routeId,
+    // Обновляем маршрут во всех композициях с таким же partCode в этом заказе
+    await this.prismaService.packageComposition.updateMany({
+      where: {
+        partCode: composition.partCode,
+        package: {
+          orderId: order.orderId,
         },
-      });
-
-      // Удаляем старый прогресс по маршруту
-      await prisma.partRouteProgress.deleteMany({
-        where: { partId },
-      });
-
-      // НЕ создаем прогресс автоматически - он будет создан когда начнется работа на этапе
+      },
+      data: {
+        routeId: updateDto.routeId,
+      },
     });
 
     const newRouteInfo: RouteInfoDto = {
@@ -293,9 +259,9 @@ export class RouteManagementService {
     };
 
     const result: PartRouteUpdateResponseDto = {
-      partId: currentPart.partId,
-      partCode: currentPart.partCode,
-      partName: currentPart.partName,
+      partId: composition.compositionId,
+      partCode: composition.partCode,
+      partName: composition.partName,
       previousRoute,
       newRoute: newRouteInfo,
       updatedAt: new Date().toISOString(),

@@ -440,7 +440,7 @@ export class PalletsMasterService {
       }
 
       return await this.prisma.$transaction(async (prisma) => {
-        // Получае�� предыдущую ячейку для обновления её статуса
+        // Получаем предыдущую ячейку для обновления её статуса
         const previousPlacement = pallet.palletBufferCells[0];
 
         // Завершаем предыдущие размещения в буфере
@@ -673,6 +673,9 @@ export class PalletsMasterService {
         if (shouldCompletePartProgress) {
           await this.updatePartStatusIfNeeded(this.prisma, machineAssignment.pallet.partId, 'COMPLETED');
         }
+
+        // Проверяем, является ли следующий этап финальным (упаковка)
+        await this.checkAndCreatePackingTask(machineAssignment.pallet.partId, stageProgress.routeStageId);
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
         await this.updatePartStatusIfNeeded(this.prisma, machineAssignment.pallet.partId, 'IN_PROGRESS');
       }
@@ -1444,5 +1447,129 @@ export class PalletsMasterService {
     return part.route.routeStages.every((routeStage) =>
       completedStageIds.has(routeStage.routeStageId),
     );
+  }
+
+  /**
+   * Проверяет, является ли следующий этап финальным, и создает задачу упаковки
+   */
+  private async checkAndCreatePackingTask(partId: number, currentRouteStageId: number): Promise<void> {
+    try {
+      // Получаем деталь с маршрутом
+      const part = await this.prisma.part.findUnique({
+        where: { partId },
+        include: {
+          route: {
+            include: {
+              routeStages: {
+                include: {
+                  stage: true,
+                },
+                orderBy: { sequenceNumber: 'asc' },
+              },
+            },
+          },
+          productionPackageParts: {
+            include: {
+              package: true,
+            },
+          },
+        },
+      });
+
+      if (!part?.route?.routeStages) {
+        this.logger.warn(`Не найден маршрут для детали ${partId}`);
+        return;
+      }
+
+      // Находим текущий этап в маршруте
+      const currentStageIndex = part.route.routeStages.findIndex(
+        (rs) => rs.routeStageId === currentRouteStageId,
+      );
+
+      if (currentStageIndex === -1) {
+        this.logger.warn(`Текущий этап ${currentRouteStageId} не найден в маршруте детали ${partId}`);
+        return;
+      }
+
+      // Проверяем, есть ли следующий этап
+      const nextStageIndex = currentStageIndex + 1;
+      if (nextStageIndex >= part.route.routeStages.length) {
+        this.logger.log(`Текущий этап является последним в маршруте для детали ${partId}`);
+        return;
+      }
+
+      const nextStage = part.route.routeStages[nextStageIndex];
+      
+      // Проверяем, является ли следующий этап финальным (упаковка)
+      if (!nextStage.stage.finalStage) {
+        this.logger.log(`Следующий этап не является финальным для детали ${partId}`);
+        return;
+      }
+
+      // Получаем упаковку для этой детали
+      const packagePart = part.productionPackageParts[0];
+      if (!packagePart) {
+        this.logger.warn(`Не найдена упаковка для детали ${partId}`);
+        return;
+      }
+
+      // Проверяем, не создана ли уже задача упаковки для этой упаковки
+      const existingPackingTask = await this.prisma.packingTask.findFirst({
+        where: {
+          packageId: packagePart.packageId,
+          status: { in: ['NOT_PROCESSED', 'PENDING', 'IN_PROGRESS'] },
+        },
+      });
+
+      if (existingPackingTask) {
+        this.logger.log(`Задача упаковки уже существует для упаковки ${packagePart.packageId}`);
+        return;
+      }
+
+      // Находим доступный станок для упаковки
+      const packingMachine = await this.prisma.machine.findFirst({
+        where: {
+          status: 'ACTIVE',
+          machinesStages: {
+            some: {
+              stageId: nextStage.stageId,
+            },
+          },
+        },
+      });
+
+      if (!packingMachine) {
+        this.logger.warn(`Не найден доступный станок для упаковки этапа ${nextStage.stageId}`);
+        return;
+      }
+
+      // Создаем задачу упаковки
+      const packingTask = await this.prisma.packingTask.create({
+        data: {
+          packageId: packagePart.packageId,
+          machineId: packingMachine.machineId,
+          status: 'PENDING',
+          priority: 0,
+          assignedAt: new Date(),
+        },
+      });
+
+      // Обновляем статус упаковки
+      await this.prisma.package.update({
+        where: { packageId: packagePart.packageId },
+        data: {
+          packingStatus: 'PENDING',
+          packingAssignedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Создана задача упаковки ${packingTask.taskId} для упаковки ${packagePart.packageId} на станке ${packingMachine.machineId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при проверке и создании задачи упаковки для детали ${partId}: ${error.message}`,
+      );
+    }
   }
 }

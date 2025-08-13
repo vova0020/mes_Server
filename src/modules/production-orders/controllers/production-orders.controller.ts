@@ -25,6 +25,7 @@ import {
   ProductionOrderResponseDto,
   OrderStatus,
   PackageDirectoryResponseDto,
+  UpdateOrderPriorityDto,
 } from '../dto/production-order.dto';
 
 @ApiTags('Заказы производства')
@@ -151,6 +152,25 @@ export class ProductionOrdersController {
     @Body('status') status: OrderStatus,
   ): Promise<ProductionOrderResponseDto> {
     return this.productionOrdersService.updateStatus(id, status);
+  }
+
+  @Patch(':id/priority')
+  @ApiOperation({ summary: 'Изменить приоритет заказа' })
+  @ApiParam({ name: 'id', description: 'ID заказа' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Приоритет заказа успешно изменен',
+    type: ProductionOrderResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Заказ не найден',
+  })
+  async updatePriority(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updatePriorityDto: UpdateOrderPriorityDto,
+  ): Promise<ProductionOrderResponseDto> {
+    return this.productionOrdersService.updatePriority(id, updatePriorityDto.priority);
   }
 
   @Delete(':id')

@@ -9,7 +9,7 @@ export class PalletMachineService {
   constructor(
     private prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
-  ) {}
+  ) { }
 
   /**
    * Начать обработку поддона на станке
@@ -282,8 +282,8 @@ export class PalletMachineService {
   }
 
   /**
-   * Завершить обработку поддона на станке
-   */
+ * Завершить обработку поддона на станке
+ */
   async completePalletProcessing(
     palletId: number,
     machineId: number,
@@ -422,15 +422,36 @@ export class PalletMachineService {
         },
       });
 
-      // Если есть следующий этап, создаем для него прогресс
+      // === МОДИФИЦИРОВАННАЯ ЛОГИКА ===
+      // Если есть следующий этап, создаем для него прогресс ТОЛЬКО если это этап упаковки (finalStage)
       if (nextRouteStage) {
-        await prisma.palletStageProgress.create({
-          data: {
-            palletId: palletId,
-            routeStageId: nextRouteStage.routeStageId,
-            status: 'NOT_PROCESSED',
-          },
-        });
+        let nextIsPackaging = false;
+
+        // Попробуем определить упаковку по имени этапа (быстрая проверка)
+        const nextStageName = nextRouteStage.stage?.stageName ?? '';
+        if (/упак/i.test(nextStageName)) {
+          nextIsPackaging = true;
+        } else {
+          // Если имя не даёт уверенности, проверим поле finalStage в productionStageLevel1
+          const nextStageInfo = await prisma.productionStageLevel1.findUnique({
+            where: { stageId: nextRouteStage.stageId },
+            select: { finalStage: true },
+          });
+          if (nextStageInfo?.finalStage) {
+            nextIsPackaging = true;
+          }
+        }
+
+        if (nextIsPackaging) {
+          await prisma.palletStageProgress.create({
+            data: {
+              palletId: palletId,
+              routeStageId: nextRouteStage.routeStageId,
+              status: 'NOT_PROCESSED',
+            },
+          });
+        }
+        // Если следующий этап НЕ упаковка — пропускаем создание записи прогресса.
       }
 
       // Проверяем, все ли поддоны данной детали завершили текущий этап
@@ -525,6 +546,7 @@ export class PalletMachineService {
       };
     });
   }
+
 
   /**
    * Получить информацию о поддоне

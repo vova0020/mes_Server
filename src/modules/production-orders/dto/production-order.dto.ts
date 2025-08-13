@@ -151,6 +151,15 @@ export class UpdateProductionOrderDto {
   packages?: CreatePackageDto[];
 }
 
+export class UpdateOrderPriorityDto {
+  @ApiProperty({
+    description: 'Новый приоритет заказа (чем больше число, тем выше приоритет)',
+    example: 1,
+  })
+  @IsInt()
+  priority: number;
+}
+
 export class PackageResponseDto {
   @ApiProperty({
     description: 'ID упаковки',
@@ -263,6 +272,12 @@ export class ProductionOrderResponseDto {
     example: false,
   })
   isCompleted: boolean;
+
+  @ApiProperty({
+    description: 'Приоритет заказа (чем больше число, тем выше приоритет)',
+    example: 1,
+  })
+  priority: number;
 
   @ApiProperty({
     description: 'Упаковки в заказе',

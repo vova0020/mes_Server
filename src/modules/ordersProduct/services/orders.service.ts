@@ -137,6 +137,7 @@ export class OrdersService {
           completionPercentage: order.completionPercentage.toNumber(),
           isCompleted: order.isCompleted,
           status: order.status,
+          priority: order.priority,
           available,
           completed,
         };

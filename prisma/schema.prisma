@@ -194,10 +194,14 @@ model Order {
   requiredDate         DateTime  @map("required_date")
   /// Статус заказа
   status               OrderStatus @default(PRELIMINARY)
+  /// Приоритет заказа (чем больше число, тем выше приоритет)
+  priority             Int         @default(0)
 
   // связи:
   /// Упаковочные единицы, связанные с заказом
   packages Package[]
+  /// Флаг, указывающий что детали были объединены при запуске
+  partsConsolidated Boolean @default(false) @map("parts_consolidated")
 
   @@map("orders")
 }
@@ -233,8 +237,36 @@ model Package {
 
   /// Задачи упаковки, назначенные на эту упаковочную единицу
   packingTasks PackingTask[] @relation("AssignedPackage")
+  /// Исходный состав упаковки (для отображения)
+  composition  PackageComposition[]
 
   @@map("packages")
+}
+
+/// Таблица package_composition: исходный состав упаковок (для отображения)
+model PackageComposition {
+  /// Первичный ключ записи
+  compositionId Int     @id @default(autoincrement()) @map("composition_id")
+  /// Внешний ключ на упаковку
+  packageId     Int     @map("package_id")
+  /// Код детали
+  partCode      String  @map("part_code")
+  /// Название детали
+  partName      String  @map("part_name")
+  /// Размер детали
+  partSize      String  @map("part_size")
+  /// ID маршрута обработки
+  routeId       Int     @map("route_id")
+  /// Количество данной детали в упаковке
+  quantity      Decimal
+
+  // связи:
+  /// Ссылка на упаковку
+  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+  /// Ссылка на маршрут
+  route   Route   @relation(fields: [routeId], references: [routeId])
+
+  @@map("package_composition")
 }
 
 /// Таблица production_package_parts: связи упаковок с деталями и их количество
@@ -649,6 +681,7 @@ model Route {
   routeStages           RouteStage[] // все этапы и подэтапы в рамках этого маршрута
   parts                 Part[] // детали, которым присвоен этот маршрут
   packageDetailRoutes   PackageDetailDirectory[] // связи с деталями в упаковках
+  packageCompositions   PackageComposition[] // исходный состав упаковок
 
   @@map("routes")
 }

@@ -476,6 +476,12 @@ export interface RoomEvents {
       newStatus: string;
       timestamp: string;
     };
+    orderPriorityChanged: {
+      order: any;
+      previousPriority: number;
+      newPriority: number;
+      timestamp: string;
+    };
   };
 
   // События управления маршрутами

@@ -115,7 +115,7 @@ export class PalletsMachinsNoSmenController {
       return await this.palletMachineNoSmenService.takePalletToWork(
         dto.palletId,
         dto.machineId,
-        dto.stageId,
+        dto.stageId!,
         dto.operatorId,
       );
     } catch (error) {
@@ -157,7 +157,7 @@ export class PalletsMachinsNoSmenController {
       return await this.palletMachineNoSmenService.completePalletProcessing(
         dto.palletId,
         dto.machineId,
-        dto.stageId,
+        dto.stageId!,
         dto.operatorId,
       );
     } catch (error) {

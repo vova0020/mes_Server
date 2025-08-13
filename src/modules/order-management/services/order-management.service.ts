@@ -58,6 +58,7 @@ export class OrderManagementService {
                 part: true,
               },
             },
+            composition: true,
           },
         },
       },
@@ -80,6 +81,13 @@ export class OrderManagementService {
   ): Promise<OrderStatusUpdateResponseDto> {
     const order = await this.prismaService.order.findUnique({
       where: { orderId },
+      include: {
+        packages: {
+          include: {
+            composition: true,
+          },
+        },
+      },
     });
 
     if (!order) {
@@ -92,6 +100,11 @@ export class OrderManagementService {
     // Проверяем валидность перехода статуса
     this.validateStatusTransition(currentStatus, newStatus);
 
+    // При переходе в LAUNCH_PERMITTED объединяем детали
+    if (newStatus === OrderStatus.LAUNCH_PERMITTED && !order.partsConsolidated) {
+      await this.consolidateParts(orderId);
+    }
+
     // Обновляем статус заказа
     const updatedOrder = await this.prismaService.order.update({
       where: { orderId },
@@ -100,6 +113,7 @@ export class OrderManagementService {
         launchPermission: newStatus === OrderStatus.LAUNCH_PERMITTED || newStatus === OrderStatus.IN_PROGRESS,
         isCompleted: newStatus === OrderStatus.COMPLETED,
         completedAt: newStatus === OrderStatus.COMPLETED ? new Date() : undefined,
+        partsConsolidated: newStatus === OrderStatus.LAUNCH_PERMITTED ? true : order.partsConsolidated,
       },
     });
 
@@ -275,7 +289,81 @@ export class OrderManagementService {
       isCompleted: order.isCompleted,
       packagesCount,
       totalPartsCount,
+      priority: order.priority,
     };
+  }
+
+  /**
+   * Объединение одинаковых деталей при запуске в производство
+   */
+  private async consolidateParts(orderId: number): Promise<void> {
+    const order = await this.prismaService.order.findUnique({
+      where: { orderId },
+      include: {
+        packages: {
+          include: {
+            composition: true,
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    // Группируем детали по коду и маршруту
+    const consolidatedParts = new Map<string, {
+      partCode: string;
+      partName: string;
+      partSize: string;
+      routeId: number;
+      totalQuantity: number;
+      packages: { packageId: number; quantity: number }[];
+    }>();
+
+    order.packages.forEach(pkg => {
+      pkg.composition.forEach(comp => {
+        const key = `${comp.partCode}_${comp.routeId}`;
+        if (consolidatedParts.has(key)) {
+          const existing = consolidatedParts.get(key)!;
+          existing.totalQuantity += Number(comp.quantity);
+          existing.packages.push({ packageId: pkg.packageId, quantity: Number(comp.quantity) });
+        } else {
+          consolidatedParts.set(key, {
+            partCode: comp.partCode,
+            partName: comp.partName,
+            partSize: comp.partSize,
+            routeId: comp.routeId,
+            totalQuantity: Number(comp.quantity),
+            packages: [{ packageId: pkg.packageId, quantity: Number(comp.quantity) }],
+          });
+        }
+      });
+    });
+
+    // Создаем объединенные детали в таблице Part и связи с упаковками
+    for (const [, partData] of consolidatedParts) {
+      const newPart = await this.prismaService.part.create({
+        data: {
+          partCode: partData.partCode,
+          partName: partData.partName,
+          size: partData.partSize,
+          totalQuantity: partData.totalQuantity,
+          status: 'PENDING',
+          routeId: partData.routeId,
+        },
+      });
+
+      // Создаем связи с упаковками
+      for (const pkgInfo of partData.packages) {
+        await this.prismaService.productionPackagePart.create({
+          data: {
+            packageId: pkgInfo.packageId,
+            partId: newPart.partId,
+            quantity: pkgInfo.quantity,
+          },
+        });
+      }
+    }
   }
 
   /**
@@ -294,6 +382,7 @@ export class OrderManagementService {
         status: order.status as OrderStatus,
         launchPermission: order.launchPermission,
         isCompleted: order.isCompleted,
+        priority: order.priority,
       },
       packages: order.packages?.map((pkg: any) => ({
         packageId: pkg.packageId,
@@ -301,14 +390,15 @@ export class OrderManagementService {
         packageName: pkg.packageName,
         quantity: Number(pkg.quantity),
         completionPercentage: Number(pkg.completionPercentage),
-        details: pkg.productionPackageParts?.map((ppp: any) => ({
-          partId: ppp.part.partId,
-          partCode: ppp.part.partCode,
-          partName: ppp.part.partName,
-          totalQuantity: Number(ppp.part.totalQuantity),
-          status: ppp.part.status,
-          size: ppp.part.size,
-          materialId: ppp.part.materialId,
+        // Всегда показываем исходный состав из композиции
+        details: pkg.composition?.map((comp: any) => ({
+          partId: comp.compositionId,
+          partCode: comp.partCode,
+          partName: comp.partName,
+          totalQuantity: Number(comp.quantity),
+          status: 'PENDING',
+          size: comp.partSize,
+          materialId: null,
         })) || [],
       })) || [],
     };
