@@ -1,13 +1,16 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
+  Body,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { PartPalletsService } from '../services/part-pallets.service';
 import { PartPalletsQueryDto } from '../dto/part-pallets-query.dto';
+import { AssignPalletToPackageDto } from '../dto/assign-pallet-to-package.dto';
 
 @Controller('packaging/pallets')
 export class PartPalletsController {
@@ -81,6 +84,19 @@ export class PartPalletsController {
         throw error;
       }
       throw new BadRequestException('Ошибка при получении статистики');
+    }
+  }
+
+  // Назначение поддона на упаковку
+  @Post('assign-to-package')
+  async assignPalletToPackage(@Body() dto: AssignPalletToPackageDto) {
+    try {
+      return await this.partPalletsService.assignPalletToPackage(dto);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Ошибка при назначении поддона на упаковку');
     }
   }
 }

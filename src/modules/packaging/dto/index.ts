@@ -13,3 +13,6 @@ export * from './package-response.dto';
 // Packing Assignment DTOs
 export * from './packing-assignment.dto';
 export * from './packing-assignment-response.dto';
+
+// Assign Pallet to Package DTOs
+export * from './assign-pallet-to-package.dto';

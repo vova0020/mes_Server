@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import {
@@ -19,7 +20,115 @@ import { PackingTaskStatus, PackageStatus } from '@prisma/client';
 
 @Injectable()
 export class PackingAssignmentService {
+  private readonly logger = new Logger(PackingAssignmentService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Получить все станки упаковки по ID участка с дополнительной информацией
+   * @param stageId ID производственного участка (этапа 1-го уровня)
+   * @returns Массив объектов с информацией о станках упаковки
+   */
+  async getPackingMachinesByStageId(stageId?: number) {
+    this.logger.log(`Получение станков упаковки для участка с ID: ${stageId}`);
+
+    try {
+      // Если указан stageId, проверяем существование участка
+      if (stageId) {
+        const stage = await this.prisma.productionStageLevel1.findUnique({
+          where: { stageId, finalStage: true },
+        });
+
+        if (!stage) {
+          throw new NotFoundException(
+            `Финальный участок с ID ${stageId} не найден`,
+          );
+        }
+      }
+
+      // Получаем все станки упаковки
+      const machines = await this.prisma.machine.findMany({
+        where: {
+          noSmenTask: false,
+          ...(stageId && {
+            machinesStages: {
+              some: {
+                stageId,
+                stage: { finalStage: true },
+              },
+            },
+          }),
+        },
+        include: {
+          packingTasks: {
+            where: {
+              status: { in: ['PENDING', 'IN_PROGRESS'] },
+            },
+            include: {
+              package: true,
+            },
+          },
+        },
+      });
+
+      // Получаем завершенные задачи упаковки
+      const completedTasks = await this.prisma.packingTask.findMany({
+        where: {
+          status: 'COMPLETED',
+          machine: {
+            ...(stageId && {
+              machinesStages: {
+                some: {
+                  stageId,
+                  stage: { finalStage: true },
+                },
+              },
+            }),
+          },
+        },
+        include: {
+          machine: true,
+          package: true,
+        },
+      });
+
+      // Группируем завершенные задачи по станкам
+      const completedByMachine = completedTasks.reduce((acc, task) => {
+        const machineId = task.machine.machineId;
+        if (!acc[machineId]) acc[machineId] = 0;
+        acc[machineId] += task.package.quantity.toNumber();
+        return acc;
+      }, {});
+
+      // Формируем ответ
+      const result = machines.map((machine) => {
+        const plannedQuantity = machine.packingTasks.reduce(
+          (total, task) => total + task.package.quantity.toNumber(),
+          0,
+        );
+
+        const completedQuantity = completedByMachine[machine.machineId] || 0;
+
+        return {
+          id: machine.machineId,
+          name: machine.machineName,
+          status: machine.status,
+          load_unit: machine.loadUnit,
+          recommendedLoad: machine.recommendedLoad.toNumber(),
+          plannedQuantity,
+          completedQuantity,
+        };
+      });
+
+      this.logger.log(`Успешно получено ${result.length} станков упаковки`);
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при получении станков упаковки: ${(error as Error).message}`,
+      );
+      throw error;
+    }
+  }
 
   // Создание нового назначения задания на станок упаковки или обновление существующего
   async createAssignment(
@@ -290,26 +399,40 @@ export class PackingAssignmentService {
       // Если нет задач, статус NOT_PROCESSED
       newPackageStatus = PackageStatus.NOT_PROCESSED;
     } else {
-      const hasCompleted = tasks.some(task => task.status === PackingTaskStatus.COMPLETED);
-      const hasInProgress = tasks.some(task => task.status === PackingTaskStatus.IN_PROGRESS);
-      const hasPending = tasks.some(task => task.status === PackingTaskStatus.PENDING);
-      const allCompleted = tasks.every(task => task.status === PackingTaskStatus.COMPLETED);
+      const hasCompleted = tasks.some(
+        (task) => task.status === PackingTaskStatus.COMPLETED,
+      );
+      const hasInProgress = tasks.some(
+        (task) => task.status === PackingTaskStatus.IN_PROGRESS,
+      );
+      const hasPending = tasks.some(
+        (task) => task.status === PackingTaskStatus.PENDING,
+      );
+      const allCompleted = tasks.every(
+        (task) => task.status === PackingTaskStatus.COMPLETED,
+      );
 
       if (allCompleted) {
         newPackageStatus = PackageStatus.COMPLETED;
         // Находим максимальную дату завершения
-        const completedTasks = tasks.filter(task => task.completedAt);
+        const completedTasks = tasks.filter((task) => task.completedAt);
         if (completedTasks.length > 0) {
-          packingCompletedAt = new Date(Math.max(...completedTasks.map(task => task.completedAt!.getTime())));
+          packingCompletedAt = new Date(
+            Math.max(
+              ...completedTasks.map((task) => task.completedAt!.getTime()),
+            ),
+          );
         }
       } else if (hasInProgress) {
         newPackageStatus = PackageStatus.IN_PROGRESS;
       } else if (hasPending) {
         newPackageStatus = PackageStatus.PENDING;
         // Находим минимальную дату назначения
-        const assignedTasks = tasks.filter(task => task.assignedAt);
+        const assignedTasks = tasks.filter((task) => task.assignedAt);
         if (assignedTasks.length > 0) {
-          packingAssignedAt = new Date(Math.min(...assignedTasks.map(task => task.assignedAt.getTime())));
+          packingAssignedAt = new Date(
+            Math.min(...assignedTasks.map((task) => task.assignedAt.getTime())),
+          );
         }
       } else {
         newPackageStatus = PackageStatus.NOT_PROCESSED;
@@ -340,7 +463,8 @@ export class PackingAssignmentService {
         orderId: task.package.order.orderId,
         batchNumber: task.package.order.batchNumber,
         orderName: task.package.order.orderName,
-        completionPercentage: task.package.order.completionPercentage.toNumber(),
+        completionPercentage:
+          task.package.order.completionPercentage.toNumber(),
         isCompleted: task.package.order.isCompleted,
         launchPermission: task.package.order.launchPermission,
       },

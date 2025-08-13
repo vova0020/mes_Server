@@ -8,6 +8,16 @@ export class PackagingService {
 
   // Получение упаковок по ID заказа
   async getPackagesByOrderId(orderId: number) {
+    // Проверяем статус заказа - не показываем завершенные заказы
+    const order = await this.prisma.order.findUnique({
+      where: { orderId },
+      select: { isCompleted: true, status: true }
+    });
+
+    if (!order || order.isCompleted || order.status === 'COMPLETED') {
+      return [];
+    }
+
     const packagesRaw = await this.prisma.package.findMany({
       where: { orderId },
       orderBy: { packageId: 'asc' },
@@ -35,6 +45,22 @@ export class PackagingService {
                 partId: true,
                 partCode: true,
                 partName: true,
+                route: {
+                  select: {
+                    routeStages: {
+                      select: {
+                        routeStageId: true,
+                        sequenceNumber: true,
+                        stage: {
+                          select: {
+                            finalStage: true,
+                          },
+                        },
+                      },
+                      orderBy: { sequenceNumber: 'asc' },
+                    },
+                  },
+                },
               },
             },
           },
@@ -42,12 +68,10 @@ export class PackagingService {
       },
     });
 
-    // Получаем статистику по упаковочным задачам для каждой упаковки
     const packagesWithStats = await Promise.all(
       packagesRaw.map(async (pkg) => {
         const packingStats = await this.getPackingStatistics(pkg.packageId);
-        
-        // Получаем задачи упаковки для данной упаковки
+
         const tasks = await this.prisma.packingTask.findMany({
           where: { packageId: pkg.packageId },
           include: {
@@ -59,19 +83,22 @@ export class PackagingService {
             },
           },
         });
-        
+
         // Рассчитываем переменные
-        const totalQuantityInPackage = pkg.quantity.toNumber();
-        const readyForPackaging = totalQuantityInPackage; // пока всегда ставим количество в упаковке
-        const assembled = totalQuantityInPackage; // то же самое что ReadyForPackaging
-        
+        const totalQuantity = pkg.quantity.toNumber();
+        const { readyForPackaging, assembled } =
+          await this.calculatePackageStatistics(
+            pkg.packageId,
+            pkg.productionPackageParts,
+            totalQuantity,
+          );
+
         return {
           id: pkg.packageId,
           orderId: pkg.orderId,
           packageCode: pkg.packageCode,
           packageName: pkg.packageName,
           completionPercentage: pkg.completionPercentage.toNumber(),
-          // Новые поля статуса упаковки
           packingStatus: pkg.packingStatus,
           packingAssignedAt: pkg.packingAssignedAt,
           packingCompletedAt: pkg.packingCompletedAt,
@@ -79,19 +106,20 @@ export class PackagingService {
             orderName: pkg.order.orderName,
             batchNumber: pkg.order.batchNumber,
           },
-          parts: pkg.productionPackageParts.map(ppp => ({
+          parts: pkg.productionPackageParts.map((ppp) => ({
             partId: ppp.part.partId,
             partCode: ppp.part.partCode,
             partName: ppp.part.partName,
             quantity: ppp.quantity.toNumber(),
           })),
           // Расчетные переменные
+          totalQuantity,
           readyForPackaging,
-          assembled,
           distributed: packingStats.distributed,
-          packaged: packingStats.packaged,
-          // Добавляем задачи упаковки
-          tasks: tasks.map(task => ({
+          assembled,
+          completed: packingStats.completed,
+          available: totalQuantity - packingStats.completed,
+          tasks: tasks.map((task) => ({
             taskId: task.taskId,
             status: task.status,
             priority: task.priority.toNumber(),
@@ -102,17 +130,21 @@ export class PackagingService {
               machineName: task.machine.machineName,
               status: task.machine.status,
             },
-            assignedUser: task.assignedUser ? {
-              userId: task.assignedUser.userId,
-              login: task.assignedUser.login,
-              userDetail: task.assignedUser.userDetail ? {
-                firstName: task.assignedUser.userDetail.firstName,
-                lastName: task.assignedUser.userDetail.lastName,
-              } : null,
-            } : null,
+            assignedUser: task.assignedUser
+              ? {
+                  userId: task.assignedUser.userId,
+                  login: task.assignedUser.login,
+                  userDetail: task.assignedUser.userDetail
+                    ? {
+                        firstName: task.assignedUser.userDetail.firstName,
+                        lastName: task.assignedUser.userDetail.lastName,
+                      }
+                    : null,
+                }
+              : null,
           })),
         };
-      })
+      }),
     );
 
     return packagesWithStats;
@@ -172,7 +204,7 @@ export class PackagingService {
     const packagesWithStats = await Promise.all(
       packagesRaw.map(async (pkg) => {
         const packingStats = await this.getPackingStatistics(pkg.packageId);
-        
+
         // Получаем задачи упаковки для данной упаковки
         const tasks = await this.prisma.packingTask.findMany({
           where: { packageId: pkg.packageId },
@@ -185,12 +217,16 @@ export class PackagingService {
             },
           },
         });
-        
+
         // Рассчитываем переменные
-        const totalQuantityInPackage = pkg.quantity.toNumber();
-        const readyForPackaging = totalQuantityInPackage; // пока всегда ставим количество в упаковке
-        const assembled = totalQuantityInPackage; // ��о же самое что ReadyForPackaging
-        
+        const totalQuantity = pkg.quantity.toNumber();
+        const { readyForPackaging, assembled } =
+          await this.calculatePackageStatistics(
+            pkg.packageId,
+            pkg.productionPackageParts,
+            totalQuantity,
+          );
+
         return {
           id: pkg.packageId,
           orderId: pkg.orderId,
@@ -205,7 +241,7 @@ export class PackagingService {
             orderName: pkg.order.orderName,
             batchNumber: pkg.order.batchNumber,
           },
-          parts: pkg.productionPackageParts.map(ppp => ({
+          parts: pkg.productionPackageParts.map((ppp) => ({
             partId: ppp.part.partId,
             partCode: ppp.part.partCode,
             partName: ppp.part.partName,
@@ -215,9 +251,10 @@ export class PackagingService {
           readyForPackaging,
           assembled,
           distributed: packingStats.distributed,
-          packaged: packingStats.packaged,
+          completed: packingStats.completed,
+          available: totalQuantity - packingStats.completed,
           // Добавляем задачи упаковки
-          tasks: tasks.map(task => ({
+          tasks: tasks.map((task) => ({
             taskId: task.taskId,
             status: task.status,
             priority: task.priority.toNumber(),
@@ -228,17 +265,21 @@ export class PackagingService {
               machineName: task.machine.machineName,
               status: task.machine.status,
             },
-            assignedUser: task.assignedUser ? {
-              userId: task.assignedUser.userId,
-              login: task.assignedUser.login,
-              userDetail: task.assignedUser.userDetail ? {
-                firstName: task.assignedUser.userDetail.firstName,
-                lastName: task.assignedUser.userDetail.lastName,
-              } : null,
-            } : null,
+            assignedUser: task.assignedUser
+              ? {
+                  userId: task.assignedUser.userId,
+                  login: task.assignedUser.login,
+                  userDetail: task.assignedUser.userDetail
+                    ? {
+                        firstName: task.assignedUser.userDetail.firstName,
+                        lastName: task.assignedUser.userDetail.lastName,
+                      }
+                    : null,
+                }
+              : null,
           })),
         };
-      })
+      }),
     );
 
     return {
@@ -252,33 +293,110 @@ export class PackagingService {
     };
   }
 
-  // Вспомогательный метод для расчета статистики упаковки
-  private async getPackingStatistics(packageId: number) {
-    // Получаем задачи упаковки для данной производственной упаковки
-    const packingTasks = await this.prisma.packingTask.findMany({
-      where: {
-        packageId: packageId,
-      },
-    });
+  // Расчет статистики для конкретной упаковки
+  private async calculatePackageStatistics(
+    packageId: number,
+    packageParts: any[],
+    totalPackages: number,
+  ) {
+    let minReadyPackages = Infinity;
+    
+    // Подсчитываем сколько упаковок можно собрать на основе готовых деталей
+    for (const packagePart of packageParts) {
+      const partId = packagePart.part.partId;
+      const requiredPerPackage = packagePart.quantity.toNumber();
 
-    let distributed = 0;
-    let packaged = 0;
+      // Получаем количество готовых деталей (со статусом COMPLETED или AWAITING_PACKAGING)
+      const readyPallets = await this.prisma.pallet.findMany({
+        where: {
+          partId,
+          part: {
+            status: {
+              in: ['COMPLETED', 'AWAITING_PACKAGING']
+            }
+          }
+        },
+        select: {
+          quantity: true
+        }
+      });
 
-    for (const task of packingTasks) {
-      // Distributed: сумма количества упаковок, распределенных на станок
-      if (task.status === 'PENDING' || task.status === 'IN_PROGRESS') {
-        distributed += 1; // считаем количество задач в работе
-      }
+      const totalReadyQuantity = readyPallets.reduce(
+        (sum, pallet) => sum + pallet.quantity.toNumber(),
+        0
+      );
+
+      const possiblePackages = Math.floor(totalReadyQuantity / requiredPerPackage);
+      minReadyPackages = Math.min(minReadyPackages, possiblePackages);
+    }
+
+    const readyForPackaging = minReadyPackages === Infinity ? 0 : minReadyPackages;
+
+    // Подсчитываем сколько упаковок реально скомплектовано (изъято из буфера)
+    let assembled = 0;
+    
+    // Проверяем для каждой детали в упаковке, сколько поддонов назначено
+    for (const packagePart of packageParts) {
+      const partId = packagePart.part.partId;
+      const requiredPerPackage = packagePart.quantity.toNumber();
+
+      // Получаем назначенные поддоны для этой детали в данной упаковке
+      const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
+        where: {
+          packageId,
+          pallet: {
+            partId
+          }
+        },
+        select: {
+          quantity: true
+        }
+      });
+
+      const totalAssignedQuantity = assignedPallets.reduce(
+        (sum, assignment) => sum + assignment.quantity.toNumber(),
+        0
+      );
+
+      const assembledForThisPart = Math.floor(totalAssignedQuantity / requiredPerPackage);
       
-      // Packaged: сумма количества выполненных заданий упаковки
-      if (task.status === 'COMPLETED') {
-        packaged += 1;
+      // Минимальное количество среди всех деталей определяет количество собранных упаковок
+      if (assembled === 0) {
+        assembled = assembledForThisPart;
+      } else {
+        assembled = Math.min(assembled, assembledForThisPart);
       }
     }
 
     return {
-      distributed,
-      packaged,
+      readyForPackaging,
+      assembled
+    };
+  }
+
+  // Получение статистики упаковочных задач
+  private async getPackingStatistics(packageId: number) {
+    // Получаем количество распределенных задач упаковки
+    const distributedTasks = await this.prisma.packingTask.count({
+      where: {
+        packageId,
+        status: {
+          in: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED']
+        }
+      }
+    });
+
+    // Получаем количество завершенных упаковок (по статусу COMPLETED)
+    const packageData = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: { packingStatus: true }
+    });
+
+    const completed = packageData?.packingStatus === 'COMPLETED' ? 1 : 0;
+
+    return {
+      distributed: distributedTasks,
+      completed
     };
   }
 }

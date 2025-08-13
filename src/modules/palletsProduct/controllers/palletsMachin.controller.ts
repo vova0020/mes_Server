@@ -22,6 +22,7 @@ import {
   CompletePalletProcessingDto,
   MovePalletToBufferDto,
 } from '../dto/pallet.dto';
+import { DefectPalletPartsDto } from '../dto/pallet-master.dto';
 
 import { PalletsResponseDto } from '../dto/pallet-machin.dto';
 import { PalletsMachineTaskService } from '../services/pallets-Machine-task.service';
@@ -179,5 +180,33 @@ export class PalletMachinController {
     );
     console.log(`Найдено поддонов: ${result.pallets.length}`);
     return result;
+  }
+
+  @ApiOperation({ summary: 'Отбраковать детали с поддона' })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно отбракованы',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Ошибка при отбраковке деталей',
+  })
+  @Post('defect-parts')
+  async defectPalletParts(@Body() dto: DefectPalletPartsDto) {
+    try {
+      return await this.palletService.defectPalletParts(
+        dto.palletId,
+        dto.quantity,
+        dto.reportedById,
+        dto.description,
+        dto.machineId,
+        dto.stageId,
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Ошибка при отбраковке деталей',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 }

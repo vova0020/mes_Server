@@ -169,15 +169,34 @@ export class MachinMasterService {
 
       // Формируем ответ с дополнительными вычисляемыми полями
       const resultMachines = machines.map((machine) => {
-        // Расчет запланированного количества - суммируем количество деталей по всем активным назначениям
-        const plannedQuantity = machine.machineAssignments.reduce(
-          (total, assignment) => total + Number(assignment.pallet.quantity),
-          0,
-        );
+        let plannedQuantity: number;
+        let completedQuantity: number;
 
-        // Получаем выполненное количество из собранной статистики или возвращаем 0
-        const completedQuantity =
-          completedQuantityByMachineId[machine.machineId] || 0;
+        if (machine.loadUnit === 'м²') {
+          // Расчет в квадратных метрах
+          plannedQuantity = machine.machineAssignments.reduce((total, assignment) => {
+            const size = assignment.pallet.part.size;
+            const quantity = Number(assignment.pallet.quantity);
+            return total + this.calculateSquareMeters(size, quantity);
+          }, 0);
+
+          // Получаем завершенные назначения для расчета выполненного количества в м²
+          const machineCompletedAssignments = completedAssignments.filter(
+            assignment => assignment.machine.machineId === machine.machineId
+          );
+          completedQuantity = machineCompletedAssignments.reduce((total, assignment) => {
+            const size = assignment.pallet.part.size;
+            const quantity = Number(assignment.pallet.quantity);
+            return total + this.calculateSquareMeters(size, quantity);
+          }, 0);
+        } else {
+          // Расчет в штуках (как было раньше)
+          plannedQuantity = machine.machineAssignments.reduce(
+            (total, assignment) => total + Number(assignment.pallet.quantity),
+            0,
+          );
+          completedQuantity = completedQuantityByMachineId[machine.machineId] || 0;
+        }
 
         return {
           id: machine.machineId,
@@ -389,6 +408,26 @@ export class MachinMasterService {
    * @param moveTaskDto DTO с данными для перемещения задания
    * @returns Объект с сообщением об успешном перемещении
    */
+  /**
+   * Вычисляет площадь в квадратных метрах на основе размера детали и количества
+   * @param size Размер детали в формате "750x300"
+   * @param quantity Количество деталей
+   * @returns Площадь в квадратных метрах
+   */
+  private calculateSquareMeters(size: string, quantity: number): number {
+    if (!size || !size.includes('x')) {
+      return 0;
+    }
+
+    const dimensions = size.split('x').map(dim => parseFloat(dim.trim()));
+    if (dimensions.length !== 2 || dimensions.some(dim => isNaN(dim))) {
+      return 0;
+    }
+
+    const [width, height] = dimensions;
+    return (width * height * quantity) / 1000000;
+  }
+
   async moveTaskToMachine(
     moveTaskDto: MoveTaskDto,
   ): Promise<{ message: string }> {

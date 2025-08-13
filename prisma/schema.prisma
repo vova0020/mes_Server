@@ -239,6 +239,8 @@ model Package {
   packingTasks PackingTask[] @relation("AssignedPackage")
   /// Исходный состав упаковки (для отображения)
   composition  PackageComposition[]
+  /// Назначения поддонов на упаковки
+  palletAssignments PalletPackageAssignment[]
 
   @@map("packages")
 }
@@ -397,6 +399,8 @@ model Pallet {
   reclamations        Reclamation[]
   /// Движения запасов по данному поддону
   inventoryMovements  InventoryMovement[]
+  /// Назначения поддонов на упаковки
+  packageAssignments  PalletPackageAssignment[]
 
   @@map("pallets")
 }
@@ -1110,6 +1114,27 @@ model MachineAssignment {
   pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
 
   @@map("machine_assignments")
+}
+
+/// Назначения поддонов на упаковки (для отслеживания какие поддоны изъяты для конкретной упаковки)
+model PalletPackageAssignment {
+  /// Уникальный идентификатор назначения
+  assignmentId Int     @id @default(autoincrement()) @map("assignment_id")
+  /// Ссылка на поддон
+  palletId     Int     @map("pallet_id")
+  /// Ссылка на упаковку
+  packageId    Int     @map("package_id")
+  /// Количество деталей из поддона, назначенных на упаковку
+  quantity     Decimal @map("quantity")
+  /// Время назначения
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  // связи:
+  pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+
+  @@unique([palletId, packageId])
+  @@map("pallet_package_assignments")
 }
 
 /// Назначения деталей на станок с указанием приоритета

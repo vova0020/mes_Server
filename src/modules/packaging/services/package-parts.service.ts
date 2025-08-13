@@ -127,6 +127,22 @@ export class PackagePartsService {
       where: whereClause,
     });
 
+    // Вычисляем готовность деталей (процент деталей готовых к финальному этапу)
+    const readyParts = productionPackagePartsRaw.filter((ppp) => {
+      // Проверяем, что все нефинальные этапы завершены
+      const completedStages = ppp.part.partRouteProgress.filter(
+        progress => progress.status === 'COMPLETED'
+      );
+      const totalStages = ppp.part.partRouteProgress.length;
+      
+      // Деталь готова если все этапы кроме последнего (финального) завершены
+      return totalStages > 0 && completedStages.length >= totalStages - 1;
+    });
+    
+    const readiness = productionPackagePartsRaw.length > 0 
+      ? Math.round((readyParts.length / productionPackagePartsRaw.length) * 100)
+      : 0;
+
     // Преобразуем данные
     const parts: PackagePartDetailDto[] = productionPackagePartsRaw.map(
       (ppp) => ({
@@ -173,6 +189,7 @@ export class PackagePartsService {
         packageCode: packageInfo.packageCode,
         packageName: packageInfo.packageName,
         completionPercentage: packageInfo.completionPercentage.toNumber(),
+        readiness,
         order: {
           orderId: packageInfo.order.orderId,
           orderName: packageInfo.order.orderName,

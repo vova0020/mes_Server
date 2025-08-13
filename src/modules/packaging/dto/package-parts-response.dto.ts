@@ -35,6 +35,7 @@ export interface PackagePartsInfoDto {
   packageCode: string;
   packageName: string;
   completionPercentage: number;
+  readiness: number;
   order: {
     orderId: number;
     orderName: string;

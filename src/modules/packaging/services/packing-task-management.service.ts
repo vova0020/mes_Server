@@ -66,42 +66,71 @@ export class PackingTaskManagementService {
   async markTaskAsCompleted(taskId: number): Promise<PackingAssignmentResponseDto> {
     const existingTask = await this.prisma.packingTask.findUnique({
       where: { taskId },
+      include: {
+        package: {
+          include: {
+            order: true,
+            productionPackageParts: {
+              include: {
+                part: {
+                  include: {
+                    pallets: true,
+                  },
+                },
+              },
+            },
+            palletAssignments: {
+              include: {
+                pallet: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!existingTask) {
       throw new NotFoundException(`Задание с ID ${taskId} не найдено`);
     }
 
-    // Проверяем, что задание можно завершить
     if (existingTask.status === PackingTaskStatus.COMPLETED) {
       throw new BadRequestException('Задание уже завершено');
     }
 
-    const updatedTask = await this.prisma.packingTask.update({
-      where: { taskId },
-      data: {
-        status: PackingTaskStatus.COMPLETED,
-        completedAt: new Date(),
-      },
-      include: {
-        package: {
-          include: {
-            order: true,
+    return await this.prisma.$transaction(async (tx) => {
+      // Обновляем статус задачи
+      const updatedTask = await tx.packingTask.update({
+        where: { taskId },
+        data: {
+          status: PackingTaskStatus.COMPLETED,
+          completedAt: new Date(),
+        },
+        include: {
+          package: {
+            include: {
+              order: true,
+            },
+          },
+          machine: true,
+          assignedUser: {
+            include: {
+              userDetail: true,
+            },
           },
         },
-        machine: true,
-        assignedUser: {
-          include: {
-            userDetail: true,
-          },
-        },
-      },
+      });
+
+      // Вычитаем количество деталей и поддонов для закрытой упаковки
+      await this.deductInventoryForPackage(tx, existingTask.packageId);
+
+      // Обновляем статус упаковки
+      await this.updatePackageStatus(existingTask.packageId, tx);
+
+      // Проверяем и обновляем статус заказа
+      await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
+
+      return this.mapToResponseDto(updatedTask);
     });
-
-    // Обновляем статус упаковки
-    await this.updatePackageStatus(existingTask.packageId);
-
-    return this.mapToResponseDto(updatedTask);
   }
 
   // Удалить задание у станка
@@ -336,54 +365,115 @@ export class PackingTaskManagementService {
     return tasks.map((task) => this.mapToResponseDto(task));
   }
 
-  // Метод для обновления статуса упаковки на основе статусов задач
-  private async updatePackageStatus(packageId: number): Promise<void> {
-    // Получаем все задачи упаковки для данной упаковки
-    const tasks = await this.prisma.packingTask.findMany({
+  // Вычитание запасов для завершенной упаковки
+  private async deductInventoryForPackage(tx: any, packageId: number): Promise<void> {
+    const packageData = await tx.package.findUnique({
       where: { packageId },
+      include: {
+        productionPackageParts: {
+          include: {
+            part: {
+              include: {
+                pallets: true,
+              },
+            },
+          },
+        },
+        palletAssignments: {
+          include: {
+            pallet: true,
+          },
+        },
+      },
     });
 
-    let newPackageStatus: PackageStatus;
-    let packingAssignedAt: Date | null = null;
-    let packingCompletedAt: Date | null = null;
+    if (!packageData) return;
+
+    // Вычитаем количество деталей из поддонов
+    for (const assignment of packageData.palletAssignments) {
+      const newQuantity = assignment.pallet.quantity - assignment.quantity;
+      
+      await tx.pallet.update({
+        where: { palletId: assignment.palletId },
+        data: { quantity: newQuantity },
+      });
+
+      // Создаем запись о движении запасов
+      await tx.inventoryMovement.create({
+        data: {
+          partId: assignment.pallet.partId,
+          palletId: assignment.palletId,
+          deltaQuantity: -assignment.quantity,
+          reason: `Упаковка завершена: Package ${packageId}`,
+        },
+      });
+    }
+  }
+
+  // Проверка и обновление статуса заказа
+  private async checkAndUpdateOrderStatus(orderId: number, tx: any): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: { orderId },
+      include: {
+        packages: {
+          include: {
+            packingTasks: true,
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    // Проверяем, все ли упаковки завершены
+    const allPackagesCompleted = order.packages.every(pkg => 
+      pkg.packingTasks.every(task => task.status === PackingTaskStatus.COMPLETED)
+    );
+
+    if (allPackagesCompleted && !order.isCompleted) {
+      await tx.order.update({
+        where: { orderId },
+        data: {
+          isCompleted: true,
+          completedAt: new Date(),
+          status: 'COMPLETED',
+          completionPercentage: 100,
+        },
+      });
+    }
+  }
+
+  // Метод для обновления статуса упаковки на основе статусов задач
+  private async updatePackageStatus(packageId: number, tx?: any): Promise<void> {
+    const prisma = tx || this.prisma;
+    
+    const packageData = await prisma.package.findUnique({
+      where: { packageId },
+      include: {
+        packingTasks: true,
+      },
+    });
+
+    if (!packageData) return;
+
+    let newStatus: PackageStatus = PackageStatus.NOT_PROCESSED;
+    const tasks = packageData.packingTasks;
 
     if (tasks.length === 0) {
-      // Если нет задач, статус NOT_PROCESSED
-      newPackageStatus = PackageStatus.NOT_PROCESSED;
-    } else {
-      const hasCompleted = tasks.some(task => task.status === PackingTaskStatus.COMPLETED);
-      const hasInProgress = tasks.some(task => task.status === PackingTaskStatus.IN_PROGRESS);
-      const hasPending = tasks.some(task => task.status === PackingTaskStatus.PENDING);
-      const allCompleted = tasks.every(task => task.status === PackingTaskStatus.COMPLETED);
-
-      if (allCompleted) {
-        newPackageStatus = PackageStatus.COMPLETED;
-        // Находим максимальную дату завершения
-        const completedTasks = tasks.filter(task => task.completedAt);
-        if (completedTasks.length > 0) {
-          packingCompletedAt = new Date(Math.max(...completedTasks.map(task => task.completedAt!.getTime())));
-        }
-      } else if (hasInProgress) {
-        newPackageStatus = PackageStatus.IN_PROGRESS;
-      } else if (hasPending) {
-        newPackageStatus = PackageStatus.PENDING;
-        // Находим минимальную дату назначения
-        const assignedTasks = tasks.filter(task => task.assignedAt);
-        if (assignedTasks.length > 0) {
-          packingAssignedAt = new Date(Math.min(...assignedTasks.map(task => task.assignedAt.getTime())));
-        }
-      } else {
-        newPackageStatus = PackageStatus.NOT_PROCESSED;
-      }
+      newStatus = PackageStatus.NOT_PROCESSED;
+    } else if (tasks.every(task => task.status === PackingTaskStatus.COMPLETED)) {
+      newStatus = PackageStatus.COMPLETED;
+    } else if (tasks.some(task => task.status === PackingTaskStatus.IN_PROGRESS)) {
+      newStatus = PackageStatus.IN_PROGRESS;
+    } else if (tasks.some(task => task.status === PackingTaskStatus.PENDING)) {
+      newStatus = PackageStatus.PENDING;
     }
 
-    // Обновляем статус упаковки
-    await this.prisma.package.update({
+    await prisma.package.update({
       where: { packageId },
       data: {
-        packingStatus: newPackageStatus,
-        packingAssignedAt,
-        packingCompletedAt,
+        packingStatus: newStatus,
+        packingCompletedAt: newStatus === PackageStatus.COMPLETED ? new Date() : null,
       },
     });
   }

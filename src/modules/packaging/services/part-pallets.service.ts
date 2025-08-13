@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PartPalletsQueryDto } from '../dto/part-pallets-query.dto';
+import { AssignPalletToPackageDto } from '../dto/assign-pallet-to-package.dto';
 import {
   PartPalletsResponseDto,
   PalletDetailDto,
@@ -75,6 +76,16 @@ export class PartPalletsService {
         palletId: true,
         palletName: true,
         quantity: true,
+        part: {
+          select: {
+            status: true,
+          },
+        },
+        packageAssignments: {
+          select: {
+            assignmentId: true,
+          },
+        },
         palletBufferCells: {
           where: {
             removedAt: null, // Только текущие размещения
@@ -162,6 +173,8 @@ export class PartPalletsService {
         palletId: pallet.palletId,
         palletName: pallet.palletName,
         quantity: pallet.quantity.toNumber(),
+        status: pallet.part.status as string,
+        assignedToPackage: pallet.packageAssignments.length > 0,
         currentCell: currentBufferCell
           ? {
               cellId: currentBufferCell.cell.cellId,
@@ -241,6 +254,16 @@ export class PartPalletsService {
         palletId: true,
         palletName: true,
         quantity: true,
+        part: {
+          select: {
+            status: true,
+          },
+        },
+        packageAssignments: {
+          select: {
+            assignmentId: true,
+          },
+        },
         palletBufferCells: {
           where: {
             removedAt: null, // Только текущие размещения
@@ -319,6 +342,8 @@ export class PartPalletsService {
       palletId: palletRaw.palletId,
       palletName: palletRaw.palletName,
       quantity: palletRaw.quantity.toNumber(),
+      status: palletRaw.part.status as string,
+      assignedToPackage: palletRaw.packageAssignments.length > 0,
       currentCell: currentBufferCell
         ? {
             cellId: currentBufferCell.cell.cellId,
@@ -406,5 +431,84 @@ export class PartPalletsService {
       palletsNotInCells: totalPallets - palletsInCells,
       stageProgressByStatus: progressByStatus,
     };
+  }
+
+  // Назначение поддона на упаковку
+  async assignPalletToPackage(dto: AssignPalletToPackageDto) {
+    const { palletId, packageId, quantity } = dto;
+
+    // Проверяем существование поддона
+    const pallet = await this.prisma.pallet.findUnique({
+      where: { palletId },
+      include: {
+        part: { select: { status: true } },
+        palletBufferCells: {
+          where: { removedAt: null },
+          include: { cell: true },
+        },
+      },
+    });
+
+    if (!pallet) {
+      throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
+    }
+
+    // Проверяем существование упаковки
+    const packageExists = await this.prisma.package.findUnique({
+      where: { packageId },
+    });
+
+    if (!packageExists) {
+      throw new NotFoundException(`Упаковка с ID ${packageId} не найдена`);
+    }
+
+    // Проверяем, что поддон находится в ячейке
+    const currentCell = pallet.palletBufferCells[0];
+    if (!currentCell) {
+      throw new BadRequestException('Поддон не находится в ячейке буфера');
+    }
+
+    // Проверяем количество
+    if (quantity > pallet.quantity.toNumber()) {
+      throw new BadRequestException('Количество превышает доступное на поддоне');
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // Обновляем статус детали на AWAITING_PACKAGING
+      await tx.part.update({
+        where: { partId: pallet.partId },
+        data: { status: 'AWAITING_PACKAGING' },
+      });
+
+      // Удаляем поддон из ячейки буфера
+      await tx.palletBufferCell.update({
+        where: { palletCellId: currentCell.palletCellId },
+        data: { removedAt: new Date() },
+      });
+
+      // Обновляем загрузку ячейки
+      await tx.bufferCell.update({
+        where: { cellId: currentCell.cellId },
+        data: {
+          currentLoad: { decrement: pallet.quantity },
+          status: 'AVAILABLE',
+        },
+      });
+
+      // Создаем назначение поддона на упаковку
+      const assignment = await tx.palletPackageAssignment.create({
+        data: {
+          palletId,
+          packageId,
+          quantity,
+        },
+      });
+
+      return {
+        success: true,
+        assignmentId: assignment.assignmentId,
+        message: 'Поддон успешно назначен на упаковку',
+      };
+    });
   }
 }

@@ -10,6 +10,8 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { PackingAssignmentService } from '../services/packing-assignment.service';
 import {
@@ -24,9 +26,28 @@ import {
 
 @Controller('packing-assignments')
 export class PackingAssignmentController {
+  private readonly logger = new Logger(PackingAssignmentController.name);
+
   constructor(
     private readonly packingAssignmentService: PackingAssignmentService,
   ) {}
+
+  @Get('machines')
+  async getPackingMachines(@Query('stageId') stageId?: string) {
+    const stageIdNum = stageId ? Number(stageId) : undefined;
+
+    if (stageId && stageIdNum && (isNaN(stageIdNum) || stageIdNum <= 0)) {
+      throw new NotFoundException('Некорректный ID участка');
+    }
+
+    this.logger.log(
+      `Запрос на получение станков упаковки для участка с ID: ${stageIdNum}`,
+    );
+
+    return this.packingAssignmentService.getPackingMachinesByStageId(
+      stageIdNum,
+    );
+  }
 
   // Создание нового назначения задания на станок упаковки
   @Post()
@@ -74,5 +95,4 @@ export class PackingAssignmentController {
       machineIdNum,
     );
   }
-
 }
