@@ -21,6 +21,16 @@ export class CreateRouteDto {
   @IsNumber()
   @IsPositive()
   lineId?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Этапы маршрута с порядковыми номерами',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateRouteStageDto)
+  stages?: CreateRouteStageDto[];
 }
 
 // DTO для обновления маршрута
