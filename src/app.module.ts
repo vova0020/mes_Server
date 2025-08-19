@@ -21,6 +21,7 @@ import { DetailsDirectoryModule } from './modules/detailsDirectory/details-direc
 import { ProductionOrdersModule } from './modules/production-orders/production-orders.module';
 import { RouteManagementModule } from './modules/route-management/route-management.module';
 import { OrderManagementModule } from './modules/order-management/order-management.module';
+import { RouteListModule } from './modules/routeList/route-list.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { OrderManagementModule } from './modules/order-management/order-manageme
     ProductionOrdersModule,
     RouteManagementModule,
     OrderManagementModule,
+    RouteListModule,
     
     // MachinNoSmenModule,
     // MachinModule,
