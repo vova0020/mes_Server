@@ -11,14 +11,11 @@ import {
   OrderDetailResponseDto,
   OrderStatusUpdateResponseDto,
 } from '../dto/order-management.dto';
-import { EventsService } from '../../websocket/services/events.service';
-import { WebSocketRooms } from '../../websocket/types/rooms.types';
 
 @Injectable()
 export class OrderManagementService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
   ) {}
 
   /**
@@ -118,17 +115,7 @@ export class OrderManagementService {
     });
 
     // Отправляем событие об изменении статуса через WebSocket
-    this.eventsService.emitToRoom(
-      WebSocketRooms.ORDER_MANAGEMENT || 'order-management',
-      'orderStatusChanged',
-      {
-        orderId,
-        previousStatus: currentStatus,
-        newStatus,
-        launchPermission: updatedOrder.launchPermission,
-        timestamp: new Date().toISOString(),
-      },
-    );
+
 
     return {
       orderId,
@@ -168,17 +155,7 @@ export class OrderManagementService {
       },
     });
 
-    this.eventsService.emitToRoom(
-      WebSocketRooms.ORDER_MANAGEMENT || 'order-management',
-      'orderStatusChanged',
-      {
-        orderId,
-        previousStatus: currentStatus,
-        newStatus: OrderStatus.POSTPONED,
-        launchPermission: false,
-        timestamp: new Date().toISOString(),
-      },
-    );
+   
 
     return {
       orderId,
@@ -235,14 +212,7 @@ export class OrderManagementService {
       where: { orderId },
     });
 
-    this.eventsService.emitToRoom(
-      WebSocketRooms.ORDER_MANAGEMENT || 'order-management',
-      'orderDeleted',
-      {
-        orderId,
-        timestamp: new Date().toISOString(),
-      },
-    );
+   
 
     return { message: `Заказ ${orderId} успешно удален` };
   }

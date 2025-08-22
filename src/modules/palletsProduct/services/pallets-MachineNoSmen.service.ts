@@ -1,7 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
-import { EventsGateway } from 'src/modules/websocket/events.gateway';
 import { PalletDto, PalletsResponseDto, RedistributePalletPartsResponseDto } from '../dto/pallet-master.dto';
 
 @Injectable()
@@ -10,7 +9,7 @@ export class PalletMachineNoSmenService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsGateway: EventsGateway,
+ 
   ) { }
 
   /**
@@ -438,7 +437,7 @@ export class PalletMachineNoSmenService {
         },
       };
 
-      this.eventsGateway.server.to('palets').emit('startWork', eventData);
+     
 
       return {
         message: 'Поддон успешно взят в работу',

@@ -5,8 +5,7 @@ import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
 } from '../../dto/machines/machines.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 export interface CreateMachineData {
   machineName: string;
@@ -30,7 +29,7 @@ export class MachinesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {
     this.logger.log('🔧 MachinesService: Сервис инициализирован');
   }
@@ -160,14 +159,7 @@ export class MachinesService {
       });
 
       // Отправляем событие о создании машины в комнату машин
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineCreated',
-        {
-          machine: result,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -216,14 +208,7 @@ export class MachinesService {
       });
 
       // Отправляем событие об обновлении машины в комнату машин
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineUpdated',
-        {
-          machine: result,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -273,14 +258,7 @@ export class MachinesService {
       });
 
       // Отправляем событие об удалении машины в комнату машин
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineDeleted',
-        {
-          machine: machine,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

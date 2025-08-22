@@ -23,8 +23,6 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { MachinesService } from '../../services/machines/machines.service';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
 
 // DTO для создания станка с валидацией
 export class CreateMachineDto {
@@ -131,7 +129,7 @@ export class MachineSubstageDto {
 export class MachinesController {
   constructor(
     private readonly machinesService: MachinesService,
-    private readonly eventsService: EventsService,
+
   ) {
     console.log('🎮 MachinesController: Контроллер инициализирован');
   }
@@ -353,17 +351,7 @@ export class MachinesController {
         `✅ POST /machines - Успешно создан станок "${newMachine.machineName}" (ID: ${newMachine.machineId}) за ${duration}ms`,
       );
 
-      // Уведомляем всех пользователей через WebSocket
-      console.log('📡 Отправка WebSocket уведомления о создании станка');
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineCreated',
-        {
-          machine: newMachine,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+     
 
       return newMachine;
     } catch (error) {
@@ -404,17 +392,7 @@ export class MachinesController {
         `✅ PUT /machines/${id} - Успешно обновлен станок "${updatedMachine.machineName}" за ${duration}ms`,
       );
 
-      // Уведомляем всех пользователей через WebSocket
-      console.log('📡 Отправка WebSocket уведомления об обновлении станка');
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineUpdated',
-        {
-          machine: updatedMachine,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+     
 
       return updatedMachine;
     } catch (error) {
@@ -451,18 +429,7 @@ export class MachinesController {
         `✅ DELETE /machines/${id} - Успешно удален станок "${deletedMachine.machineName}" за ${duration}ms`,
       );
 
-      // Уведомляем всех пользователей через WebSocket
-      console.log('📡 Отправка WebSocket уведомления об удалении станка');
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineDeleted',
-        {
-          machine: deletedMachine,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
-
+      
       return { message: 'Станок успешно удален' };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -506,17 +473,7 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления о добавлении связи с этапом',
       );
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineStageAdded',
-        {
-          machineId,
-          stageId: machineStageDto.stageId,
-          result,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+      
 
       return result;
     } catch (error) {
@@ -554,16 +511,7 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления об удалении связи с этапом',
       );
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineStageRemoved',
-        {
-          machineId,
-          stageId,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+     
 
       return { message: 'Связь с этапом успешно удалена' };
     } catch (error) {
@@ -608,17 +556,7 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления о добавлении связи с подэтапом',
       );
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineSubstageAdded',
-        {
-          machineId,
-          substageId: machineSubstageDto.substageId,
-          result,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+      
 
       return result;
     } catch (error) {
@@ -656,16 +594,7 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления об удалении связи с подэтапом',
       );
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_MACHINES,
-        'machineSubstageRemoved',
-        {
-          machineId,
-          substageId,
-          timestamp: new Date().toISOString(),
-        },
-      );
-      console.log('✅ WebSocket уведомление отправлено');
+      
 
       return { message: 'Связь с подэтапом успешно удалена' };
     } catch (error) {

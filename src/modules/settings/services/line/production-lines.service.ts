@@ -15,14 +15,13 @@ import {
   LineStagesUpdateDto,
   LineMaterialResponseDto,
 } from '../../dto/line/production-line.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class ProductionLinesService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   async create(
@@ -94,15 +93,7 @@ export class ProductionLinesService {
     const newLine = await this.findOne(line.lineId);
 
     // Отправляем событие о создании потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'lineCreated',
-      {
-        line: newLine,
-        timestamp: new Date().toISOString(),
-      },
-    );
-
+    
     return newLine;
   }
 
@@ -271,14 +262,7 @@ export class ProductionLinesService {
     const updatedLine = await this.findOne(id);
 
     // Отправляем событие об обновлении потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'lineUpdated',
-      {
-        line: updatedLine,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
 
     return updatedLine;
   }
@@ -308,15 +292,7 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие об удалении потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'lineDeleted',
-      {
-        lineId: id,
-        lineName: line.lineName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
   }
 
   async linkStageToLine(linkDto: LinkStageToLineDto): Promise<void> {
@@ -355,17 +331,7 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие о привязке этапа к потоку
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'stageLinkedToLine',
-      {
-        lineId: linkDto.lineId,
-        stageId: linkDto.stageId,
-        lineName: line.lineName,
-        stageName: stage.stageName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
   }
 
   async unlinkStageFromLine(lineStageId: number): Promise<void> {
@@ -386,17 +352,7 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие об отвязке этапа от потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'stageUnlinkedFromLine',
-      {
-        lineId: existingLink.lineId,
-        stageId: existingLink.stageId,
-        lineName: existingLink.line.lineName,
-        stageName: existingLink.stage.stageName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
   }
 
   async getStagesInLine(lineId: number): Promise<LineStageResponseDto[]> {
@@ -461,17 +417,7 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие о привязке материала к потоку
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'materialLinkedToLine',
-      {
-        lineId: linkDto.lineId,
-        materialId: linkDto.materialId,
-        lineName: line.lineName,
-        materialName: material.materialName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
   }
 
   async unlinkMaterialFromLine(linkDto: LinkMaterialToLineDto): Promise<void> {
@@ -502,17 +448,7 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие об отвязке материала от потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'materialUnlinkedFromLine',
-      {
-        lineId: linkDto.lineId,
-        materialId: linkDto.materialId,
-        lineName: line?.lineName,
-        materialName: material?.materialName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
   }
 
   async getMaterialsInLine(lineId: number): Promise<LineMaterialResponseDto[]> {
@@ -582,16 +518,7 @@ export class ProductionLinesService {
     const updatedMaterials = await this.getMaterialsInLine(lineId);
 
     // Отправляем событие об обновлении материалов потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'lineMaterialsUpdated',
-      {
-        lineId,
-        lineName: line.lineName,
-        materials: updatedMaterials,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
 
     return updatedMaterials;
   }
@@ -664,16 +591,7 @@ export class ProductionLinesService {
     const updatedStages = await this.getStagesInLine(lineId);
 
     // Отправляем событие об обновлении этапов потока
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-      'lineStagesUpdated',
-      {
-        lineId,
-        lineName: line.lineName,
-        stages: updatedStages,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
 
     return updatedStages;
   }

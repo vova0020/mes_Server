@@ -1,14 +1,14 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
-import { EventsGateway } from 'src/modules/websocket/events.gateway';
+
 
 @Injectable()
 export class PalletMachineService {
   private readonly logger = new Logger(PalletMachineService.name);
   constructor(
     private prisma: PrismaService,
-    private readonly eventsGateway: EventsGateway,
+
   ) { }
 
   /**
@@ -199,10 +199,7 @@ export class PalletMachineService {
         },
       });
 
-      // Отправляем событие
-      this.eventsGateway.server
-        .to('palets')
-        .emit('startWork', currentAssignment);
+   
       return currentAssignment;
     }
 
@@ -274,9 +271,7 @@ export class PalletMachineService {
       };
 
       // Отправляем событие
-      this.eventsGateway.server
-        .to('palets')
-        .emit('startWork', optimizedAssignment);
+      
       return optimizedAssignment;
     });
   }

@@ -10,14 +10,13 @@ import {
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
 } from '../../dto/material/material-group.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class MaterialGroupsService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   async create(
@@ -50,14 +49,7 @@ export class MaterialGroupsService {
     };
 
     // Отправляем событие о создании группы материалов
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIAL_GROUPS,
-      'materialGroupCreated',
-      {
-        group: newGroup,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
 
     return newGroup;
   }
@@ -150,14 +142,7 @@ export class MaterialGroupsService {
     };
 
     // Отправляем событие об обновлении группы материалов
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIAL_GROUPS,
-      'materialGroupUpdated',
-      {
-        group: groupResponse,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
 
     return groupResponse;
   }
@@ -188,15 +173,7 @@ export class MaterialGroupsService {
     });
 
     // Отправляем событие об удалении группы материалов
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIAL_GROUPS,
-      'materialGroupDeleted',
-      {
-        groupId: id,
-        groupName: group.groupName,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
   }
 
   async linkMaterialToGroup(linkDto: LinkMaterialToGroupDto): Promise<void> {
@@ -239,30 +216,10 @@ export class MaterialGroupsService {
     });
 
     // Отправляем событие о привязке материала к группе
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIAL_GROUPS,
-      'materialLinkedToGroup',
-      {
-        groupId: linkDto.groupId,
-        materialId: linkDto.materialId,
-        groupName: group.groupName,
-        materialName: material.materialName,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
 
     // Также отправляем в комнату материалов
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIALS,
-      'materialLinkedToGroup',
-      {
-        groupId: linkDto.groupId,
-        materialId: linkDto.materialId,
-        groupName: group.groupName,
-        materialName: material.materialName,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
   }
 
   async unlinkMaterialFromGroup(
@@ -295,30 +252,7 @@ export class MaterialGroupsService {
     });
 
     // Отправляем событие об отвязке материала от группы
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIAL_GROUPS,
-      'materialUnlinkedFromGroup',
-      {
-        groupId: linkDto.groupId,
-        materialId: linkDto.materialId,
-        groupName: group?.groupName,
-        materialName: material?.materialName,
-        timestamp: new Date().toISOString(),
-      },
-    );
-
-    // Также отправляем в комнату материалов
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_MATERIALS,
-      'materialUnlinkedFromGroup',
-      {
-        groupId: linkDto.groupId,
-        materialId: linkDto.materialId,
-        groupName: group?.groupName,
-        materialName: material?.materialName,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
   }
 
   async getMaterialsInGroup(groupId: number) {

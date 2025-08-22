@@ -6,8 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 import {
   CreatePickerDto,
   UpdatePickerDto,
@@ -23,7 +22,7 @@ export class PickersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   // ========================================
@@ -69,14 +68,7 @@ export class PickersService {
       );
 
       // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'pickerCreated',
-        {
-          picker: this.formatPickerResponse(picker),
-          timestamp: new Date().toISOString(),
-        }
-      );
+      
 
       return this.formatPickerResponse(picker);
     } catch (error) {
@@ -160,31 +152,10 @@ export class PickersService {
         );
 
         // Уведомляем через WebSocket
-        this.eventsService.emitToRoom(
-          WebSocketRooms.SETTINGS_USER,
-          'pickerCreated',
-          {
-            picker: this.formatPickerResponse(picker),
-            timestamp: new Date().toISOString(),
-          }
-        );
+        
 
         // Если была создана привязка роли, отправляем дополнительное уведомление
-        if (roleBindingId) {
-          this.eventsService.emitToRoom(
-            WebSocketRooms.SETTINGS_USER,
-            'userRoleBindingCreated',
-            {
-              userId: createPickerWithRoleDto.userId,
-              bindingId: roleBindingId,
-              role: UserRoleType.ORDER_PICKER,
-              contextType: RoleContextType.ORDER_PICKER,
-              contextId: picker.pickerId,
-              contextName: this.formatPickerName(picker),
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
+        
 
         return result;
       });
@@ -303,16 +274,7 @@ export class PickersService {
       this.logger.log(`Комплектовщик обновлён успешно: ID ${pickerId}`);
 
       // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'pickerUpdated',
-        {
-          picker: this.formatPickerResponse(updatedPicker),
-          changes: this.getChangesFromUpdateDto(updatePickerDto),
-          timestamp: new Date().toISOString(),
-        }
-      );
-
+      
       return this.formatPickerResponse(updatedPicker);
     } catch (error) {
       this.logger.error(
@@ -347,15 +309,7 @@ export class PickersService {
       this.logger.log(`Комплектовщик удалён успешно: ID ${pickerId}`);
 
       // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'pickerDeleted',
-        {
-          pickerId,
-          pickerName: this.formatPickerName(picker),
-          timestamp: new Date().toISOString(),
-        }
-      );
+      
     } catch (error) {
       this.logger.error(
         `Ошибка удаления комплектовщика ID ${pickerId}: ${error.message}`,

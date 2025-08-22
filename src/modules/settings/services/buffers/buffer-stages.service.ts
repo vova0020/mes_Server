@@ -11,8 +11,7 @@ import {
   BufferStageResponse,
   StagesWithBuffersResponse,
 } from '../../dto/buffers/buffers.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class BufferStagesService {
@@ -20,7 +19,7 @@ export class BufferStagesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   // ================================
@@ -169,13 +168,7 @@ export class BufferStagesService {
       };
 
       // Отправляем событие о создании связи буфера с этапом
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStageCreated', {
-        bufferId: bufferId,
-        bufferName: buffer.bufferName,
-        bufferStage: result,
-        timestamp: new Date().toISOString(),
-      });
-
+      
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Создана связь буфера "${buffer.bufferName}" с этапом "${stage.stageName}" (ID: ${result.bufferStageId}) за ${executionTime}ms`,
@@ -229,14 +222,7 @@ export class BufferStagesService {
       });
 
       // Отправляем событие об удалении связи буфера с этапом
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStageDeleted', {
-        bufferStageId: bufferStageId,
-        bufferId: bufferStage.bufferId,
-        bufferName: bufferStage.buffer.bufferName,
-        stageId: bufferStage.stageId,
-        stageName: bufferStage.stage.stageName,
-        timestamp: new Date().toISOString(),
-      });
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -334,13 +320,7 @@ export class BufferStagesService {
       }));
 
       // Отправляем событие об обновлении связей буфера с этапами
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferStagesUpdated', {
-        bufferId: bufferId,
-        bufferName: buffer.bufferName,
-        bufferStages: mappedResult,
-        timestamp: new Date().toISOString(),
-      });
-
+      
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Успешно обновлены связи буфера "${buffer.bufferName}" с ${mappedResult.length} этапами за ${executionTime}ms`,

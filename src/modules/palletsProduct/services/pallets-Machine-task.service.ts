@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PalletsResponseDto } from '../dto/pallet-machin.dto';
-import { EventsGateway } from 'src/modules/websocket/events.gateway';
+
 
 @Injectable()
 export class PalletsMachineTaskService {
   constructor(
     private prisma: PrismaService,
-    private readonly eventsGateway: EventsGateway,
+
   ) { }
 
   /**

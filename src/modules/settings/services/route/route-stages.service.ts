@@ -11,8 +11,7 @@ import {
   UpdateRouteStageDto,
   ReorderRouteStagesDto,
 } from '../../dto/route/routes.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class RouteStagesService {
@@ -20,7 +19,7 @@ export class RouteStagesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   // ================================
@@ -200,27 +199,7 @@ export class RouteStagesService {
       });
 
       // Отправляем событие о связывании этапа с линией в комнату производственных этапов
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-        'stageLevel1Created',
-        {
-          stage: routeStage,
-          timestamp: new Date().toISOString(),
-        },
-      );
-
-      // Также отправляем событие в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'stageLinkedToLine',
-        {
-          lineId: routeId,
-          stageId: routeStage.stageId,
-          lineName: route.routeName,
-          stageName: routeStage.stage.stageName,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -347,14 +326,7 @@ export class RouteStagesService {
       });
 
       // Отправляем событие об обновлении этапа в комнату производственных этапов
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-        'stageLevel1Updated',
-        {
-          stage: updatedRouteStage,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -443,17 +415,7 @@ export class RouteStagesService {
       });
 
       // Отправляем событие об удалении этапа
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-        'stageLevel1Deleted',
-        {
-          stageId: routeStage.stageId,
-          routeId: routeStage.routeId,
-          routeName: routeStage.route.routeName,
-          stageName: routeStage.stage.stageName,
-          timestamp: new Date().toISOString(),
-        },
-      );
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -608,16 +570,7 @@ export class RouteStagesService {
       });
 
       // Отправляем событие об обновлении этапов линии (все этапы удалены)
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineStagesUpdated',
-        {
-          lineId: routeId,
-          lineName: route.routeName,
-          stages: [], // Пустой массив, так как все этапы удалены
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -701,16 +654,7 @@ export class RouteStagesService {
       const reorderedStages = await this.getRouteStages(routeId);
 
       // Отправляем событие об обновлении этапов линии в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineStagesUpdated',
-        {
-          lineId: routeId,
-          lineName: route.routeName,
-          stages: reorderedStages,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -812,16 +756,7 @@ export class RouteStagesService {
       const updatedStages = await this.getRouteStages(routeId);
 
       // Отправляем событие об обновлении этапов линии в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineStagesUpdated',
-        {
-          lineId: routeId,
-          lineName: routeStage.route.routeName,
-          stages: updatedStages,
-          timestamp: new Date().toISOString(),
-        },
-      );
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

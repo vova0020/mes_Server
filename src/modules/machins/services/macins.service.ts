@@ -1,15 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { MachineResponseDto, MachineStatus } from '../dto/machineNoSmen.dto';
-import { EventsService } from '../../websocket/services/events.service';
-import { WebSocketRooms } from '../../websocket/types/rooms.types';
+
 import { MachineStatus as PrismaMachineStatus } from '@prisma/client';
 
 @Injectable()
 export class MachinsService {
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
   ) {}
 
   /**
@@ -78,22 +76,7 @@ export class MachinsService {
     const firstStage = updatedMachine.machinesStages[0]?.stage || null;
 
     // Отправляем событие через новый WebSocket API
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCT_MACHINES,
-      'machineStatusUpdated',
-      {
-        machine: {
-          id: updatedMachine.machineId,
-          name: updatedMachine.machineName,
-          status: updatedMachine.status,
-          recommendedLoad: Number(updatedMachine.recommendedLoad),
-          noShiftAssignment: updatedMachine.noSmenTask,
-          segmentId: firstStage?.stageId || null,
-          segmentName: firstStage?.stageName || null,
-        },
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
 
     return {
       id: updatedMachine.machineId,

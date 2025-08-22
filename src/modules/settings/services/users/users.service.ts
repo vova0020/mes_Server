@@ -6,8 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 import { PickersService } from './pickers.service';
 import * as bcrypt from 'bcrypt';
 import {
@@ -37,7 +36,6 @@ export class UsersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventsService: EventsService,
     private readonly pickersService: PickersService,
   ) {}
 
@@ -98,15 +96,7 @@ export class UsersService {
         `Пользователь создан успешно: ID ${user.userId}, логин: ${user.login}`,
       );
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userCreated',
-        {
-          user: this.formatUserResponse(user),
-          timestamp: new Date().toISOString(),
-        }
-      );
+
 
       return this.formatUserResponse(user);
     } catch (error) {
@@ -226,16 +216,7 @@ export class UsersService {
 
       this.logger.log(`Пользователь обновлён успешно: ID ${userId}`);
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userUpdated',
-        {
-          user: this.formatUserResponse(updatedUser),
-          changes: this.getChangesFromUpdateDto(updateUserDto),
-          timestamp: new Date().toISOString(),
-        }
-      );
+
 
       return this.formatUserResponse(updatedUser);
     } catch (error) {
@@ -268,16 +249,7 @@ export class UsersService {
         `Пользователь удалён успешно: ID ${userId}, логин: ${user.login}`,
       );
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userDeleted',
-        {
-          userId,
-          userName: user.login,
-          timestamp: new Date().toISOString(),
-        }
-      );
+
     } catch (error) {
       this.logger.error(
         `Ошибка удаления пользователя ID ${userId}: ${error.message}`,
@@ -330,16 +302,7 @@ export class UsersService {
       );
 
       // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userRoleAssigned',
-        {
-          userId: createUserRoleDto.userId,
-          role: createUserRoleDto.role,
-          roleType: 'global' as const,
-          timestamp: new Date().toISOString(),
-        }
-      );
+      
     } catch (error) {
       this.logger.error(
         `Ошибка назначения глобальной роли: ${error.message}`,
@@ -415,20 +378,8 @@ export class UsersService {
         `Контекстная привязка создана успешно: ${createRoleBindingDto.role} -> ${createRoleBindingDto.contextType}:${createRoleBindingDto.contextId}`,
       );
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userRoleBindingCreated',
-        {
-          userId: createRoleBindingDto.userId,
-          bindingId: createdBinding?.id || 0,
-          role: createRoleBindingDto.role,
-          contextType: createRoleBindingDto.contextType,
-          contextId: createRoleBindingDto.contextId,
-          contextName,
-          timestamp: new Date().toISOString(),
-        }
-      );
+  
+      
     } catch (error) {
       this.logger.error(
         `Ошибка создания контекстной привязки: ${error.message}`,
@@ -514,17 +465,7 @@ export class UsersService {
         `Глобальная роль удалена успешно: ${role} у пользователя ID ${userId}`,
       );
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userRoleRemoved',
-        {
-          userId,
-          role,
-          roleType: 'global' as const,
-          timestamp: new Date().toISOString(),
-        }
-      );
+      
     } catch (error) {
       this.logger.error(
         `Ошибка удаления глобальной роли: ${error.message}`,
@@ -559,20 +500,7 @@ export class UsersService {
 
       this.logger.log(`Контекстная привязка удалена успешно: ID ${bindingId}`);
 
-      // Уведомляем через WebSocket
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_USER,
-        'userRoleBindingRemoved',
-        {
-          userId: binding.userId,
-          bindingId,
-          role: binding.role.roleName,
-          contextType: this.mapPrismaContextTypeToDto(binding.contextType),
-          contextId: binding.contextId,
-          contextName,
-          timestamp: new Date().toISOString(),
-        }
-      );
+      
     } catch (error) {
       this.logger.error(
         `Ошибка удаления контекстной привязки: ${error.message}`,

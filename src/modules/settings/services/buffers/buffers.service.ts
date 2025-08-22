@@ -12,8 +12,7 @@ import {
   BufferResponse,
   BufferDetailResponse,
 } from '../../dto/buffers/buffers.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 import { BufferCellsService } from './buffer-cells.service';
 import { BufferStagesService } from './buffer-stages.service';
 
@@ -23,7 +22,6 @@ export class BuffersService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
     private readonly bufferCellsService: BufferCellsService,
     private readonly bufferStagesService: BufferStagesService,
   ) {}
@@ -244,14 +242,7 @@ export class BuffersService {
       const newBuffer = await this.getBufferById(createdBufferId);
 
       // Отправляем событие о создании буфера
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_BUFFERS,
-        'bufferCreated',
-        {
-          buffer: newBuffer,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -332,18 +323,7 @@ export class BuffersService {
       const updatedBuffer = await this.getBufferById(bufferId);
 
       // Отправляем событие об обновлении буфера
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_BUFFERS,
-        'bufferUpdated',
-        {
-          buffer: updatedBuffer,
-          changes: {
-            name: oldName !== updatedBuffer.bufferName,
-            location: oldLocation !== updatedBuffer.location,
-          },
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -421,16 +401,7 @@ export class BuffersService {
       });
 
       // Отправляем событие об удалении буфера
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_BUFFERS,
-        'bufferDeleted',
-        {
-          bufferId: bufferId,
-          bufferName: buffer.bufferName,
-          timestamp: new Date().toISOString(),
-        },
-      );
-
+      
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Буфер "${buffer.bufferName}" (ID: ${bufferId}) успешно удален за ${executionTime}ms`,
@@ -545,16 +516,7 @@ export class BuffersService {
       const finalCopiedBuffer = await this.getBufferById(copiedBufferId);
 
       // Отправляем событие о копировании буфера
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_BUFFERS,
-        'bufferCopied',
-        {
-          originalBuffer: originalBuffer,
-          copiedBuffer: finalCopiedBuffer,
-          copyOptions: { copyCells, copyStages },
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

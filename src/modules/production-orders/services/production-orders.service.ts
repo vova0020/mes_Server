@@ -12,14 +12,11 @@ import {
   OrderStatus,
   PackageDirectoryResponseDto,
 } from '../dto/production-order.dto';
-import { EventsService } from '../../websocket/services/events.service';
-import { WebSocketRooms } from '../../websocket/types/rooms.types';
 
 @Injectable()
 export class ProductionOrdersService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
   ) {}
 
   async create(
@@ -137,14 +134,7 @@ export class ProductionOrdersService {
     const newOrder = await this.findOne(order.orderId);
 
     // Отправляем событие о создании заказа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
-      'orderCreated',
-      {
-        order: newOrder,
-        timestamp: new Date().toISOString(),
-      },
-    );
+   
 
     return newOrder;
   }
@@ -361,14 +351,7 @@ export class ProductionOrdersService {
     const updatedOrder = await this.findOne(id);
 
     // Отправляем событие об обновлении заказа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
-      'orderUpdated',
-      {
-        order: updatedOrder,
-        timestamp: new Date().toISOString(),
-      },
-    );
+ 
 
     return updatedOrder;
   }
@@ -435,16 +418,7 @@ export class ProductionOrdersService {
     const updatedOrder = await this.findOne(id);
 
     // Отправляем событие об изменении приоритета
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
-      'orderPriorityChanged',
-      {
-        order: updatedOrder,
-        previousPriority: currentPriority,
-        newPriority,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
 
     return updatedOrder;
   }
@@ -501,15 +475,7 @@ export class ProductionOrdersService {
     });
 
     // Отправляем событие об удалении заказа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
-      'orderDeleted',
-      {
-        orderId: id,
-        batchNumber: order.batchNumber,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
   }
 
   async updateStatus(
@@ -542,16 +508,7 @@ export class ProductionOrdersService {
     const updatedOrder = await this.findOne(id);
 
     // Отправляем событие об изменении статуса
-    this.eventsService.emitToRoom(
-      WebSocketRooms.PRODUCTION_ORDERS || 'production-orders',
-      'orderStatusChanged',
-      {
-        order: updatedOrder,
-        previousStatus: order.status,
-        newStatus: status,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    
 
     return updatedOrder;
   }

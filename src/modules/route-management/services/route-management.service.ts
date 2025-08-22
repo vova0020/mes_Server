@@ -13,14 +13,11 @@ import {
   RouteInfoDto,
   PartForRouteManagementDto,
 } from '../dto/route-management.dto';
-import { EventsService } from '../../websocket/services/events.service';
-import { WebSocketRooms } from '../../websocket/types/rooms.types';
 
 @Injectable()
 export class RouteManagementService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
   ) {}
 
   async getOrdersForRouteManagement(): Promise<OrderForRoutesResponseDto[]> {
@@ -268,16 +265,7 @@ export class RouteManagementService {
     };
 
     // Отправляем событие об изменении маршрута
-    this.eventsService.emitToRoom(
-      WebSocketRooms.ROUTE_MANAGEMENT || 'route-management',
-      'partRouteUpdated',
-      {
-        orderId: order.orderId,
-        batchNumber: order.batchNumber,
-        partRouteUpdate: result,
-        timestamp: new Date().toISOString(),
-      },
-    );
+   
 
     return result;
   }

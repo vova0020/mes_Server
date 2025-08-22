@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
+import { SocketService } from '../../websocket/services/socket.service';
 import {
   OperationCompletionStatus,
   PalletDto,
@@ -12,7 +13,10 @@ import { MachineTaskMasterResponseDto } from '../dto/machine-taskDetail.dto';
 export class PalletsMasterService {
   private readonly logger = new Logger(PalletsMasterService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   /**
    * Получить все поддоны по ID детали
@@ -90,7 +94,8 @@ export class PalletsMasterService {
     const totalPalletQuantity = pallets.reduce((sum, pallet) => {
       return sum + Number(pallet.quantity);
     }, 0);
-    const unallocatedQuantity = Number(part.totalQuantity) - totalPalletQuantity - totalDefectiveQuantity;
+    const unallocatedQuantity =
+      Number(part.totalQuantity) - totalPalletQuantity - totalDefectiveQuantity;
 
     // 6. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
@@ -611,12 +616,16 @@ export class PalletsMasterService {
       });
 
       if (!machineAssignment) {
-        throw new NotFoundException(`Назначение с ID ${operationId} не найдено`);
+        throw new NotFoundException(
+          `Назначение с ID ${operationId} не найдено`,
+        );
       }
 
       const stageProgress = machineAssignment.pallet.palletStageProgress[0];
       if (!stageProgress) {
-        throw new NotFoundException(`Активный прогресс этапа для операции ${operationId} не найден`);
+        throw new NotFoundException(
+          `Активный прогресс этапа для операции ${operationId} не найден`,
+        );
       }
 
       // Проверяем, что операция активна
@@ -671,13 +680,24 @@ export class PalletsMasterService {
           new Date(),
         );
         if (shouldCompletePartProgress) {
-          await this.updatePartStatusIfNeeded(this.prisma, machineAssignment.pallet.partId, 'COMPLETED');
+          await this.updatePartStatusIfNeeded(
+            this.prisma,
+            machineAssignment.pallet.partId,
+            'COMPLETED',
+          );
         }
 
         // Проверяем, является ли следующий этап финальным (упаковка)
-        await this.checkAndCreatePackingTask(machineAssignment.pallet.partId, stageProgress.routeStageId);
+        await this.checkAndCreatePackingTask(
+          machineAssignment.pallet.partId,
+          stageProgress.routeStageId,
+        );
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
-        await this.updatePartStatusIfNeeded(this.prisma, machineAssignment.pallet.partId, 'IN_PROGRESS');
+        await this.updatePartStatusIfNeeded(
+          this.prisma,
+          machineAssignment.pallet.partId,
+          'IN_PROGRESS',
+        );
       }
 
       // Если операция завершена, завершаем назначение станка
@@ -698,6 +718,13 @@ export class PalletsMasterService {
       }
 
       this.logger.log(`Операция ${operationId} обновлена: ${message}`);
+
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'pallet:event',
+        { palletId: updatedStageProgress.pallet.palletId },
+      );
 
       const currentMachine = machineAssignment.machine;
 
@@ -892,21 +919,24 @@ export class PalletsMasterService {
         where: { partId },
         _sum: { quantity: true },
       });
-      const totalDefectiveQuantity = Number(defectiveQuantity._sum.quantity || 0);
+      const totalDefectiveQuantity = Number(
+        defectiveQuantity._sum.quantity || 0,
+      );
 
       // 3. Рассчитываем количество уже распределенных деталей с учетом брака
       const allocatedQuantity = part.pallets.reduce((sum, pallet) => {
         return sum + Number(pallet.quantity);
       }, 0);
 
-      const availableQuantity = Number(part.totalQuantity) - allocatedQuantity - totalDefectiveQuantity;
+      const availableQuantity =
+        Number(part.totalQuantity) - allocatedQuantity - totalDefectiveQuantity;
 
       // 4. Проверяем, достаточно ли деталей для создания поддона
       if (quantity > availableQuantity) {
         throw new Error(
           `Недостаточно деталей для создания поддона. ` +
-          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
-          `(общее количество: ${part.totalQuantity}, распределено: ${allocatedQuantity}, отбраковано: ${totalDefectiveQuantity})`,
+            `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+            `(общее количество: ${part.totalQuantity}, распределено: ${allocatedQuantity}, отбраковано: ${totalDefectiveQuantity})`,
         );
       }
 
@@ -915,7 +945,8 @@ export class PalletsMasterService {
       }
 
       // 5. Генерируем название поддона, если не указано
-      const finalPalletName = palletName || `Поддон-${part.partCode}-${Date.now()}`;
+      const finalPalletName =
+        palletName || `Поддон-${part.partCode}-${Date.now()}`;
 
       // 6. Создаем поддон в транзакции
       const newPallet = await this.prisma.$transaction(async (prisma) => {
@@ -968,11 +999,7 @@ export class PalletsMasterService {
   /**
    * Создать новый поддон (существующий метод для совместимости)
    */
-  async createPallet(
-    partId: number,
-    quantity: number,
-    palletName?: string,
-  ) {
+  async createPallet(partId: number, quantity: number, palletName?: string) {
     // Используем новый метод для создания поддона
     return this.createPalletByPartId(partId, quantity, palletName);
   }
@@ -988,9 +1015,7 @@ export class PalletsMasterService {
     machineId?: number,
     stageId?: number,
   ) {
-    this.logger.log(
-      `Отбраковка ${quantity} деталей с поддона ${palletId}`,
-    );
+    this.logger.log(`Отбраковка ${quantity} деталей с поддона ${palletId}`);
 
     const pallet = await this.prisma.pallet.findUnique({
       where: { palletId },
@@ -1050,11 +1075,13 @@ export class PalletsMasterService {
    */
   async redistributePalletParts(
     sourcePalletId: number,
-    distributions: { targetPalletId?: number; quantity: number; palletName?: string }[],
+    distributions: {
+      targetPalletId?: number;
+      quantity: number;
+      palletName?: string;
+    }[],
   ) {
-    this.logger.log(
-      `Перераспределение деталей с поддона ${sourcePalletId}`,
-    );
+    this.logger.log(`Перераспределение деталей с поддона ${sourcePalletId}`);
 
     const sourcePallet = await this.prisma.pallet.findUnique({
       where: { palletId: sourcePalletId },
@@ -1073,8 +1100,13 @@ export class PalletsMasterService {
     }
 
     return await this.prisma.$transaction(async (prisma) => {
-      const createdPallets: { id: number; name: string; quantity: number }[] = [];
-      const updatedPallets: { id: number; name: string; newQuantity: number }[] = [];
+      const createdPallets: { id: number; name: string; quantity: number }[] =
+        [];
+      const updatedPallets: {
+        id: number;
+        name: string;
+        newQuantity: number;
+      }[] = [];
 
       for (const dist of distributions) {
         if (dist.targetPalletId) {
@@ -1180,16 +1212,14 @@ export class PalletsMasterService {
         }
 
         if (pallet.partId !== partId) {
-          throw new Error(
-            `Поддон ${palletId} не принадлежит детали ${partId}`,
-          );
+          throw new Error(`Поддон ${palletId} не принадлежит детали ${partId}`);
         }
 
         // Проверяем, что на поддоне достаточно деталей для списания
         if (Number(pallet.quantity) < quantity) {
           throw new Error(
             `На поддоне ${palletId} недостаточно деталей для списания. ` +
-            `Доступно: ${pallet.quantity}, требуется: ${quantity}`,
+              `Доступно: ${pallet.quantity}, требуется: ${quantity}`,
           );
         }
       }
@@ -1355,7 +1385,8 @@ export class PalletsMasterService {
       ),
     ).length;
 
-    const shouldCompletePartProgress = completedPalletsCount === allPalletsForPart.length;
+    const shouldCompletePartProgress =
+      completedPalletsCount === allPalletsForPart.length;
 
     const existingPartProgress = await this.prisma.partRouteProgress.findFirst({
       where: { partId, routeStageId },
@@ -1365,7 +1396,9 @@ export class PalletsMasterService {
       await this.prisma.partRouteProgress.update({
         where: { prpId: existingPartProgress.prpId },
         data: {
-          status: shouldCompletePartProgress ? TaskStatus.COMPLETED : TaskStatus.IN_PROGRESS,
+          status: shouldCompletePartProgress
+            ? TaskStatus.COMPLETED
+            : TaskStatus.IN_PROGRESS,
           completedAt: shouldCompletePartProgress ? completedAt : null,
         },
       });
@@ -1374,7 +1407,9 @@ export class PalletsMasterService {
         data: {
           partId,
           routeStageId,
-          status: shouldCompletePartProgress ? TaskStatus.COMPLETED : TaskStatus.IN_PROGRESS,
+          status: shouldCompletePartProgress
+            ? TaskStatus.COMPLETED
+            : TaskStatus.IN_PROGRESS,
           completedAt: shouldCompletePartProgress ? completedAt : null,
         },
       });
@@ -1392,7 +1427,7 @@ export class PalletsMasterService {
     targetStatus: 'IN_PROGRESS' | 'COMPLETED',
   ): Promise<void> {
     const prisma = prismaOrThis.partId ? this.prisma : prismaOrThis;
-    
+
     const part = await prisma.part.findUnique({
       where: { partId },
       select: { status: true },
@@ -1408,7 +1443,10 @@ export class PalletsMasterService {
         data: { status: 'IN_PROGRESS' },
       });
     } else if (targetStatus === 'COMPLETED' && part.status === 'IN_PROGRESS') {
-      const allStagesCompleted = await this.checkAllPartStagesCompleted(partId, prisma);
+      const allStagesCompleted = await this.checkAllPartStagesCompleted(
+        partId,
+        prisma,
+      );
       if (allStagesCompleted) {
         await prisma.part.update({
           where: { partId },
@@ -1421,9 +1459,12 @@ export class PalletsMasterService {
   /**
    * Проверяет, завершены ли все этапы детали
    */
-  private async checkAllPartStagesCompleted(partId: number, prisma?: any): Promise<boolean> {
+  private async checkAllPartStagesCompleted(
+    partId: number,
+    prisma?: any,
+  ): Promise<boolean> {
     const db = prisma || this.prisma;
-    
+
     const part = await db.part.findUnique({
       where: { partId },
       include: {
@@ -1452,7 +1493,10 @@ export class PalletsMasterService {
   /**
    * Проверяет, является ли следующий этап финальным, и создает задачу упаковки
    */
-  private async checkAndCreatePackingTask(partId: number, currentRouteStageId: number): Promise<void> {
+  private async checkAndCreatePackingTask(
+    partId: number,
+    currentRouteStageId: number,
+  ): Promise<void> {
     try {
       // Получаем деталь с маршрутом
       const part = await this.prisma.part.findUnique({
@@ -1487,22 +1531,28 @@ export class PalletsMasterService {
       );
 
       if (currentStageIndex === -1) {
-        this.logger.warn(`Текущий этап ${currentRouteStageId} не найден в маршруте детали ${partId}`);
+        this.logger.warn(
+          `Текущий этап ${currentRouteStageId} не найден в маршруте детали ${partId}`,
+        );
         return;
       }
 
       // Проверяем, есть ли следующий этап
       const nextStageIndex = currentStageIndex + 1;
       if (nextStageIndex >= part.route.routeStages.length) {
-        this.logger.log(`Текущий этап является последним в маршруте для детали ${partId}`);
+        this.logger.log(
+          `Текущий этап является последним в маршруте для детали ${partId}`,
+        );
         return;
       }
 
       const nextStage = part.route.routeStages[nextStageIndex];
-      
+
       // Проверяем, является ли следующий этап финальным (упаковка)
       if (!nextStage.stage.finalStage) {
-        this.logger.log(`Следующий этап не является финальным для детали ${partId}`);
+        this.logger.log(
+          `Следующий этап не является финальным для детали ${partId}`,
+        );
         return;
       }
 
@@ -1522,7 +1572,9 @@ export class PalletsMasterService {
       });
 
       if (existingPackingTask) {
-        this.logger.log(`Задача упаковки уже существует для упаковки ${packagePart.packageId}`);
+        this.logger.log(
+          `Задача упаковки уже существует для упаковки ${packagePart.packageId}`,
+        );
         return;
       }
 
@@ -1539,7 +1591,9 @@ export class PalletsMasterService {
       });
 
       if (!packingMachine) {
-        this.logger.warn(`Не найден доступный станок для упаковки этапа ${nextStage.stageId}`);
+        this.logger.warn(
+          `Не найден доступный станок для упаковки этапа ${nextStage.stageId}`,
+        );
         return;
       }
 

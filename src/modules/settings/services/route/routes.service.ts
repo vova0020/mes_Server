@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
 import { CreateRouteDto, UpdateRouteDto } from '../../dto/route/routes.dto';
-import { EventsService } from '../../../websocket/services/events.service';
+
 import { RouteStagesService } from './route-stages.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class RoutesService {
@@ -16,7 +16,7 @@ export class RoutesService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
     private readonly routeStagesService: RouteStagesService,
   ) {}
 
@@ -171,14 +171,7 @@ export class RoutesService {
       const newRoute = await this.getRouteById(route.routeId);
 
       // Отправляем событие о создании маршрута в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineCreated',
-        {
-          line: newRoute,
-          timestamp: new Date().toISOString(),
-        },
-      );
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -371,14 +364,7 @@ export class RoutesService {
       const updatedRoute = await this.getRouteById(routeId);
 
       // Отправляем событие об обновлении маршрута в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineUpdated',
-        {
-          line: updatedRoute,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -442,15 +428,7 @@ export class RoutesService {
       });
 
       // Отправляем событие об удалении маршрута в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineDeleted',
-        {
-          lineId: routeId,
-          lineName: route.routeName,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -553,14 +531,7 @@ export class RoutesService {
       const finalCopiedRoute = await this.getRouteById(copiedRoute);
 
       // Отправляем событие о копировании маршрута в комнату производственных линий
-      this.eventsService.emitToRoom(
-        WebSocketRooms.SETTINGS_PRODUCTION_LINES,
-        'lineCreated',
-        {
-          line: finalCopiedRoute,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

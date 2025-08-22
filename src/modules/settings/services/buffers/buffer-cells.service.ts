@@ -11,8 +11,7 @@ import {
   BufferCellResponse,
   CellStatus,
 } from '../../dto/buffers/buffers.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class BufferCellsService {
@@ -20,7 +19,7 @@ export class BufferCellsService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   // ================================
@@ -149,12 +148,7 @@ export class BufferCellsService {
       };
 
       // Отправляем событие о создании ячейки буфера
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellCreated', {
-        bufferId: bufferId,
-        bufferName: buffer.bufferName,
-        bufferCell: result,
-        timestamp: new Date().toISOString(),
-      });
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -252,16 +246,7 @@ export class BufferCellsService {
       };
 
       // Отправляем событие об обновлении ячейки буфера
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellUpdated', {
-        bufferId: bufferCell.bufferId,
-        bufferName: bufferCell.buffer.bufferName,
-        bufferCell: result,
-        changes: {
-          cellCode: oldCellCode !== result.cellCode,
-          status: oldStatus !== result.status,
-        },
-        timestamp: new Date().toISOString(),
-      });
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -332,13 +317,7 @@ export class BufferCellsService {
       });
 
       // Отправляем событие об удалении ячейки буфера
-      this.eventsService.emitToRoom(WebSocketRooms.SETTINGS_BUFFERS, 'bufferCellDeleted', {
-        cellId: cellId,
-        bufferId: bufferCell.bufferId,
-        bufferName: bufferCell.buffer.bufferName,
-        cellCode: bufferCell.cellCode,
-        timestamp: new Date().toISOString(),
-      });
+     
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

@@ -11,14 +11,13 @@ import {
   LinkSubstageToStageDto,
   RebindSubstageDto,
 } from '../../dto/line/production-stage-level2.dto';
-import { EventsService } from '../../../websocket/services/events.service';
-import { WebSocketRooms } from '../../../websocket/types/rooms.types';
+
 
 @Injectable()
 export class ProductionStagesLevel2Service {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly eventsService: EventsService,
+
   ) {}
 
   async create(
@@ -68,14 +67,7 @@ export class ProductionStagesLevel2Service {
     };
 
     // Отправляем событие о создании подэтапа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-      'stageLevel2Created',
-      {
-        substage: newSubstage,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
 
     return newSubstage;
   }
@@ -173,14 +165,7 @@ export class ProductionStagesLevel2Service {
     };
 
     // Отправляем событие об обновлении подэтапа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-      'stageLevel2Updated',
-      {
-        substage: substageResponse,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
 
     return substageResponse;
   }
@@ -212,15 +197,7 @@ export class ProductionStagesLevel2Service {
     });
 
     // Отправляем событие об удалении подэтапа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-      'stageLevel2Deleted',
-      {
-        substageId: id,
-        substageName: substage.substageName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
   }
 
   async findByStage(
@@ -289,17 +266,7 @@ export class ProductionStagesLevel2Service {
     });
 
     // Отправляем событие о создании связи
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-      'substageLinkedToStage',
-      {
-        substageId: substage.substageId,
-        stageId: linkDto.stageId,
-        substageName: linkDto.substageName,
-        stageName: stage.stageName,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    
   }
 
   async rebindSubstageToNewStage(
@@ -373,14 +340,7 @@ export class ProductionStagesLevel2Service {
     };
 
     // Отправляем событие о перепривязке подэтапа
-    this.eventsService.emitToRoom(
-      WebSocketRooms.SETTINGS_PRODUCTION_STAGES,
-      'stageLevel2Rebound',
-      {
-        substage: substageResponse,
-        timestamp: new Date().toISOString(),
-      }
-    );
+   
 
     return substageResponse;
   }
