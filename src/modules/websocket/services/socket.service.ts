@@ -1,6 +1,6 @@
 /**
  * ===== SOCKET SERVICE =====
- * 
+ *
  * Сервис для отправки WebSocket сообщений в MES системе.
  * Основные функции:
  * - Отправка сообщений всем подключенным клиентам
@@ -8,7 +8,7 @@
  * - Отправка сообщений конкретным пользователям
  * - Специализированные методы для различных типов уведомлений
  * - Управление экземпляром Socket.IO сервера
- * 
+ *
  * Этот сервис является центральным узлом для всех исходящих WebSocket сообщений
  * и используется другими модулями системы для уведомления пользователей о событиях.
  */
@@ -23,6 +23,21 @@ import { Server } from 'socket.io';
 import { ROOMS } from '../constants/rooms.constants';
 import { EVENTS } from '../constants/events.constants';
 
+// Импорт интерфейсов для типизации
+import {
+  OrderEventPayload,
+  PackageEventPayload,
+  DetailEventPayload,
+  MaterialEventPayload,
+  MachineSettingEventPayload,
+  PalletEventPayload,
+  StreamEventPayload,
+  TechnologyRouteEventPayload,
+  DetailCatalogEventPayload,
+  UserSettingsEventPayload,
+  BufferSettingsEventPayload
+} from '../interfaces/socket-user.interface';
+
 /**
  * Декоратор @Injectable делает класс доступным для инъекции зависимостей
  * в других частях приложения
@@ -35,7 +50,7 @@ export class SocketService {
    * Это необходимо, так как сервер создается в Gateway после инициализации сервиса.
    */
   private server: Server | null = null;
-  
+
   /**
    * Приватный логгер для записи сообщений о работе сервиса.
    * Использует имя класса для идентификации источника логов.
@@ -50,7 +65,7 @@ export class SocketService {
   /**
    * Устанавливает ссылку на Socket.IO сервер.
    * Вызывается из Gateway после инициализации WebSocket сервера.
-   * 
+   *
    * @param server - экземпляр Socket.IO сервера
    */
   setServer(server: Server): void {
@@ -62,7 +77,7 @@ export class SocketService {
   /**
    * Возвращает текущий экземпляр Socket.IO сервера.
    * Может вернуть null, если сервер еще не был установлен.
-   * 
+   *
    * @returns Server | null - экземпляр сервера или null
    */
   getServer(): Server | null {
@@ -77,7 +92,7 @@ export class SocketService {
   /**
    * Отправляет сообщение всем подключенным клиентам.
    * Используется для системных объявлений и критических уведомлений.
-   * 
+   *
    * @param event - название события (тип сообщения)
    * @param payload - данные для отправки (любой JSON-сериализуемый объект)
    */
@@ -87,10 +102,10 @@ export class SocketService {
       this.logger.warn('Server not initialized, cannot emit to all');
       return;
     }
-    
+
     // server.emit() отправляет сообщение всем подключенным клиентам
     this.server.emit(event, payload);
-    
+
     // Логируем отправку для отладки (используем debug уровень, чтобы не засорять основные логи)
     this.logger.debug(`Emitted ${event} to all clients`);
   }
@@ -98,7 +113,7 @@ export class SocketService {
   /**
    * Отправляет сообщение всем клиентам в определенной комнате.
    * Основной метод для целевой доставки сообщений группам пользователей.
-   * 
+   *
    * @param room - название комнаты (должно соответствовать константам из ROOMS)
    * @param event - название события
    * @param payload - данные для отправки
@@ -109,10 +124,10 @@ export class SocketService {
       this.logger.warn('Server not initialized, cannot emit to room');
       return;
     }
-    
+
     // server.to(room).emit() отправляет сообщение только клиентам в указанной комнате
     this.server.to(room).emit(event, payload);
-    
+
     // Логируем отправку с указанием комнаты
     this.logger.debug(`Emitted ${event} to room ${room}`);
   }
@@ -120,7 +135,7 @@ export class SocketService {
   /**
    * Отправляет сообщение конкретному клиенту по его Socket ID.
    * Используется для персональных уведомлений и ответов на запросы.
-   * 
+   *
    * @param socketId - уникальный идентификатор WebSocket соединения
    * @param event - название события
    * @param payload - данные для отправки
@@ -131,10 +146,10 @@ export class SocketService {
       this.logger.warn('Server not initialized, cannot emit to socket');
       return;
     }
-    
+
     // server.to(socketId).emit() отправляет сообщение конкретному соединению
     this.server.to(socketId).emit(event, payload);
-    
+
     // Логируем отправку с указанием получателя
     this.logger.debug(`Emitted ${event} to socket ${socketId}`);
   }
@@ -176,7 +191,7 @@ export class SocketService {
    * Отправляет сообщение в несколько комнат одновременно
    */
   emitToMultipleRooms(rooms: string[], event: string, payload: any): void {
-    rooms.forEach(room => this.emitToRoom(room, event, payload));
+    rooms.forEach((room) => this.emitToRoom(room, event, payload));
   }
 
   /**
@@ -184,32 +199,66 @@ export class SocketService {
    * Бизнес-логика распределения событий по комнатам
    */
 
-  notifyAboutOrderChanges(payload: any): void {
+  // === ТИПИЗИРОВАННЫЕ МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЙ ===
+  
+  notifyAboutOrderChanges(payload: OrderEventPayload): void {
     const rooms = [ROOMS.MASTER_CEH, ROOMS.MASTER_YPACK, ROOMS.DIRECTOR];
     this.emitToMultipleRooms(rooms, EVENTS.ORDER_EVENT, payload);
   }
 
-  notifyAboutPackageChanges(payload: any): void {
+  notifyAboutPackageChanges(payload: PackageEventPayload): void {
     const rooms = [ROOMS.MASTER_YPACK, ROOMS.MACHINES_YPACK];
     this.emitToMultipleRooms(rooms, EVENTS.PACKAGE_EVENT, payload);
   }
 
-  notifyAboutDetailChanges(payload: any): void {
+  notifyAboutDetailChanges(payload: DetailEventPayload): void {
     const rooms = [ROOMS.MASTER_CEH, ROOMS.MACHINES, ROOMS.TECHNOLOGIST];
     this.emitToMultipleRooms(rooms, EVENTS.DETAIL_EVENT, payload);
   }
 
-  notifyAboutMaterialChanges(payload: any): void {
+  notifyAboutMaterialChanges(payload: MaterialEventPayload): void {
     const rooms = [ROOMS.TECHNOLOGIST, ROOMS.DIRECTOR];
     this.emitToMultipleRooms(rooms, EVENTS.MATERIAL_EVENT, payload);
   }
 
-  notifyAboutMachineSettingChanges(payload: any): void {
-    const rooms = [ROOMS.MACHINES, ROOMS.MACHINES_YPACK, ROOMS.MACHINES_NO_SMEN];
+  notifyAboutMachineSettingChanges(payload: MachineSettingEventPayload): void {
+    const rooms = [
+      ROOMS.MACHINES,
+      ROOMS.MACHINES_YPACK,
+      ROOMS.MACHINES_NO_SMEN,
+    ];
     this.emitToMultipleRooms(rooms, EVENTS.MACHINE_SETTING_EVENT, payload);
   }
 
+  notifyAboutPalletChanges(payload: PalletEventPayload): void {
+    const rooms = [ROOMS.MASTER_CEH, ROOMS.MACHINES];
+    this.emitToMultipleRooms(rooms, EVENTS.PALLET_EVENT, payload);
+  }
 
+  notifyAboutStreamChanges(payload: StreamEventPayload): void {
+    const rooms = [ROOMS.TECHNOLOGIST, ROOMS.DIRECTOR];
+    this.emitToMultipleRooms(rooms, EVENTS.STREAM_EVENT, payload);
+  }
+
+  notifyAboutTechnologyRouteChanges(payload: TechnologyRouteEventPayload): void {
+    const rooms = [ROOMS.TECHNOLOGIST, ROOMS.MASTER_CEH];
+    this.emitToMultipleRooms(rooms, EVENTS.TECHNOLOGY_ROUTE_EVENT, payload);
+  }
+
+  notifyAboutDetailCatalogChanges(payload: DetailCatalogEventPayload): void {
+    const rooms = [ROOMS.TECHNOLOGIST, ROOMS.MASTER_CEH];
+    this.emitToMultipleRooms(rooms, EVENTS.DETAIL_CATALOG_EVENT, payload);
+  }
+
+  notifyAboutUserSettingsChanges(payload: UserSettingsEventPayload): void {
+    const rooms = [ROOMS.DIRECTOR];
+    this.emitToMultipleRooms(rooms, EVENTS.USER_SETTINGS_EVENT, payload);
+  }
+
+  notifyAboutBufferSettingsChanges(payload: BufferSettingsEventPayload): void {
+    const rooms = [ROOMS.TECHNOLOGIST, ROOMS.MACHINES];
+    this.emitToMultipleRooms(rooms, EVENTS.BUFFER_SETTINGS_EVENT, payload);
+  }
 
   /**
    * === УНИВЕРСАЛЬНЫЙ МЕТОД ===
@@ -219,7 +268,7 @@ export class SocketService {
   /**
    * Отправляет пользовательское событие в указанную комнату.
    * Включает проверку существования комнаты для предотвращения ошибок.
-   * 
+   *
    * @param roomName - название комнаты (должно существовать в ROOMS)
    * @param eventName - название события
    * @param payload - данные для отправки
@@ -228,11 +277,13 @@ export class SocketService {
   sendCustomEvent(roomName: string, eventName: string, payload: any): boolean {
     // Получаем список всех разрешенных комнат
     const allowedRooms = Object.values(ROOMS);
-    
+
     // Проверяем, существует ли запрашиваемая комната
     if (!allowedRooms.includes(roomName)) {
       // Логируем попытку отправки в несуществующую комнату для безопасности
-      this.logger.warn(`Attempted to send event to non-existent room: ${roomName}`);
+      this.logger.warn(
+        `Attempted to send event to non-existent room: ${roomName}`,
+      );
       return false; // Возвращаем false - отправка не удалась
     }
 

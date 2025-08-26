@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PartPalletsQueryDto } from '../dto/part-pallets-query.dto';
 import { AssignPalletToPackageDto } from '../dto/assign-pallet-to-package.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 import {
   PartPalletsResponseDto,
   PalletDetailDto,
@@ -11,7 +16,10 @@ import {
 
 @Injectable()
 export class PartPalletsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   // Получение поддонов по ID детали
   async getPalletsByPartId(
@@ -470,7 +478,9 @@ export class PartPalletsService {
 
     // Проверяем количество
     if (quantity > pallet.quantity.toNumber()) {
-      throw new BadRequestException('Количество превышает доступное на поддоне');
+      throw new BadRequestException(
+        'Количество превышает доступное на поддоне',
+      );
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -503,6 +513,13 @@ export class PartPalletsService {
           quantity,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'package:event',
+        { status: 'updated' },
+      );
 
       return {
         success: true,

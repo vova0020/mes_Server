@@ -1,27 +1,27 @@
 /**
  * ===== MAIN WEBSOCKET GATEWAY =====
- * 
+ *
  * Основной WebSocket Gateway для MES системы.
  * Этот класс является точкой входа для всех WebSocket соединений и обрабатывает:
- * 
+ *
  * ЖИЗНЕННЫЙ ЦИКЛ СОЕДИНЕНИЙ:
  * - Установку новых WebSocket соединений
  * - Аутентификацию пользователей (базовая)
  * - Отключение пользователей
  * - Автоматическое подключение к глобальным обновлениям
- * 
+ *
  * УПРАВЛЕНИЕ КОМНАТАМИ:
  * - Присоединение пользователей к комнатам
  * - Выход пользователей из комнат
  * - Предоставление списка доступных комнат
  * - Быстрое подключение к популярным комнатам
- * 
+ *
  * ОБРАБОТКА СООБЩЕНИЙ:
  * - Обработка входящих сообщений от клиентов
  * - Валидация запросов
  * - Отправка ответов и уведомлений об ошибках
  * - Тестовые сообщения для отладки
- * 
+ *
  * БЕЗОПАСНОСТЬ:
  * - Проверка существования комнат
  * - Логирование всех действий
@@ -30,14 +30,14 @@
 
 // Импорт всех необходимых декораторов и интерфейсов из @nestjs/websockets
 import {
-  WebSocketGateway,     // Декоратор для создания WebSocket Gateway
-  WebSocketServer,      // Декоратор для инъекции Socket.IO сервера
-  OnGatewayInit,        // Интерфейс для хука инициализации Gateway
-  OnGatewayConnection,  // Интерфейс для хука подключения клиента
-  OnGatewayDisconnect,  // Интерфейс для хука отключения клиента
-  SubscribeMessage,     // Декоратор для обработки входящих сообщений
-  MessageBody,          // Декоратор для извлечения тела сообщения
-  ConnectedSocket,      // Декоратор для получения объекта Socket
+  WebSocketGateway, // Декоратор для создания WebSocket Gateway
+  WebSocketServer, // Декоратор для инъекции Socket.IO сервера
+  OnGatewayInit, // Интерфейс для хука инициализации Gateway
+  OnGatewayConnection, // Интерфейс для хука подключения клиента
+  OnGatewayDisconnect, // Интерфейс для хука отключения клиента
+  SubscribeMessage, // Декоратор для обработки входящих сообщений
+  MessageBody, // Декоратор для извлечения тела сообщения
+  ConnectedSocket, // Декоратор для получения объекта Socket
 } from '@nestjs/websockets';
 
 // Импорт типов из socket.io для работы с WebSocket
@@ -56,7 +56,7 @@ import { ROOMS } from '../constants/rooms.constants';
 
 /**
  * Декоратор @WebSocketGateway настраивает WebSocket сервер.
- * 
+ *
  * Параметры конфигурации:
  * - cors: { origin: true } - разрешает CORS запросы от любых доменов
  *   В продакшене следует указать конкретные домены для безопасности
@@ -81,7 +81,7 @@ export class MainGateway
   /**
    * Конструктор Gateway с инъекцией зависимостей.
    * NestJS автоматически создаст и передаст экземпляры сервисов.
-   * 
+   *
    * @param socketService - сервис для отправки сообщений
    * @param roomService - сервис для управления комнатами
    */
@@ -99,13 +99,13 @@ export class MainGateway
    * Хук инициализации Gateway.
    * Вызывается после создания WebSocket сервера, но до начала приема соединений.
    * Используется для настройки сервера и передачи его ссылки в SocketService.
-   * 
+   *
    * @param server - экземпляр Socket.IO сервера
    */
   afterInit(server: Server) {
     // Логируем успешную инициализацию
     this.logger.log('WebSocket gateway initialized with fixed rooms');
-    
+
     // Передаем ссылку на сервер в SocketService для возможности отправки сообщений
     this.socketService.setServer(server);
   }
@@ -114,7 +114,7 @@ export class MainGateway
    * Хук подключения нового клиента.
    * Вызывается каждый раз, когда клиент устанавливает WebSocket соединение.
    * Выполняет начальную настройку соединения и аутентификацию.
-   * 
+   *
    * @param client - объект Socket представляющий соединение с клиентом
    */
   async handleConnection(client: Socket) {
@@ -124,15 +124,15 @@ export class MainGateway
        * В реальном приложении здесь должна быть полноценная аутентификация
        * через JWT токен или другой механизм
        */
-      
+
       // Создаем временный ID для анонимного пользователя
       const anonUserId = `anon:${client.id}`;
-      
+
       // Сохраняем информацию о пользователе в объекте Socket
       // (client as any) - приведение типа, так как TypeScript не знает о нашем расширении
-      (client as any).user = { 
-        userId: anonUserId,    // Уникальный идентификатор
-        email: undefined       // Email отсутствует у анонимных пользователей
+      (client as any).user = {
+        userId: anonUserId, // Уникальный идентификатор
+        email: undefined, // Email отсутствует у анонимных пользователей
       };
 
       // Логируем успешное подключение
@@ -156,14 +156,13 @@ export class MainGateway
         rooms: this.roomService.getAllAvailableRooms(),
         message: 'Available rooms for joining',
       });
-      
     } catch (err) {
       /**
        * ОБРАБОТКА ОШИБОК ПОДКЛЮЧЕНИЯ
        * Если что-то пошло не так, логируем ошибку и отключаем клиента
        */
       this.logger.error('Connection handling error', err as Error);
-      
+
       // Принудительно отключаем клиента с ошибкой
       client.disconnect(true);
     }
@@ -173,18 +172,18 @@ export class MainGateway
    * Хук отключения клиента.
    * Вызывается когда клиент закрывает соединение или теряет связь.
    * Используется для логирования и очистки ресурсов.
-   * 
+   *
    * @param client - объект Socket отключившегося клиента
    */
   handleDisconnect(client: Socket) {
     // Получаем информацию о пользователе из объекта Socket
     const user = (client as any).user;
-    
+
     // Логируем отключение с информацией о пользователе (если есть)
     this.logger.log(
       `Client disconnected: ${client.id}${user ? ` (user ${user.userId})` : ''}`,
     );
-    
+
     // Примечание: Socket.IO автоматически удаляет отключившихся клиентов из всех комнат,
     // поэтому дополнительная очистка не требуется
   }
@@ -198,7 +197,7 @@ export class MainGateway
   /**
    * Обработчик присоединения к комнате.
    * Клиент отправляет запрос на подключение к определенной комнате.
-   * 
+   *
    * @param data - данные от клиента, должны содержать поле 'room'
    * @param client - объект Socket клиента, отправившего запрос
    */
@@ -247,7 +246,7 @@ export class MainGateway
   /**
    * Обработчик выхода из комнаты.
    * Клиент запрашивает отключение от определенной комнаты.
-   * 
+   *
    * @param data - данные от клиента с названием комнаты
    * @param client - объект Socket клиента
    */
@@ -282,14 +281,14 @@ export class MainGateway
   /**
    * Обработчик запроса списка доступных комнат.
    * Клиент может запросить актуальный список комнат в любое время.
-   * 
+   *
    * @param client - объект Socket клиента
    */
   @SubscribeMessage('get_available_rooms')
   async handleGetAvailableRooms(@ConnectedSocket() client: Socket) {
     // Получаем список всех доступных комнат
     const rooms = this.roomService.getAllAvailableRooms();
-    
+
     // Отправляем список клиенту
     client.emit('available_rooms', { rooms });
   }
@@ -325,7 +324,7 @@ export class MainGateway
    * Обработчик тестовых сообщений.
    * Позволяет разработчикам и администраторам тестировать отправку сообщений
    * в различные комнаты или всем пользователям.
-   * 
+   *
    * @param data - данные тестового сообщения
    * @param client - объект Socket отправителя
    */
@@ -343,9 +342,9 @@ export class MainGateway
        * Если указана комната, отправляем только туда
        */
       this.socketService.sendCustomEvent(data.room, 'test_response', {
-        message: data.message,           // Исходное сообщение
-        from: client.id,                // ID отправителя
-        timestamp: new Date(),          // Время отправки
+        message: data.message, // Исходное сообщение
+        from: client.id, // ID отправителя
+        timestamp: new Date(), // Время отправки
       });
     } else {
       /**
@@ -358,7 +357,7 @@ export class MainGateway
         timestamp: new Date(),
       });
     }
-    
+
     /**
      * Примечание: В продакшене этот метод следует удалить или ограничить
      * доступ к нему только для администраторов

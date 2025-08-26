@@ -1,15 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
-
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class PalletMachineService {
   private readonly logger = new Logger(PalletMachineService.name);
+
   constructor(
     private prisma: PrismaService,
-
-  ) { }
+    private socketService: SocketService,
+  ) {}
 
   /**
    * Начать обработку поддона на станке
@@ -199,7 +200,6 @@ export class PalletMachineService {
         },
       });
 
-   
       return currentAssignment;
     }
 
@@ -270,15 +270,20 @@ export class PalletMachineService {
         },
       };
 
-      // Отправляем событие
-      
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
       return optimizedAssignment;
     });
   }
 
   /**
- * Завершить обработку поддона на станке
- */
+   * Завершить обработку поддона на станке
+   */
   async completePalletProcessing(
     palletId: number,
     machineId: number,
@@ -480,7 +485,11 @@ export class PalletMachineService {
 
       // Обновляем статус детали если все поддоны завершили этап
       if (shouldCompletePartProgress) {
-        await this.updatePartStatusIfNeeded(prisma, assignment.pallet.partId, 'COMPLETED');
+        await this.updatePartStatusIfNeeded(
+          prisma,
+          assignment.pallet.partId,
+          'COMPLETED',
+        );
       }
 
       // Проверяем, является ли следующий этап финальным (упаковка)
@@ -512,6 +521,13 @@ export class PalletMachineService {
         }
       }
 
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
       // Возвращаем оптимизированный ответ с минимальными данными
       return {
         assignment: {
@@ -541,7 +557,6 @@ export class PalletMachineService {
       };
     });
   }
-
 
   /**
    * Получить информацию о поддоне
@@ -897,6 +912,13 @@ export class PalletMachineService {
           },
         });
 
+        // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'pallet:event',
+          { status: 'updated' },
+        );
+
         return {
           message: 'Поддон успешно перемещен в буфер',
           pallet: pallet,
@@ -1078,7 +1100,8 @@ export class PalletMachineService {
       ),
     ).length;
 
-    const shouldCompletePartProgress = completedPalletsCount === allPalletsForPart.length;
+    const shouldCompletePartProgress =
+      completedPalletsCount === allPalletsForPart.length;
 
     const existingPartProgress = await prisma.partRouteProgress.findFirst({
       where: { partId, routeStageId },
@@ -1132,7 +1155,10 @@ export class PalletMachineService {
       });
     } else if (targetStatus === 'COMPLETED' && part.status === 'IN_PROGRESS') {
       // Проверяем, все ли этапы детали завершены
-      const allStagesCompleted = await this.checkAllPartStagesCompleted(prisma, partId);
+      const allStagesCompleted = await this.checkAllPartStagesCompleted(
+        prisma,
+        partId,
+      );
       if (allStagesCompleted) {
         await prisma.part.update({
           where: { partId },
@@ -1145,7 +1171,10 @@ export class PalletMachineService {
   /**
    * Проверяет, завершены ли все этапы детали
    */
-  private async checkAllPartStagesCompleted(prisma: any, partId: number): Promise<boolean> {
+  private async checkAllPartStagesCompleted(
+    prisma: any,
+    partId: number,
+  ): Promise<boolean> {
     const part = await prisma.part.findUnique({
       where: { partId },
       include: {
@@ -1268,6 +1297,13 @@ export class PalletMachineService {
 
       this.logger.log(
         `Отбраковано ${quantity} деталей с поддона ${palletId}, создана рекламация ${reclamation.reclamationId}`,
+      );
+
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
       );
 
       return {

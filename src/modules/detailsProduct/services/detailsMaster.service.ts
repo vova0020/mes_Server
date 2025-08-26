@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
-
+import { SocketService } from '../../websocket/services/socket.service';
 @Injectable()
 export class DetailsMasterService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   /**
    * Изменить приоритет детали для определенного станка
@@ -53,6 +56,13 @@ export class DetailsMasterService {
           machine: true,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
 
       return {
         message: 'Приоритет детали для станка успешно обновлен',

@@ -3,9 +3,10 @@ import { PackageDirectoryController } from './controllers/package-directory.cont
 import { PackageDirectoryService } from './services/package-directory.service';
 
 import { SharedModule } from '../../shared/shared.module';
+import { WebsocketModule } from '../websocket/websocket.module';
 
 @Module({
-  imports: [SharedModule],
+  imports: [SharedModule, WebsocketModule],
   controllers: [PackageDirectoryController],
   providers: [PackageDirectoryService],
   exports: [PackageDirectoryService],

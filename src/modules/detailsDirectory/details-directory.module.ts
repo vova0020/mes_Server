@@ -7,10 +7,12 @@ import { ParserService } from './services/parser.service';
 import { ValidationService } from './services/validation.service';
 import { DetailsService } from './services/details.service';
 import { SharedModule } from 'src/shared/shared.module';
+import { WebsocketModule } from '../websocket/websocket.module';
 
 @Module({
   imports: [
     SharedModule,
+    WebsocketModule,
     MulterModule.register({
       dest: './uploads',
     }),

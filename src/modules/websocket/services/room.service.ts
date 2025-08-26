@@ -1,13 +1,13 @@
 /**
  * ===== ROOM SERVICE =====
- * 
+ *
  * Сервис для управления WebSocket комнатами в MES системе.
  * Отвечает за:
  * - Подключение пользователей к комнатам
  * - Отключение пользователей от комнат
  * - Проверку доступности комнат
  * - Логирование действий с комнатами
- * 
+ *
  * Комнаты используются для группировки пользователей по ролям,
  * отделам или производственным линиям для целевой доставки сообщений.
  */
@@ -124,7 +124,7 @@ export class RoomService {
    * Универсальный метод для присоединения к любой разрешенной комнате.
    * Проверяет, существует ли комната в списке разрешенных, и только тогда
    * подключает пользователя.
-   * 
+   *
    * @param socket - WebSocket соединение пользователя
    * @param roomName - название комнаты для подключения
    * @returns Promise<boolean> - true если подключение успешно, false если комната не найдена
@@ -132,11 +132,13 @@ export class RoomService {
   async joinRoom(socket: Socket, roomName: string): Promise<boolean> {
     // Получаем массив всех разрешенных названий комнат из константы ROOMS
     const allowedRooms = Object.values(ROOMS);
-    
+
     // Проверяем, есть ли запрашиваемая комната в списке разрешенных
     if (!allowedRooms.includes(roomName)) {
       // Логируем попытку подключения к несуществующей комнате для безопасности
-      this.logger.warn(`Socket ${socket.id} tried to join non-existent room: ${roomName}`);
+      this.logger.warn(
+        `Socket ${socket.id} tried to join non-existent room: ${roomName}`,
+      );
       return false; // Возвращаем false - подключение не удалось
     }
 
@@ -150,7 +152,7 @@ export class RoomService {
   /**
    * Универсальный метод для выхода из любой комнаты.
    * Аналогично joinRoom, но для отключения от комнат.
-   * 
+   *
    * @param socket - WebSocket соединение пользователя
    * @param roomName - название комнаты для отключения
    * @returns Promise<boolean> - true если отключение успешно, false если комната не найдена
@@ -160,7 +162,9 @@ export class RoomService {
     const allowedRooms = Object.values(ROOMS);
     if (!allowedRooms.includes(roomName)) {
       // Логируем попытку выхода из несуществующей комнаты
-      this.logger.warn(`Socket ${socket.id} tried to leave non-existent room: ${roomName}`);
+      this.logger.warn(
+        `Socket ${socket.id} tried to leave non-existent room: ${roomName}`,
+      );
       return false;
     }
 
@@ -175,7 +179,7 @@ export class RoomService {
    * Возвращает список всех доступных комнат.
    * Используется для отправки клиенту информации о том, к каким комнатам
    * он может подключиться.
-   * 
+   *
    * @returns string[] - массив названий всех доступных комнат
    */
   getAllAvailableRooms(): string[] {

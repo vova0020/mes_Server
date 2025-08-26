@@ -11,13 +11,13 @@ import {
   LinkSubstageToStageDto,
   RebindSubstageDto,
 } from '../../dto/line/production-stage-level2.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class ProductionStagesLevel2Service {
   constructor(
     private readonly prismaService: PrismaService,
-
+    private socketService: SocketService,
   ) {}
 
   async create(
@@ -66,8 +66,19 @@ export class ProductionStagesLevel2Service {
       allowance: Number(substage.allowance),
     };
 
-    // Отправляем событие о создании подэтапа
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage2:event',
+      { status: 'updated' },
+    );
 
     return newSubstage;
   }
@@ -164,8 +175,19 @@ export class ProductionStagesLevel2Service {
       allowance: Number(updatedSubstage.allowance),
     };
 
-    // Отправляем событие об обновлении подэтапа
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage2:event',
+      { status: 'updated' },
+    );
 
     return substageResponse;
   }
@@ -196,8 +218,19 @@ export class ProductionStagesLevel2Service {
       where: { substageId: id },
     });
 
-    // Отправляем событие об удалении подэтапа
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage2:event',
+      { status: 'updated' },
+    );
   }
 
   async findByStage(
@@ -265,8 +298,19 @@ export class ProductionStagesLevel2Service {
       },
     });
 
-    // Отправляем событие о создании связи
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage2:event',
+      { status: 'updated' },
+    );
   }
 
   async rebindSubstageToNewStage(
@@ -339,8 +383,19 @@ export class ProductionStagesLevel2Service {
       allowance: Number(reboundSubstage.allowance),
     };
 
-    // Отправляем событие о перепривязке подэтапа
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage2:event',
+      { status: 'updated' },
+    );
 
     return substageResponse;
   }

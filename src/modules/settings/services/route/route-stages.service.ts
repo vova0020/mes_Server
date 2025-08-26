@@ -11,7 +11,7 @@ import {
   UpdateRouteStageDto,
   ReorderRouteStagesDto,
 } from '../../dto/route/routes.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class RouteStagesService {
@@ -19,8 +19,8 @@ export class RouteStagesService {
 
   constructor(
     private prisma: PrismaService,
-
-  ) {}
+    private socketService: SocketService,
+  ) { }
 
   // ================================
   // CRUD операции для этапов маршрута
@@ -198,13 +198,23 @@ export class RouteStagesService {
         return newRouteStage;
       });
 
-      // Отправляем событие о связывании этапа с линией в комнату производственных этапов
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Создан этап маршрута ID: ${routeStage.routeStageId} для маршрута "${route.routeName}", этап: "${stage.stageName}"${
-          routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
+        `Создан этап маршрута ID: ${routeStage.routeStageId} для маршрута "${route.routeName}", этап: "${stage.stageName}"${routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
         }, позиция: ${sequenceNumber} за ${executionTime}ms`,
       );
 
@@ -325,15 +335,24 @@ export class RouteStagesService {
         },
       });
 
-      // Отправляем событие об обновлении этапа в комнату производственных этапов
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Обновлен этап маршрута ID: ${routeStageId} для маршрута "${routeStage.route.routeName}" с "${oldStageName}${
-          oldSubstageName ? ` > ${oldSubstageName}` : ''
-        }" на "${newStageName}${
-          newSubstageName ? ` > ${newSubstageName}` : ''
+        `Обновлен этап маршрута ID: ${routeStageId} для маршрута "${routeStage.route.routeName}" с "${oldStageName}${oldSubstageName ? ` > ${oldSubstageName}` : ''
+        }" на "${newStageName}${newSubstageName ? ` > ${newSubstageName}` : ''
         }" за ${executionTime}ms`,
       );
 
@@ -414,13 +433,23 @@ export class RouteStagesService {
         },
       });
 
-      // Отправляем событие об удалении этапа
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Этап "${routeStage.stage.stageName}"${
-          routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
+        `Этап "${routeStage.stage.stageName}"${routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
         } успешно удален из маршрута "${route.routeName}" за ${executionTime}ms`,
       );
 
@@ -497,10 +526,9 @@ export class RouteStagesService {
         if (usageCount > 0) {
           totalUsageCount += usageCount;
           usageDetails.push(
-            `"${routeStage.stage.stageName}${
-              routeStage.substage
-                ? ` > ${routeStage.substage.substageName}`
-                : ''
+            `"${routeStage.stage.stageName}${routeStage.substage
+              ? ` > ${routeStage.substage.substageName}`
+              : ''
             }" (${usageCount} записей)`,
           );
         }
@@ -569,8 +597,19 @@ export class RouteStagesService {
         );
       });
 
-      // Отправляем событие об обновлении этапов линии (все этапы удалены)
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -653,8 +692,19 @@ export class RouteStagesService {
 
       const reorderedStages = await this.getRouteStages(routeId);
 
-      // Отправляем событие об обновлении этапов линии в комнату производственных линий
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -755,8 +805,19 @@ export class RouteStagesService {
 
       const updatedStages = await this.getRouteStages(routeId);
 
-      // Отправляем событие об обновлении этапов линии в комнату производственных линий
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -809,7 +870,19 @@ export class RouteStagesService {
           `Создан этап ${i + 1}/${stages.length} для маршрута ID: ${routeId}`,
         );
       }
-
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Успешно создано ${stages.length} этапов для маршрута ID: ${routeId} за ${executionTime}ms`,

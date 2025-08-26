@@ -9,13 +9,14 @@ import {
   UpdateProductionStageLevel1Dto,
   ProductionStageLevel1ResponseDto,
 } from '../../dto/line/production-stage-level1.dto';
+import { SocketService } from '../../../websocket/services/socket.service';
 
 
 @Injectable()
 export class ProductionStagesLevel1Service {
   constructor(
     private readonly prismaService: PrismaService,
- 
+    private readonly socketService: SocketService,
   ) {}
 
   async create(
@@ -52,7 +53,19 @@ export class ProductionStagesLevel1Service {
       substagesCount: stage._count.productionStagesLevel2,
     };
 
-    // Отправляем событие о создании технологической операции
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage1:event',
+      { status: 'updated' },
+    );
    
 
     return newStage;
@@ -168,8 +181,19 @@ export class ProductionStagesLevel1Service {
       substagesCount: updatedStage._count.productionStagesLevel2,
     };
 
-    // Отправляем событие об обновлении технологической операции
-    
+   // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage1:event',
+      { status: 'updated' },
+    );
 
     return stageResponse;
   }
@@ -217,7 +241,18 @@ export class ProductionStagesLevel1Service {
       where: { stageId: id },
     });
 
-    // Отправляем событие об удалении технологической операции
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stage1:event',
+      { status: 'updated' },
+    );
   }
 }

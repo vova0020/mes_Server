@@ -8,6 +8,7 @@ import { PrismaService } from '../../../../shared/prisma.service';
 import { CreateRouteDto, UpdateRouteDto } from '../../dto/route/routes.dto';
 
 import { RouteStagesService } from './route-stages.service';
+import { SocketService } from '../../../websocket/services/socket.service';
 
 
 @Injectable()
@@ -16,9 +17,9 @@ export class RoutesService {
 
   constructor(
     private prisma: PrismaService,
-
+    private socketService: SocketService,
     private readonly routeStagesService: RouteStagesService,
-  ) {}
+  ) { }
 
   // ================================
   // CRUD операции для маршрутов
@@ -29,7 +30,7 @@ export class RoutesService {
    */
   async getAllRoutes() {
     const startTime = Date.now();
-    this.logger.log('��апрос на получение всех маршрутов');
+    this.logger.log('Запрос на получение всех маршрутов');
 
     try {
       const routes = await this.prisma.route.findMany({
@@ -170,8 +171,19 @@ export class RoutesService {
       // Получаем созданный маршрут со всеми связанными данными
       const newRoute = await this.getRouteById(route.routeId);
 
-      // Отправляем событие о создании маршрута в комнату производственных линий
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -327,20 +339,20 @@ export class RoutesService {
             // Проверяем и удаляем лишние этапы, если новых меньше чем было
             if (existingStages.length > updateRouteDto.stageIds.length) {
               const stagesToDelete = existingStages.slice(updateRouteDto.stageIds.length);
-              
+
               // Проверяем, не используются ли этапы в производстве
               for (const stage of stagesToDelete) {
                 const usageCount = await prisma.partRouteProgress.count({
                   where: { routeStageId: stage.routeStageId },
                 });
-                
+
                 if (usageCount > 0) {
                   throw new BadRequestException(
                     `Невозможно удалить этап маршрута. Этап используется в ${usageCount} деталях на производстве`
                   );
                 }
               }
-              
+
               // Если этапы не используются, удаляем их
               const stageIdsToDelete = stagesToDelete.map(stage => stage.routeStageId);
               await prisma.routeStage.deleteMany({
@@ -348,7 +360,7 @@ export class RoutesService {
                   routeStageId: { in: stageIdsToDelete },
                 },
               });
-              
+
               this.logger.log(
                 `Удалено ${stagesToDelete.length} лишних этапов из маршрута ID: ${routeId}`
               );
@@ -363,15 +375,25 @@ export class RoutesService {
 
       const updatedRoute = await this.getRouteById(routeId);
 
-      // Отправляем событие об обновлении маршрута в комнату производственных линий
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Маршрут ID: ${routeId} успешно обновлен с "${oldName}" на "${updateRouteDto.routeName || oldName}"${
-          updateRouteDto.lineId !== undefined
-            ? `, линия изменена с ${oldLineId} на ${updateRouteDto.lineId}`
-            : ''
+        `Маршрут ID: ${routeId} успешно обновлен с "${oldName}" на "${updateRouteDto.routeName || oldName}"${updateRouteDto.lineId !== undefined
+          ? `, линия изменена с ${oldLineId} на ${updateRouteDto.lineId}`
+          : ''
         } за ${executionTime}ms`,
       );
 
@@ -427,8 +449,19 @@ export class RoutesService {
         where: { routeId },
       });
 
-      // Отправляем событие об удалении маршрута в комнату производственных линий
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -530,8 +563,19 @@ export class RoutesService {
       // Получаем скопированный маршрут со всеми данными
       const finalCopiedRoute = await this.getRouteById(copiedRoute);
 
-      // Отправляем событие о копировании маршрута в комнату производственных линий
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'technology_route:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

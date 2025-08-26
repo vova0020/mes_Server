@@ -1,6 +1,6 @@
 /**
  * ===== WEBSOCKET INTERFACES =====
- * 
+ *
  * Файл содержит TypeScript интерфейсы для типизации данных
  * в WebSocket системе MES. Интерфейсы обеспечивают:
  * - Типобезопасность при работе с данными
@@ -17,19 +17,19 @@
 export interface SocketUser {
   /** Уникальный идентификатор пользователя (обязательное поле) */
   userId: string;
-  
+
   /** Электронная почта пользователя (опционально, может отсутствовать у анонимных пользователей) */
   email?: string;
-  
+
   /** Массив ролей и прав пользователя (определяет доступ к определенным функциям) */
   roles?: string[];
-  
+
   /** Отдел или подразделение, в котором работает пользователь (используется для автоматического подключения к комнатам) */
   department?: string;
-  
+
   /** Должность пользователя (определяет уровень доступа и типы уведомлений) */
   position?: string;
-  
+
   /** Рабочая смена пользователя (помогает фильтровать сообщения по времени) */
   shift?: string;
 }
@@ -42,22 +42,22 @@ export interface SocketUser {
 export interface OrderEvent {
   /** Уникальный идентификатор заказа */
   orderId: string;
-  
+
   /** Текущий статус заказа (например: 'новый', 'в работе', 'завершен') */
   status: string;
-  
+
   /** Приоритет выполнения заказа (опционально) */
   priority?: 'low' | 'normal' | 'high' | 'urgent';
-  
+
   /** Производственная линия, на которой выполняется заказ (опционально) */
   productionLine?: string;
-  
+
   /** Предполагаемое время завершения заказа (опционально) */
   estimatedCompletion?: Date;
-  
+
   /** Идентификатор пользователя, который внес изменения */
   updatedBy: string;
-  
+
   /** Время создания события */
   timestamp: Date;
 }
@@ -70,25 +70,25 @@ export interface OrderEvent {
 export interface EquipmentEvent {
   /** Уникальный идентификатор оборудования */
   equipmentId: string;
-  
+
   /** Название оборудования (человекочитаемое) */
   equipmentName: string;
-  
+
   /** Текущий статус оборудования */
   status: 'online' | 'offline' | 'maintenance' | 'error';
-  
+
   /** Код ошибки (если статус 'error') */
   errorCode?: string;
-  
+
   /** Описание ошибки для оператора (если статус 'error') */
   errorDescription?: string;
-  
+
   /** Производственная линия, на которой расположено оборудование */
   productionLine: string;
-  
+
   /** Идентификатор пользователя, который сообщил о проблеме */
   reportedBy: string;
-  
+
   /** Время создания события */
   timestamp: Date;
 }
@@ -101,25 +101,25 @@ export interface EquipmentEvent {
 export interface ProductionEvent {
   /** Уникальный идентификатор производственной операции */
   productionId: string;
-  
+
   /** Идентификатор связанного заказа */
   orderId: string;
-  
+
   /** Текущий статус производственного процесса */
   status: 'started' | 'paused' | 'completed' | 'cancelled';
-  
+
   /** Производственная линия, на которой выполняется операция */
   productionLine: string;
-  
+
   /** Общее количество к производству (опционально) */
   quantity?: number;
-  
+
   /** Количество уже произведенных единиц (опционально) */
   completedQuantity?: number;
-  
+
   /** Идентификатор оператора, ответственного за операцию */
   operatorId: string;
-  
+
   /** Время создания события */
   timestamp: Date;
 }
@@ -132,31 +132,31 @@ export interface ProductionEvent {
 export interface UserNotification {
   /** Уникальный идентификатор уведомления */
   id: string;
-  
+
   /** Заголовок уведомления (краткое описание) */
   title: string;
-  
+
   /** Полный текст уведомления */
   message: string;
-  
+
   /** Тип уведомления (определяет цветовую схему и иконку в UI) */
   type: 'info' | 'warning' | 'error' | 'success';
-  
+
   /** Приоритет уведомления (влияет на порядок отображения и способ доставки) */
   priority: 'low' | 'normal' | 'high';
-  
+
   /** ID конкретного пользователя для персональных уведомлений (опционально) */
   targetUserId?: string;
-  
+
   /** Название комнаты для групповых уведомлений (опционально) */
   targetRoom?: string;
-  
+
   /** Флаг прочтения уведомления пользователем */
   isRead: boolean;
-  
+
   /** ID пользователя, создавшего уведомление */
   createdBy: string;
-  
+
   /** Время создания уведомления */
   createdAt: Date;
 }
@@ -225,6 +225,49 @@ export interface MaterialEventPayload {
 export interface MachineSettingEventPayload {
   machineId: string;
   settingId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий поддонов
+export interface PalletEventPayload {
+  palletId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий потоков
+export interface StreamEventPayload {
+  streamId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий технологических маршрутов
+export interface TechnologyRouteEventPayload {
+  routeId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий справочника деталей
+export interface DetailCatalogEventPayload {
+  catalogId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий настроек пользователей
+export interface UserSettingsEventPayload {
+  userId: string;
+  settingId: string;
+  action: 'created' | 'updated' | 'deleted';
+  affectedRooms?: string[];
+}
+
+// Интерфейс для событий настроек буфера
+export interface BufferSettingsEventPayload {
+  bufferId: string;
   action: 'created' | 'updated' | 'deleted';
   affectedRooms?: string[];
 }

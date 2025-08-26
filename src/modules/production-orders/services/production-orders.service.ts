@@ -12,11 +12,13 @@ import {
   OrderStatus,
   PackageDirectoryResponseDto,
 } from '../dto/production-order.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class ProductionOrdersService {
   constructor(
     private readonly prismaService: PrismaService,
+    private socketService: SocketService,
   ) {}
 
   async create(
@@ -128,13 +130,19 @@ export class ProductionOrdersService {
         }
       }
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:event',
+        { status: 'updated' },
+      );
+
       return newOrder;
     });
 
     const newOrder = await this.findOne(order.orderId);
 
     // Отправляем событие о создании заказа
-   
 
     return newOrder;
   }
@@ -283,7 +291,7 @@ export class ProductionOrdersService {
         },
       });
 
-      // Если указаны новые упаковки, з��меняем существующие
+      // Если указаны новые упаковки, заменяем существующие
       if (updateOrderDto.packages) {
         // Удаляем старые упаковки и их детали
         for (const pkg of existingOrder.packages) {
@@ -350,8 +358,12 @@ export class ProductionOrdersService {
 
     const updatedOrder = await this.findOne(id);
 
-    // Отправляем событие об обновлении заказа
- 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:event',
+      { status: 'updated' },
+    );
 
     return updatedOrder;
   }
@@ -417,8 +429,19 @@ export class ProductionOrdersService {
 
     const updatedOrder = await this.findOne(id);
 
-    // Отправляем событие об изменении приоритета
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
 
     return updatedOrder;
   }
@@ -474,8 +497,12 @@ export class ProductionOrdersService {
       });
     });
 
-    // Отправляем событие об удалении заказа
-    
+     // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:event',
+      { status: 'updated' },
+    );
   }
 
   async updateStatus(
@@ -507,8 +534,19 @@ export class ProductionOrdersService {
 
     const updatedOrder = await this.findOne(id);
 
-    // Отправляем событие об изменении статуса
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
 
     return updatedOrder;
   }

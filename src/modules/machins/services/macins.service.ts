@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { MachineResponseDto, MachineStatus } from '../dto/machineNoSmen.dto';
-
+import { SocketService } from '../../websocket/services/socket.service';
 import { MachineStatus as PrismaMachineStatus } from '@prisma/client';
 
 @Injectable()
 export class MachinsService {
   constructor(
     private prisma: PrismaService,
+    private socketService: SocketService,
   ) {}
 
   /**
@@ -75,8 +76,18 @@ export class MachinsService {
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = updatedMachine.machinesStages[0]?.stage || null;
 
-    // Отправляем событие через новый WebSocket API
-    
+   // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
+      'machine:event',
+      { status: 'updated' },
+    );
 
     return {
       id: updatedMachine.machineId,

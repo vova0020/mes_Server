@@ -8,6 +8,7 @@ import { DetailDirectory, PackageDetailDirectory } from '@prisma/client';
 import { CreateDetailWithPackageDto } from '../dto/create-detail-with-package.dto';
 import { DetailFromFileDto } from '../dto/save-details-from-file.dto';
 import { RouteDto } from '../dto/route.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 export interface DetailWithPackages extends DetailDirectory {
   packageDetails: Array<
@@ -23,7 +24,10 @@ export interface DetailWithPackages extends DetailDirectory {
 
 @Injectable()
 export class DetailsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private socketService: SocketService,
+  ) { }
 
   /**
    * Удаляет undefined значения из объекта для корректной работы с Prisma
@@ -191,7 +195,10 @@ export class DetailsService {
     });
 
     // Если переданы quantity или routeId, обязательно нужен packageId
-    if ((quantity !== undefined || routeId !== undefined) && packageId === undefined) {
+    if (
+      (quantity !== undefined || routeId !== undefined) &&
+      packageId === undefined
+    ) {
       throw new BadRequestException(
         'Для обновления quantity или routeId необходимо указать packageId',
       );
@@ -211,6 +218,20 @@ export class DetailsService {
         data: updateData,
       });
     }
+
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'detail_catalog:event',
+      { status: 'updated' },
+    );
 
     return updatedDetail;
   }
@@ -275,6 +296,35 @@ export class DetailsService {
       detailDeleted = true;
     }
 
+
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'package_catalog:event',
+      { status: 'updated' },
+    );
+
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'detail_catalog:event',
+      { status: 'updated' },
+    );
+
     return {
       detailDeleted,
       connectionDeleted: true,
@@ -330,6 +380,34 @@ export class DetailsService {
           routeId,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'package_catalog:event',
+        { status: 'updated' },
+      );
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'detail_catalog:event',
+        { status: 'updated' },
+      );
 
       return existingDetail;
     }
@@ -455,7 +533,34 @@ export class DetailsService {
         created++;
       }
     }
+  // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'package_catalog:event',
+      { status: 'updated' },
+    );
 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'detail_catalog:event',
+      { status: 'updated' },
+    );
+    
     return { created, updated, connected };
   }
 

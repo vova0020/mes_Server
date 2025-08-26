@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 import {
   CreatePickerDto,
   UpdatePickerDto,
@@ -22,8 +22,8 @@ export class PickersService {
 
   constructor(
     private readonly prisma: PrismaService,
-
-  ) {}
+    private socketService: SocketService,
+  ) { }
 
   // ========================================
   // CRUD операции с комплектовщиками
@@ -67,8 +67,20 @@ export class PickersService {
         `Комплектовщик создан успешно: ID ${picker.pickerId} для пользователя ${createPickerDto.userId}`,
       );
 
-      // Уведомляем через WebSocket
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
+
 
       return this.formatPickerResponse(picker);
     } catch (error) {
@@ -151,11 +163,23 @@ export class PickersService {
           `Комплектовщик с ролью создан успешно: picker ID ${picker.pickerId}, binding ID ${roleBindingId}`,
         );
 
-        // Уведомляем через WebSocket
-        
+        // Отправляем WebSocket уведомление о событии
+        this.socketService.emitToMultipleRooms(
+          [
+            'room:masterceh',
+            'room:machines',
+            'room:machinesnosmen',
+            'room:technologist',
+            'room:masterypack',
+            'room:director',
+          ],
+          'user:event',
+          { status: 'updated' },
+        );
+
 
         // Если была создана привязка роли, отправляем дополнительное уведомление
-        
+
 
         return result;
       });
@@ -273,8 +297,20 @@ export class PickersService {
 
       this.logger.log(`Комплектовщик обновлён успешно: ID ${pickerId}`);
 
-      // Уведомляем через WebSocket
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
+
       return this.formatPickerResponse(updatedPicker);
     } catch (error) {
       this.logger.error(
@@ -308,8 +344,20 @@ export class PickersService {
 
       this.logger.log(`Комплектовщик удалён успешно: ID ${pickerId}`);
 
-      // Уведомляем через WebSocket
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
+
     } catch (error) {
       this.logger.error(
         `Ошибка удаления комплектовщика ID ${pickerId}: ${error.message}`,
@@ -373,11 +421,11 @@ export class PickersService {
         login: picker.user.login,
         userDetail: picker.user.userDetail
           ? {
-              firstName: picker.user.userDetail.firstName,
-              lastName: picker.user.userDetail.lastName,
-              phone: picker.user.userDetail.phone,
-              position: picker.user.userDetail.position,
-            }
+            firstName: picker.user.userDetail.firstName,
+            lastName: picker.user.userDetail.lastName,
+            phone: picker.user.userDetail.phone,
+            position: picker.user.userDetail.position,
+          }
           : undefined,
       },
       createdAt: picker.user.createdAt,
@@ -448,11 +496,11 @@ export class PickersService {
 
   private getChangesFromUpdateDto(updateDto: UpdatePickerDto): Record<string, boolean> {
     const changes: Record<string, boolean> = {};
-    
+
     if (updateDto.userId !== undefined) {
       changes.userId = true;
     }
-    
+
     return changes;
   }
 }

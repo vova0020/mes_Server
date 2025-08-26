@@ -11,12 +11,16 @@ import {
   MachineTaskResponseDto,
   MoveTaskDto,
 } from 'src/modules/machins/dto/machine-task.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class MachinMasterService {
   private readonly logger = new Logger(MachinMasterService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   // Получение списка станков с включением связанных данных
   async getMachines(stageId?: number) {
@@ -61,7 +65,9 @@ export class MachinMasterService {
 
       return machineAll;
     } catch (error) {
-      this.logger.error(`Ошибка при получении станков: ${(error as Error).message}`);
+      this.logger.error(
+        `Ошибка при получении станков: ${(error as Error).message}`,
+      );
       throw error;
     }
   }
@@ -174,28 +180,35 @@ export class MachinMasterService {
 
         if (machine.loadUnit === 'м²') {
           // Расчет в квадратных метрах
-          plannedQuantity = machine.machineAssignments.reduce((total, assignment) => {
-            const size = assignment.pallet.part.size;
-            const quantity = Number(assignment.pallet.quantity);
-            return total + this.calculateSquareMeters(size, quantity);
-          }, 0);
+          plannedQuantity = machine.machineAssignments.reduce(
+            (total, assignment) => {
+              const size = assignment.pallet.part.size;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateSquareMeters(size, quantity);
+            },
+            0,
+          );
 
           // Получаем завершенные назначения для расчета выполненного количества в м²
           const machineCompletedAssignments = completedAssignments.filter(
-            assignment => assignment.machine.machineId === machine.machineId
+            (assignment) => assignment.machine.machineId === machine.machineId,
           );
-          completedQuantity = machineCompletedAssignments.reduce((total, assignment) => {
-            const size = assignment.pallet.part.size;
-            const quantity = Number(assignment.pallet.quantity);
-            return total + this.calculateSquareMeters(size, quantity);
-          }, 0);
+          completedQuantity = machineCompletedAssignments.reduce(
+            (total, assignment) => {
+              const size = assignment.pallet.part.size;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateSquareMeters(size, quantity);
+            },
+            0,
+          );
         } else {
           // Расчет в штуках (как было раньше)
           plannedQuantity = machine.machineAssignments.reduce(
             (total, assignment) => total + Number(assignment.pallet.quantity),
             0,
           );
-          completedQuantity = completedQuantityByMachineId[machine.machineId] || 0;
+          completedQuantity =
+            completedQuantityByMachineId[machine.machineId] || 0;
         }
 
         return {
@@ -224,7 +237,7 @@ export class MachinMasterService {
   /**
    * Получить сменное задание для станка по его ID
    * @param machineId ID станка
-   * @returns Массив з��даний для станка со всеми необходимыми данными
+   * @returns Массив заданий для станка со всеми необходимыми данными
    */
   async getMachineTasksById(
     machineId: number,
@@ -306,7 +319,8 @@ export class MachinMasterService {
             packagePart?.package.order.orderName || 'Неизвестный заказ',
           detailArticle: assignment.pallet.part.partCode,
           detailName: assignment.pallet.part.partName,
-          detailMaterial: assignment.pallet.part.material?.materialName || 'Не указан',
+          detailMaterial:
+            assignment.pallet.part.material?.materialName || 'Не указан',
           detailSize: assignment.pallet.part.size,
           palletName: assignment.pallet.palletName,
           quantity: Number(assignment.pallet.quantity),
@@ -393,6 +407,20 @@ export class MachinMasterService {
         });
       });
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
       this.logger.log(`Задание с ID ${operationId} успешно удалено`);
       return { message: `Задание с ID ${operationId} успешно удалено` };
     } catch (error) {
@@ -419,8 +447,8 @@ export class MachinMasterService {
       return 0;
     }
 
-    const dimensions = size.split('x').map(dim => parseFloat(dim.trim()));
-    if (dimensions.length !== 2 || dimensions.some(dim => isNaN(dim))) {
+    const dimensions = size.split('x').map((dim) => parseFloat(dim.trim()));
+    if (dimensions.length !== 2 || dimensions.some((dim) => isNaN(dim))) {
       return 0;
     }
 
@@ -486,6 +514,20 @@ export class MachinMasterService {
           },
         });
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'pallet:event',
+        { status: 'updated' },
+      );
 
       this.logger.log(
         `Задание с ID ${operationId} успешно перемещено на станок с ID ${targetMachineId}`,

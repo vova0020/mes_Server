@@ -13,6 +13,8 @@ import {
   BufferDetailResponse,
 } from '../../dto/buffers/buffers.dto';
 
+import { SocketService } from '../../../websocket/services/socket.service';
+
 import { BufferCellsService } from './buffer-cells.service';
 import { BufferStagesService } from './buffer-stages.service';
 
@@ -24,6 +26,7 @@ export class BuffersService {
     private prisma: PrismaService,
     private readonly bufferCellsService: BufferCellsService,
     private readonly bufferStagesService: BufferStagesService,
+    private socketService: SocketService,
   ) {}
 
   // ================================
@@ -241,8 +244,19 @@ export class BuffersService {
       // Получаем созданный буфер со всеми связанными данными
       const newBuffer = await this.getBufferById(createdBufferId);
 
-      // Отправляем событие о создании буфера
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -322,8 +336,19 @@ export class BuffersService {
 
       const updatedBuffer = await this.getBufferById(bufferId);
 
-      // Отправляем событие об обновлении буфера
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -400,8 +425,19 @@ export class BuffersService {
         where: { bufferId },
       });
 
-      // Отправляем событие об удалении буфера
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Буфер "${buffer.bufferName}" (ID: ${bufferId}) успешно удален за ${executionTime}ms`,
@@ -515,8 +551,19 @@ export class BuffersService {
       // Получаем скопированный буфер со всеми данными
       const finalCopiedBuffer = await this.getBufferById(copiedBufferId);
 
-      // Отправляем событие о копировании буфера
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(

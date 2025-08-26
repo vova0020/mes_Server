@@ -15,13 +15,13 @@ import {
   LineStagesUpdateDto,
   LineMaterialResponseDto,
 } from '../../dto/line/production-line.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class ProductionLinesService {
   constructor(
     private readonly prismaService: PrismaService,
-
+    private readonly socketService: SocketService,
   ) {}
 
   async create(
@@ -92,8 +92,20 @@ export class ProductionLinesService {
 
     const newLine = await this.findOne(line.lineId);
 
-    // Отправляем событие о создании потока
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
+
     return newLine;
   }
 
@@ -261,8 +273,19 @@ export class ProductionLinesService {
 
     const updatedLine = await this.findOne(id);
 
-    // Отправляем событие об обновлении потока
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
 
     return updatedLine;
   }
@@ -292,7 +315,6 @@ export class ProductionLinesService {
     });
 
     // Отправляем событие об удалении потока
-    
   }
 
   async linkStageToLine(linkDto: LinkStageToLineDto): Promise<void> {
@@ -323,15 +345,26 @@ export class ProductionLinesService {
     });
 
     if (existingLink) {
-      throw new ConflictException('Этап уже привя��ан к этому потоку');
+      throw new ConflictException('Этап уже привязан к этому потоку');
     }
 
     await this.prismaService.lineStage.create({
       data: linkDto,
     });
 
-    // Отправляем событие о привязке этапа к потоку
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
   }
 
   async unlinkStageFromLine(lineStageId: number): Promise<void> {
@@ -351,8 +384,19 @@ export class ProductionLinesService {
       where: { lineStageId },
     });
 
-    // Отправляем событие об отвязке этапа от потока
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
   }
 
   async getStagesInLine(lineId: number): Promise<LineStageResponseDto[]> {
@@ -416,8 +460,19 @@ export class ProductionLinesService {
       data: linkDto,
     });
 
-    // Отправляем событие о привязке материала к потоку
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
   }
 
   async unlinkMaterialFromLine(linkDto: LinkMaterialToLineDto): Promise<void> {
@@ -447,8 +502,19 @@ export class ProductionLinesService {
       where: { lineMaterialId: existingLink.lineMaterialId },
     });
 
-    // Отправляем событие об отвязке материала от потока
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
   }
 
   async getMaterialsInLine(lineId: number): Promise<LineMaterialResponseDto[]> {
@@ -517,8 +583,19 @@ export class ProductionLinesService {
 
     const updatedMaterials = await this.getMaterialsInLine(lineId);
 
-    // Отправляем событие об обновлении материалов потока
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
 
     return updatedMaterials;
   }
@@ -553,10 +630,10 @@ export class ProductionLinesService {
     const currentStages = await this.prismaService.lineStage.findMany({
       where: { lineId },
     });
-    
+
     const currentStageIds = currentStages.map((stage) => stage.stageId);
     const newStageIds = updateDto.stageIds;
-    
+
     // Находим этапы для удаления и добавления
     const stageIdsToRemove = currentStageIds.filter(
       (id) => !newStageIds.includes(id),
@@ -576,7 +653,7 @@ export class ProductionLinesService {
           },
         });
       }
-      
+
       // Добавляем новые связи
       if (stageIdsToAdd.length > 0) {
         await prisma.lineStage.createMany({
@@ -590,8 +667,19 @@ export class ProductionLinesService {
 
     const updatedStages = await this.getStagesInLine(lineId);
 
-    // Отправляем событие об обновлении этапов потока
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'stream:event',
+      { status: 'updated' },
+    );
 
     return updatedStages;
   }

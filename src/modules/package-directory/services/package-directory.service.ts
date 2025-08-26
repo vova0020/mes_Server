@@ -8,10 +8,14 @@ import {
   CreatePackageDirectoryDto,
   UpdatePackageDirectoryDto,
 } from './../dto/package-directory.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class PackageDirectoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   /**
    * Создание новой упаковки
@@ -36,6 +40,20 @@ export class PackageDirectoryService {
           packageName: createDto.packageName,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'package_catalog:event',
+        { status: 'updated' },
+      );
 
       return packageDirectory;
     } catch (error) {
@@ -131,6 +149,20 @@ export class PackageDirectoryService {
         },
       });
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'package_catalog:event',
+        { status: 'updated' },
+      );
+
       return updatedPackage;
     } catch (error) {
       if (
@@ -155,6 +187,20 @@ export class PackageDirectoryService {
       await this.prisma.packageDirectory.delete({
         where: { packageId: id },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'package_catalog:event',
+        { status: 'updated' },
+      );
 
       return { message: `Упаковка с ID ${id} успешно удалена` };
     } catch (error) {

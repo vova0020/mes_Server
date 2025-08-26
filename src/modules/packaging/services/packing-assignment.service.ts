@@ -17,12 +17,16 @@ import {
   OrderInfo,
 } from '../dto/packing-assignment-response.dto';
 import { PackingTaskStatus, PackageStatus } from '@prisma/client';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class PackingAssignmentService {
   private readonly logger = new Logger(PackingAssignmentService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   /**
    * Получить все станки упаковки по ID участка с дополнительной информацией
@@ -134,7 +138,7 @@ export class PackingAssignmentService {
   async createAssignment(
     dto: CreatePackingAssignmentDto,
   ): Promise<PackingAssignmentResponseDto> {
-    // Проверяем существование производственной у��аковки
+    // Проверяем существование производственной упаковки
     const productionPackage = await this.prisma.package.findUnique({
       where: { packageId: dto.packageId },
     });
@@ -167,7 +171,7 @@ export class PackingAssignmentService {
       }
     }
 
-    // Ищем существующее задание для этого пак��та (независимо от станка)
+    // Ищем существующее задание для этого пакета (независимо от станка)
     const existingTask = await this.prisma.packingTask.findFirst({
       where: {
         packageId: dto.packageId,
@@ -203,7 +207,7 @@ export class PackingAssignmentService {
           machineId: dto.machineId, // Обновляем станок
           assignedTo: dto.assignedTo, // Обновляем назначенного пользователя
           priority: dto.priority ?? existingTask.priority.toNumber(), // Обновляем приоритет или оставляем старый
-          status: PackingTaskStatus.PENDING, // Сб��асываем статус на PENDING
+          status: PackingTaskStatus.PENDING, // Сбрасываем статус на PENDING
           assignedAt: new Date(), // Обновляем время назначения
           completedAt: null, // Сбрасываем время завершения
         },
@@ -254,6 +258,13 @@ export class PackingAssignmentService {
 
       // Обновляем статус упаковки
       await this.updatePackageStatus(dto.packageId);
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'package:event',
+        { status: 'updated' },
+      );
 
       return this.mapToResponseDto(newTask);
     }

@@ -29,6 +29,7 @@ import {
   CreatePickerWithRoleDto,
   PickerWithRoleResponseDto,
 } from '../../dto/users/picker-management.dto';
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class UsersService {
@@ -37,7 +38,8 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pickersService: PickersService,
-  ) {}
+    private readonly socketService: SocketService,
+  ) { }
 
   // ========================================
   // CRUD операции с пользователями
@@ -96,7 +98,19 @@ export class UsersService {
         `Пользователь создан успешно: ID ${user.userId}, логин: ${user.login}`,
       );
 
-
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
 
       return this.formatUserResponse(user);
     } catch (error) {
@@ -216,7 +230,19 @@ export class UsersService {
 
       this.logger.log(`Пользователь обновлён успешно: ID ${userId}`);
 
-
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
 
       return this.formatUserResponse(updatedUser);
     } catch (error) {
@@ -249,6 +275,19 @@ export class UsersService {
         `Пользователь удалён успешно: ID ${userId}, логин: ${user.login}`,
       );
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
 
     } catch (error) {
       this.logger.error(
@@ -301,8 +340,20 @@ export class UsersService {
         `Глобальная роль назначена успешно: ${createUserRoleDto.role} -> пользователь ID ${createUserRoleDto.userId}`,
       );
 
-      // Уведомляем через WebSocket
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
+
     } catch (error) {
       this.logger.error(
         `Ошибка назначения глобальной роли: ${error.message}`,
@@ -378,8 +429,20 @@ export class UsersService {
         `Контекстная привязка создана успешно: ${createRoleBindingDto.role} -> ${createRoleBindingDto.contextType}:${createRoleBindingDto.contextId}`,
       );
 
-  
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
+
     } catch (error) {
       this.logger.error(
         `Ошибка создания контекстной привязки: ${error.message}`,
@@ -464,8 +527,20 @@ export class UsersService {
       this.logger.log(
         `Глобальная роль удалена успешно: ${role} у пользователя ID ${userId}`,
       );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
 
-      
     } catch (error) {
       this.logger.error(
         `Ошибка удаления глобальной роли: ${error.message}`,
@@ -499,8 +574,20 @@ export class UsersService {
       );
 
       this.logger.log(`Контекстная привязка удалена успешно: ID ${bindingId}`);
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'user:event',
+        { status: 'updated' },
+      );
 
-      
     } catch (error) {
       this.logger.error(
         `Ошибка удаления контекстной привязки: ${error.message}`,
@@ -615,7 +702,7 @@ export class UsersService {
 
   private getChangesFromUpdateDto(updateDto: UpdateUserDto): Record<string, boolean> {
     const changes: Record<string, boolean> = {};
-    
+
     if (updateDto.login !== undefined) changes.login = true;
     if (updateDto.password !== undefined) changes.password = true;
     if (updateDto.firstName !== undefined) changes.firstName = true;
@@ -623,7 +710,7 @@ export class UsersService {
     if (updateDto.phone !== undefined) changes.phone = true;
     if (updateDto.position !== undefined) changes.position = true;
     if (updateDto.salary !== undefined) changes.salary = true;
-    
+
     return changes;
   }
 
@@ -635,12 +722,12 @@ export class UsersService {
       updatedAt: user.updatedAt,
       userDetail: user.userDetail
         ? {
-            firstName: user.userDetail.firstName,
-            lastName: user.userDetail.lastName,
-            phone: user.userDetail.phone,
-            position: user.userDetail.position,
-            salary: user.userDetail.salary,
-          }
+          firstName: user.userDetail.firstName,
+          lastName: user.userDetail.lastName,
+          phone: user.userDetail.phone,
+          position: user.userDetail.position,
+          salary: user.userDetail.salary,
+        }
         : undefined,
     };
   }
@@ -686,7 +773,7 @@ export class UsersService {
     if (!allowedRoles[contextType].includes(role)) {
       throw new BadRequestException(
         `Роль "${role}" не может быть привязана к контексту "${contextType}". ` +
-          `Допустимые роли: ${allowedRoles[contextType].join(', ')}`,
+        `Допустимые роли: ${allowedRoles[contextType].join(', ')}`,
       );
     }
   }

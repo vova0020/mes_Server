@@ -10,14 +10,15 @@ import {
   MaterialGroupResponseDto,
   LinkMaterialToGroupDto,
 } from '../../dto/material/material-group.dto';
+import { SocketService } from '../../../websocket/services/socket.service';
 
 
 @Injectable()
 export class MaterialGroupsService {
   constructor(
     private readonly prismaService: PrismaService,
-
-  ) {}
+    private socketService: SocketService,
+  ) { }
 
   async create(
     createMaterialGroupDto: CreateMaterialGroupDto,
@@ -48,8 +49,19 @@ export class MaterialGroupsService {
       materialsCount: group._count.groupsMaterials,
     };
 
-    // Отправляем событие о создании группы материалов
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
 
     return newGroup;
   }
@@ -141,8 +153,20 @@ export class MaterialGroupsService {
       materialsCount: updatedGroup._count.groupsMaterials,
     };
 
-    // Отправляем событие об обновлении группы материалов
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
+
 
     return groupResponse;
   }
@@ -172,8 +196,20 @@ export class MaterialGroupsService {
       where: { groupId: id },
     });
 
-    // Отправляем событие об удалении группы материалов
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
+
   }
 
   async linkMaterialToGroup(linkDto: LinkMaterialToGroupDto): Promise<void> {
@@ -215,11 +251,23 @@ export class MaterialGroupsService {
       data: linkDto,
     });
 
-    // Отправляем событие о привязке материала к группе
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
+
 
     // Также отправляем в комнату материалов
-    
+
   }
 
   async unlinkMaterialFromGroup(
@@ -251,8 +299,20 @@ export class MaterialGroupsService {
       where: { groupMaterialId: existingLink.groupMaterialId },
     });
 
-    // Отправляем событие об отвязке материала от группы
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
+
   }
 
   async getMaterialsInGroup(groupId: number) {

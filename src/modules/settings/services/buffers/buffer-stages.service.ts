@@ -11,7 +11,7 @@ import {
   BufferStageResponse,
   StagesWithBuffersResponse,
 } from '../../dto/buffers/buffers.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class BufferStagesService {
@@ -19,7 +19,7 @@ export class BufferStagesService {
 
   constructor(
     private prisma: PrismaService,
-
+    private socketService: SocketService,
   ) {}
 
   // ================================
@@ -31,7 +31,9 @@ export class BufferStagesService {
    */
   async getBufferStages(bufferId: number): Promise<BufferStageResponse[]> {
     const startTime = Date.now();
-    this.logger.log(`Запрос на получение связей с этапами для буфера ID: ${bufferId}`);
+    this.logger.log(
+      `Запрос на получение связей с этапами для буфера ID: ${bufferId}`,
+    );
 
     try {
       const buffer = await this.prisma.buffer.findUnique({
@@ -167,8 +169,20 @@ export class BufferStagesService {
         },
       };
 
-      // Отправляем событие о создании связи буфера с этапом
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
+
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Создана связь буфера "${buffer.bufferName}" с этапом "${stage.stageName}" (ID: ${result.bufferStageId}) за ${executionTime}ms`,
@@ -196,7 +210,9 @@ export class BufferStagesService {
    */
   async deleteBufferStage(bufferStageId: number) {
     const startTime = Date.now();
-    this.logger.log(`Запрос на удаление связи буфера с этапом ID: ${bufferStageId}`);
+    this.logger.log(
+      `Запрос на удаление связи буфера с этапом ID: ${bufferStageId}`,
+    );
 
     try {
       const bufferStage = await this.prisma.bufferStage.findUnique({
@@ -221,8 +237,19 @@ export class BufferStagesService {
         where: { bufferStageId },
       });
 
-      // Отправляем событие об удалении связи буфера с этапом
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -308,19 +335,33 @@ export class BufferStagesService {
         return newBufferStages;
       });
 
-      const mappedResult: BufferStageResponse[] = result.map((bufferStage: any) => ({
-        bufferStageId: bufferStage.bufferStageId,
-        bufferId: bufferStage.bufferId,
-        stageId: bufferStage.stageId,
-        stage: {
-          stageId: bufferStage.stage.stageId,
-          stageName: bufferStage.stage.stageName,
-          description: bufferStage.stage.description,
-        },
-      }));
+      const mappedResult: BufferStageResponse[] = result.map(
+        (bufferStage: any) => ({
+          bufferStageId: bufferStage.bufferStageId,
+          bufferId: bufferStage.bufferId,
+          stageId: bufferStage.stageId,
+          stage: {
+            stageId: bufferStage.stage.stageId,
+            stageName: bufferStage.stage.stageName,
+            description: bufferStage.stage.description,
+          },
+        }),
+      );
 
-      // Отправляем событие об обновлении связей буфера с этапами
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
+
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `Успешно обновлены связи буфера "${buffer.bufferName}" с ${mappedResult.length} этапами за ${executionTime}ms`,
@@ -350,11 +391,7 @@ export class BufferStagesService {
   /**
    * Создать несколько связей буфера с этапами (используется в транзакциях)
    */
-  async createBufferStages(
-    bufferId: number,
-    stageIds: number[],
-    prisma: any,
-  ) {
+  async createBufferStages(bufferId: number, stageIds: number[], prisma: any) {
     const startTime = Date.now();
     this.logger.log(
       `Создание связей с ${stageIds.length} этапами для буфера ID: ${bufferId}`,

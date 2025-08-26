@@ -63,10 +63,41 @@ export const EVENTS = {
   /** Событие о удалении поддона */
   PALLET_DELETED: 'pallet:deleted',
 
+  /**
+  * === СОБЫТИЯ заданий на станки ===
+  * События, связанные с жизненным циклом заданий на станки
+  */
+  /** Событие о изменениях в задании на станок */
+  MACHINE_TASK_EVENT: 'machine_task:event',
+  /** Событие о создании задания на станок */
+  MACHINE_TASK_CREATED: 'machine_task:created',
+  /** Событие о удалении задания на станок */
+  MACHINE_TASK_DELETED: 'machine_task:deleted',
+
+  /**
+  * === СОБЫТИЯ СТАНКОВ ===
+  * События, связанные с жизненным циклом станков
+  */
+  /** Событие о изменениях в станке */
+  MACHINE_EVENT: 'machine:event',
+  /** Событие о создании станка */
+  MACHINE_CREATED: 'machine:created',
+  /** Событие о удалении станка */
+  MACHINE_DELETED: 'machine:deleted',
+
  /**
   * === СОБЫТИЯ НАСТРОЕК ===
   * События, связанные с жизненным циклом настроек
   */
+
+  //  ==== Пользователи =======
+
+  /** Событие о изменениях в пользователе */
+  USER_EVENT: 'user:event',
+  /** Событие о создании пользователя */
+  USER_CREATED: 'user:created',
+  /** Событие о удалении пользователя */
+  USER_DELETED: 'user:deleted',
 
   //  ==== Материалы =======
 
@@ -86,6 +117,24 @@ export const EVENTS = {
   /** Событие о удалении потока */
   STREAM_DELETED: 'stream:deleted',
 
+ //  ==== Этап производства уровень 1 =======
+
+  /** Событие о изменениях в этапе производства уровень 1 */
+  STAGE1_EVENT: 'stage1:event',
+  /** Событие о создании этапа производства уровень 1 */
+  STAGE1_CREATED: 'stage1:created',
+  /** Событие о удалении этапа производства уровень 1 */
+  STAGE1_DELETED: 'stage1:deleted',
+
+ //  ==== Этап производства уровень 2 =======
+
+  /** Событие о изменениях в этапе производства уровень 2 */
+  STAGE2_EVENT: 'stage2:event',
+  /** Событие о создании этапа производства уровень 2 */
+  STAGE2_CREATED: 'stage2:created',
+  /** Событие о удалении этапа производства уровень 2 */
+  STAGE2_DELETED: 'stage2:deleted',
+
    //  ==== Технологические маршруты =======
 
   /** Событие о изменениях в технологическом маршруте */
@@ -103,6 +152,15 @@ export const EVENTS = {
   MACHINE_SETTING_CREATED: 'machine_setting:created',
   /** Событие о удалении настройки станка */
   MACHINE_SETTING_DELETED: 'machine_setting:deleted',
+
+   //  ==== Справочник упаковок =======
+
+  /** Событие о изменениях в справочнике упаковок */
+  PACKAGE_CATALOG_EVENT: 'package_catalog:event',
+  /** Событие о создании справочника упаковок */
+  PACKAGE_CATALOG_CREATED: 'package_catalog:created',
+  /** Событие о удалении справочника упаковок */
+  PACKAGE_CATALOG_DELETED: 'package_catalog:deleted',
 
    //  ==== Справочник деталей =======
 

@@ -9,13 +9,13 @@ import {
   UpdateMaterialDto,
   MaterialResponseDto,
 } from '../../dto/material/material.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class MaterialsService {
   constructor(
     private readonly prismaService: PrismaService,
-
+    private socketService: SocketService,
   ) {}
 
   async create(
@@ -30,7 +30,7 @@ export class MaterialsService {
       throw new ConflictException('Материал с таким названием уже существует');
     }
 
-    // Если указа��ы группы, проверяем их существование
+    // Если указаны группы, проверяем их существование
     if (createMaterialDto.groupIds && createMaterialDto.groupIds.length > 0) {
       const existingGroups = await this.prismaService.materialGroup.findMany({
         where: { groupId: { in: createMaterialDto.groupIds } },
@@ -63,8 +63,19 @@ export class MaterialsService {
 
     const newMaterial = await this.findOne(material.materialId);
 
-    // Отправляем событие о создании материала
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
 
     return newMaterial;
   }
@@ -195,8 +206,19 @@ export class MaterialsService {
 
     const updatedMaterial = await this.findOne(id);
 
-    // Отправляем событие об обновлении материала
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
 
     return updatedMaterial;
   }
@@ -227,13 +249,24 @@ export class MaterialsService {
       where: { materialId: id },
     });
 
-    // Удаляем мат��риал
+    // Удаляем материал
     await this.prismaService.material.delete({
       where: { materialId: id },
     });
 
-    // Отправляем событие об удалении материала
-    
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'material:event',
+      { status: 'updated' },
+    );
   }
 
   async findByGroup(groupId: number): Promise<MaterialResponseDto[]> {

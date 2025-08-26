@@ -14,13 +14,19 @@ import {
   ProductionPackageInfo,
 } from '../dto/packing-assignment-response.dto';
 import { PackingTaskStatus, PackageStatus } from '@prisma/client';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class PackingTaskManagementService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly socketService: SocketService,
+  ) {}
 
   // Отметить задание как взято в работу
-  async markTaskAsInProgress(taskId: number): Promise<PackingAssignmentResponseDto> {
+  async markTaskAsInProgress(
+    taskId: number,
+  ): Promise<PackingAssignmentResponseDto> {
     const existingTask = await this.prisma.packingTask.findUnique({
       where: { taskId },
     });
@@ -59,11 +65,20 @@ export class PackingTaskManagementService {
     // Обновляем статус упаковки
     await this.updatePackageStatus(existingTask.packageId);
 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
+
     return this.mapToResponseDto(updatedTask);
   }
 
   // Отметить задание как выполнено
-  async markTaskAsCompleted(taskId: number): Promise<PackingAssignmentResponseDto> {
+  async markTaskAsCompleted(
+    taskId: number,
+  ): Promise<PackingAssignmentResponseDto> {
     const existingTask = await this.prisma.packingTask.findUnique({
       where: { taskId },
       include: {
@@ -129,6 +144,13 @@ export class PackingTaskManagementService {
       // Проверяем и обновляем статус заказа
       await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'package:event',
+        { status: 'updated' },
+      );
+
       return this.mapToResponseDto(updatedTask);
     });
   }
@@ -154,6 +176,13 @@ export class PackingTaskManagementService {
 
     // Обновляем статус упаковки после удаления задачи
     await this.updatePackageStatus(existingTask.packageId);
+
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
   }
 
   // Переместить задание на другой станок
@@ -223,6 +252,13 @@ export class PackingTaskManagementService {
     // Обновляем статус упаковки
     await this.updatePackageStatus(existingTask.packageId);
 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
+
     return this.mapToResponseDto(updatedTask);
   }
 
@@ -281,6 +317,13 @@ export class PackingTaskManagementService {
     // Обновляем статус упаковки
     await this.updatePackageStatus(existingTask.packageId);
 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
+
     return this.mapToResponseDto(updatedTask);
   }
 
@@ -330,11 +373,20 @@ export class PackingTaskManagementService {
       },
     });
 
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
+
     return this.mapToResponseDto(updatedTask);
   }
 
   // Получить задания по пользователю
-  async getTasksByUser(userId: number): Promise<PackingAssignmentResponseDto[]> {
+  async getTasksByUser(
+    userId: number,
+  ): Promise<PackingAssignmentResponseDto[]> {
     // Проверяем существование пользователя
     const user = await this.prisma.user.findUnique({
       where: { userId },
@@ -366,7 +418,10 @@ export class PackingTaskManagementService {
   }
 
   // Вычитание запасов для завершенной упаковки
-  private async deductInventoryForPackage(tx: any, packageId: number): Promise<void> {
+  private async deductInventoryForPackage(
+    tx: any,
+    packageId: number,
+  ): Promise<void> {
     const packageData = await tx.package.findUnique({
       where: { packageId },
       include: {
@@ -392,7 +447,7 @@ export class PackingTaskManagementService {
     // Вычитаем количество деталей из поддонов
     for (const assignment of packageData.palletAssignments) {
       const newQuantity = assignment.pallet.quantity - assignment.quantity;
-      
+
       await tx.pallet.update({
         where: { palletId: assignment.palletId },
         data: { quantity: newQuantity },
@@ -411,7 +466,10 @@ export class PackingTaskManagementService {
   }
 
   // Проверка и обновление статуса заказа
-  private async checkAndUpdateOrderStatus(orderId: number, tx: any): Promise<void> {
+  private async checkAndUpdateOrderStatus(
+    orderId: number,
+    tx: any,
+  ): Promise<void> {
     const order = await tx.order.findUnique({
       where: { orderId },
       include: {
@@ -426,8 +484,10 @@ export class PackingTaskManagementService {
     if (!order) return;
 
     // Проверяем, все ли упаковки завершены
-    const allPackagesCompleted = order.packages.every(pkg => 
-      pkg.packingTasks.every(task => task.status === PackingTaskStatus.COMPLETED)
+    const allPackagesCompleted = order.packages.every((pkg) =>
+      pkg.packingTasks.every(
+        (task) => task.status === PackingTaskStatus.COMPLETED,
+      ),
     );
 
     if (allPackagesCompleted && !order.isCompleted) {
@@ -444,9 +504,12 @@ export class PackingTaskManagementService {
   }
 
   // Метод для обновления статуса упаковки на основе статусов задач
-  private async updatePackageStatus(packageId: number, tx?: any): Promise<void> {
+  private async updatePackageStatus(
+    packageId: number,
+    tx?: any,
+  ): Promise<void> {
     const prisma = tx || this.prisma;
-    
+
     const packageData = await prisma.package.findUnique({
       where: { packageId },
       include: {
@@ -461,11 +524,17 @@ export class PackingTaskManagementService {
 
     if (tasks.length === 0) {
       newStatus = PackageStatus.NOT_PROCESSED;
-    } else if (tasks.every(task => task.status === PackingTaskStatus.COMPLETED)) {
+    } else if (
+      tasks.every((task) => task.status === PackingTaskStatus.COMPLETED)
+    ) {
       newStatus = PackageStatus.COMPLETED;
-    } else if (tasks.some(task => task.status === PackingTaskStatus.IN_PROGRESS)) {
+    } else if (
+      tasks.some((task) => task.status === PackingTaskStatus.IN_PROGRESS)
+    ) {
       newStatus = PackageStatus.IN_PROGRESS;
-    } else if (tasks.some(task => task.status === PackingTaskStatus.PENDING)) {
+    } else if (
+      tasks.some((task) => task.status === PackingTaskStatus.PENDING)
+    ) {
       newStatus = PackageStatus.PENDING;
     }
 
@@ -473,7 +542,8 @@ export class PackingTaskManagementService {
       where: { packageId },
       data: {
         packingStatus: newStatus,
-        packingCompletedAt: newStatus === PackageStatus.COMPLETED ? new Date() : null,
+        packingCompletedAt:
+          newStatus === PackageStatus.COMPLETED ? new Date() : null,
       },
     });
   }
@@ -491,7 +561,8 @@ export class PackingTaskManagementService {
         orderId: task.package.order.orderId,
         batchNumber: task.package.order.batchNumber,
         orderName: task.package.order.orderName,
-        completionPercentage: task.package.order.completionPercentage.toNumber(),
+        completionPercentage:
+          task.package.order.completionPercentage.toNumber(),
         isCompleted: task.package.order.isCompleted,
         launchPermission: task.package.order.launchPermission,
       },

@@ -11,7 +11,7 @@ import {
   BufferCellResponse,
   CellStatus,
 } from '../../dto/buffers/buffers.dto';
-
+import { SocketService } from '../../../websocket/services/socket.service';
 
 @Injectable()
 export class BufferCellsService {
@@ -19,8 +19,8 @@ export class BufferCellsService {
 
   constructor(
     private prisma: PrismaService,
-
-  ) {}
+    private socketService: SocketService,
+  ) { }
 
   // ================================
   // CRUD операции для ячеек буфера
@@ -147,8 +147,19 @@ export class BufferCellsService {
         updatedAt: bufferCell.updatedAt,
       };
 
-      // Отправляем событие о создании ячейки буфера
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -204,7 +215,10 @@ export class BufferCellsService {
       const oldStatus = bufferCell.status;
 
       // Проверяем уникальность нового кода ячейки, если он изменяется
-      if (updateBufferCellDto.cellCode && updateBufferCellDto.cellCode !== oldCellCode) {
+      if (
+        updateBufferCellDto.cellCode &&
+        updateBufferCellDto.cellCode !== oldCellCode
+      ) {
         const existingCell = await this.prisma.bufferCell.findFirst({
           where: {
             bufferId: bufferCell.bufferId,
@@ -245,8 +259,19 @@ export class BufferCellsService {
         updatedAt: updatedBufferCell.updatedAt,
       };
 
-      // Отправляем событие об обновлении ячейки буфера
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -297,7 +322,7 @@ export class BufferCellsService {
       }
 
       // Проверяем, не используется ли ячейка
-      const usageCount = 
+      const usageCount =
         bufferCell.palletBufferCells.length +
         bufferCell.pickerTasksFrom.length +
         bufferCell.pickerTasksTo.length;
@@ -316,8 +341,19 @@ export class BufferCellsService {
         where: { cellId },
       });
 
-      // Отправляем событие об удалении ячейки буфера
-     
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'buffer_settings:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -444,9 +480,14 @@ export class BufferCellsService {
         reservedCells,
         totalCapacity: Number(totalCapacity._sum.capacity) || 0,
         totalCurrentLoad: Number(totalCurrentLoad._sum.currentLoad) || 0,
-        utilizationPercentage: 
-          Number(totalCapacity._sum.capacity) > 0 
-            ? Math.round((Number(totalCurrentLoad._sum.currentLoad) / Number(totalCapacity._sum.capacity)) * 100 * 100) / 100
+        utilizationPercentage:
+          Number(totalCapacity._sum.capacity) > 0
+            ? Math.round(
+              (Number(totalCurrentLoad._sum.currentLoad) /
+                Number(totalCapacity._sum.capacity)) *
+              100 *
+              100,
+            ) / 100
             : 0,
       };
 

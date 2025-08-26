@@ -551,6 +551,13 @@ export class PalletsMasterService {
             `Новая загрузка: ${newLoad}/${bufferCell.capacity} поддонов, статус: ${newStatus}`,
         );
 
+        // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'pallet:event',
+          { status: 'updated' },
+        );
+
         return {
           message: 'Поддон успешно перемещен в буфер',
           pallet: {
@@ -721,9 +728,9 @@ export class PalletsMasterService {
 
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines'],
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',
-        { palletId: updatedStageProgress.pallet.palletId },
+        { status: 'updated' },
       );
 
       const currentMachine = machineAssignment.machine;
@@ -970,6 +977,13 @@ export class PalletsMasterService {
         `Поддон ${newPallet.palletId} успешно создан для детали ${partId}`,
       );
 
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
       return {
         message: 'Поддон успешно создан',
         pallet: {
@@ -1058,6 +1072,13 @@ export class PalletsMasterService {
       if (Number(updatedPallet.quantity) === 0) {
         await prisma.pallet.delete({ where: { palletId } });
       }
+
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
 
       return {
         message: 'Детали успешно отбракованы',
@@ -1156,6 +1177,12 @@ export class PalletsMasterService {
           data: { quantity: remainingQuantity },
         });
       }
+        // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
 
       return {
         message: 'Детали успешно перераспределены',

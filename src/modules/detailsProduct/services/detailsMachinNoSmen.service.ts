@@ -2,12 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { OrderDetailsResponseDto } from '../dto/machineNoSmen.dto';
 
-
 @Injectable()
 export class DetailsMachinNoSmenService {
-  constructor(
-    private prisma: PrismaService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Получить все детали для конкретного заказа и участка
@@ -102,7 +99,9 @@ export class DetailsMachinNoSmenService {
 
     // Получаем этапы для данного участка
     const segmentStageIds = [segmentId]; // основной этап
-    const segmentSubstageIds = segment.productionStagesLevel2.map(s => s.substageId);
+    const segmentSubstageIds = segment.productionStagesLevel2.map(
+      (s) => s.substageId,
+    );
 
     // Проходим по всем пакетам и деталям в них
     for (const packageItem of packages) {
@@ -113,7 +112,7 @@ export class DetailsMachinNoSmenService {
         const partRelatedToSegment = await this.isPartRelatedToSegment(
           part.partId,
           segmentId,
-          segmentSubstageIds
+          segmentSubstageIds,
         );
 
         if (!partRelatedToSegment) {
@@ -147,10 +146,14 @@ export class DetailsMachinNoSmenService {
 
             // Вычитаем завершенные на этом участке
             for (const pallet of pallets) {
-              const hasCompletedOnSegment = pallet.palletStageProgress.some(progress =>
-                (segmentStageIds.includes(progress.routeStage.stageId) ||
-                 (progress.routeStage.substageId && segmentSubstageIds.includes(progress.routeStage.substageId))) &&
-                progress.status === 'COMPLETED'
+              const hasCompletedOnSegment = pallet.palletStageProgress.some(
+                (progress) =>
+                  (segmentStageIds.includes(progress.routeStage.stageId) ||
+                    (progress.routeStage.substageId &&
+                      segmentSubstageIds.includes(
+                        progress.routeStage.substageId,
+                      ))) &&
+                  progress.status === 'COMPLETED',
               );
 
               if (hasCompletedOnSegment) {
@@ -163,17 +166,21 @@ export class DetailsMachinNoSmenService {
             for (const pallet of pallets) {
               const hasCompletedPrevious = await this.hasCompletedPreviousStage(
                 pallet.palletId,
-                previousSegment.stageId
+                previousSegment.stageId,
               );
 
               if (hasCompletedPrevious) {
                 readyForProcessing += 1;
 
                 // Проверяем завершенность на текущем участке
-                const hasCompletedCurrent = pallet.palletStageProgress.some(progress =>
-                  (segmentStageIds.includes(progress.routeStage.stageId) ||
-                   (progress.routeStage.substageId && segmentSubstageIds.includes(progress.routeStage.substageId))) &&
-                  progress.status === 'COMPLETED'
+                const hasCompletedCurrent = pallet.palletStageProgress.some(
+                  (progress) =>
+                    (segmentStageIds.includes(progress.routeStage.stageId) ||
+                      (progress.routeStage.substageId &&
+                        segmentSubstageIds.includes(
+                          progress.routeStage.substageId,
+                        ))) &&
+                    progress.status === 'COMPLETED',
                 );
 
                 if (hasCompletedCurrent) {
@@ -191,7 +198,8 @@ export class DetailsMachinNoSmenService {
             material: part.material?.materialName || 'Не указан',
             size: part.size,
             totalNumber: Number(packagePart.quantity),
-            isCompletedForSegment: completed === pallets.length && pallets.length > 0,
+            isCompletedForSegment:
+              completed === pallets.length && pallets.length > 0,
             readyForProcessing,
             completed,
           });
@@ -215,7 +223,7 @@ export class DetailsMachinNoSmenService {
   private async isPartRelatedToSegment(
     partId: number,
     segmentId: number,
-    segmentSubstageIds: number[]
+    segmentSubstageIds: number[],
   ): Promise<boolean> {
     const part = await this.prisma.part.findUnique({
       where: { partId },
@@ -238,9 +246,11 @@ export class DetailsMachinNoSmenService {
     }
 
     // Проверяем, есть ли в маршруте этапы, относящиеся к данному участку
-    return part.route.routeStages.some(routeStage =>
-      routeStage.stageId === segmentId ||
-      (routeStage.substageId && segmentSubstageIds.includes(routeStage.substageId))
+    return part.route.routeStages.some(
+      (routeStage) =>
+        routeStage.stageId === segmentId ||
+        (routeStage.substageId &&
+          segmentSubstageIds.includes(routeStage.substageId)),
     );
   }
 
@@ -307,7 +317,7 @@ export class DetailsMachinNoSmenService {
     }
 
     const currentIndex = part.route.routeStages.findIndex(
-      stage => stage.stageId === currentSegmentId
+      (stage) => stage.stageId === currentSegmentId,
     );
 
     if (currentIndex <= 0) {
@@ -322,7 +332,7 @@ export class DetailsMachinNoSmenService {
    */
   private async hasCompletedPreviousStage(
     palletId: number,
-    previousStageId: number
+    previousStageId: number,
   ): Promise<boolean> {
     const progress = await this.prisma.palletStageProgress.findFirst({
       where: {

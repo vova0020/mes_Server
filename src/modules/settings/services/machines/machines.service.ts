@@ -5,6 +5,7 @@ import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
 } from '../../dto/machines/machines.dto';
+import { SocketService } from '../../../websocket/services/socket.service';
 
 
 export interface CreateMachineData {
@@ -29,7 +30,7 @@ export class MachinesService {
 
   constructor(
     private readonly prisma: PrismaService,
-
+    private socketService: SocketService,
   ) {
     this.logger.log('🔧 MachinesService: Сервис инициализирован');
   }
@@ -158,8 +159,20 @@ export class MachinesService {
         },
       });
 
-      // Отправляем событие о создании машины в комнату машин
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
+
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -207,8 +220,19 @@ export class MachinesService {
         },
       });
 
-      // Отправляем событие об обновлении машины в комнату машин
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -257,8 +281,20 @@ export class MachinesService {
         where: { machineId: id },
       });
 
-      // Отправляем событие об удалении машины в комнату машин
-      
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
+
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -344,6 +380,20 @@ export class MachinesService {
         },
       });
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
+
       console.log(
         `✅ MachinesService.addStage: Успешно создана связь (ID: ${result.machineStageId})`,
       );
@@ -402,6 +452,20 @@ export class MachinesService {
           machineStageId: relation.machineStageId,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
 
       console.log(
         `✅ MachinesService.removeStage: Успешно удалена связь станка ${machineId} с этапом ${stageId}`,
@@ -468,7 +532,7 @@ export class MachinesService {
         );
         throw new Error(
           `Нельзя привязать подэтап "${substage.substageName}" к станку. ` +
-            `Станок должен быть сначала связан с этапом "${substage.stage.stageName}"`,
+          `Станок должен быть сначала связан с этапом "${substage.stage.stageName}"`,
         );
       }
       console.log(
@@ -510,6 +574,20 @@ export class MachinesService {
           },
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
 
       console.log(
         `✅ MachinesService.addSubstage: Успешно создана связь (ID: ${result.machineSubstageId})`,
@@ -554,6 +632,20 @@ export class MachinesService {
           machineSubstageId: relation.machineSubstageId,
         },
       });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:technologist',
+          'room:masterypack',
+          'room:director',
+        ],
+        'machine_setting:event',
+        { status: 'updated' },
+      );
 
       console.log(
         `✅ MachinesService.removeSubstage: Успешно удалена связь станка ${machineId} с подэтапом ${substageId}`,

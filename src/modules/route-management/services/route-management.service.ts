@@ -13,12 +13,14 @@ import {
   RouteInfoDto,
   PartForRouteManagementDto,
 } from '../dto/route-management.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class RouteManagementService {
   constructor(
     private readonly prismaService: PrismaService,
-  ) {}
+    private readonly socketService: SocketService,
+  ) { }
 
   async getOrdersForRouteManagement(): Promise<OrderForRoutesResponseDto[]> {
     const orders = await this.prismaService.order.findMany({
@@ -112,7 +114,7 @@ export class RouteManagementService {
 
     // Собираем все детали из композиции упаковок (каждая деталь отдельно)
     const parts: PartForRouteManagementDto[] = [];
-    
+
     for (const pkg of order.packages) {
       for (const comp of pkg.composition) {
         // Формируем информацию о текущем маршруте
@@ -264,8 +266,13 @@ export class RouteManagementService {
       updatedAt: new Date().toISOString(),
     };
 
-    // Отправляем событие об изменении маршрута
-   
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:event',
+      { status: 'updated' },
+    );
+
 
     return result;
   }

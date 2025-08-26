@@ -11,11 +11,13 @@ import {
   OrderDetailResponseDto,
   OrderStatusUpdateResponseDto,
 } from '../dto/order-management.dto';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class OrderManagementService {
   constructor(
     private readonly prismaService: PrismaService,
+    private socketService: SocketService,
   ) {}
 
   /**
@@ -114,7 +116,19 @@ export class OrderManagementService {
       },
     });
 
-    // Отправляем событие об изменении статуса через WebSocket
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
 
 
     return {
@@ -155,7 +169,20 @@ export class OrderManagementService {
       },
     });
 
-   
+   // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
+
 
     return {
       orderId,
@@ -212,7 +239,20 @@ export class OrderManagementService {
       where: { orderId },
     });
 
-   
+   // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
+
 
     return { message: `Заказ ${orderId} успешно удален` };
   }
