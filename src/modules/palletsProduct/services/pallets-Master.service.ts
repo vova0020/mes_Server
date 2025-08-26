@@ -314,6 +314,26 @@ export class PalletsMasterService {
       // Обновляем статус детали на IN_PROGRESS
       await this.updatePartStatusIfNeeded(prisma, pallet.partId, 'IN_PROGRESS');
 
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
+        // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
       this.logger.log(
         `Создано задание ${machineAssignment.assignmentId} → статус этапа: ${stageProgress.status}`,
       );
@@ -555,6 +575,12 @@ export class PalletsMasterService {
         this.socketService.emitToMultipleRooms(
           ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
           'pallet:event',
+          { status: 'updated' },
+        );
+        // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'buffer_settings:event',
           { status: 'updated' },
         );
 
@@ -1177,7 +1203,7 @@ export class PalletsMasterService {
           data: { quantity: remainingQuantity },
         });
       }
-        // Отправляем WebSocket уведомление о событии поддона
+      // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',

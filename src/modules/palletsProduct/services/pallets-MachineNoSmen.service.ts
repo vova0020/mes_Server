@@ -15,7 +15,7 @@ export class PalletMachineNoSmenService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
-  ) {}
+  ) { }
 
   /**
    * Получить все поддоны по ID детали
@@ -106,16 +106,16 @@ export class PalletMachineNoSmenService {
       // Если есть запись прогресса — конструируем объект, иначе null
       const currentOperation = stageProgress
         ? {
-            id: stageProgress.pspId,
-            status: stageProgress.status,
-            startedAt: new Date(),
-            completedAt: stageProgress.completedAt ?? undefined,
-            processStep: {
-              id: currentRouteStage.stageId,
-              name: currentRouteStage.stage.stageName,
-              sequence: Number(currentRouteStage.sequenceNumber),
-            },
-          }
+          id: stageProgress.pspId,
+          status: stageProgress.status,
+          startedAt: new Date(),
+          completedAt: stageProgress.completedAt ?? undefined,
+          processStep: {
+            id: currentRouteStage.stageId,
+            name: currentRouteStage.stage.stageName,
+            sequence: Number(currentRouteStage.sequenceNumber),
+          },
+        }
         : null;
 
       return {
@@ -126,19 +126,19 @@ export class PalletMachineNoSmenService {
 
         bufferCell: currentBuffer
           ? {
-              id: currentBuffer.cell.cellId,
-              code: currentBuffer.cell.cellCode,
-              bufferId: currentBuffer.cell.bufferId,
-              bufferName: currentBuffer.cell.buffer?.bufferName,
-            }
+            id: currentBuffer.cell.cellId,
+            code: currentBuffer.cell.cellCode,
+            bufferId: currentBuffer.cell.bufferId,
+            bufferName: currentBuffer.cell.buffer?.bufferName,
+          }
           : null,
 
         machine: currentMachine?.machine
           ? {
-              id: currentMachine.machine.machineId,
-              name: currentMachine.machine.machineName,
-              status: currentMachine.machine.status,
-            }
+            id: currentMachine.machine.machineId,
+            name: currentMachine.machine.machineName,
+            status: currentMachine.machine.status,
+          }
           : null,
 
         currentOperation,
@@ -448,6 +448,13 @@ export class PalletMachineNoSmenService {
         { status: 'updated' },
       );
 
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+
       const eventData = {
         assignmentId: machineAssignment.assignmentId,
         machineId: machineAssignment.machineId,
@@ -644,9 +651,9 @@ export class PalletMachineNoSmenService {
         const nextStageInfo = nextStageProdLevel
           ? nextStageProdLevel
           : await prisma.productionStageLevel1.findUnique({
-              where: { stageId: nextRouteStage.stageId },
-              select: { finalStage: true },
-            });
+            where: { stageId: nextRouteStage.stageId },
+            select: { finalStage: true },
+          });
 
         if (nextStageInfo?.finalStage && shouldCompletePartProgress) {
           await this.createPackingTasks(prisma, assignment.pallet.partId);
@@ -661,6 +668,13 @@ export class PalletMachineNoSmenService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',
+        { status: 'updated' },
+      );
+
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
         { status: 'updated' },
       );
 
@@ -816,6 +830,12 @@ export class PalletMachineNoSmenService {
           'pallet:event',
           { status: 'updated' },
         );
+        // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'buffer_settings:event',
+          { status: 'updated' },
+        );
 
         return {
           message: 'Поддон успешно перемещен в буфер',
@@ -870,8 +890,8 @@ export class PalletMachineNoSmenService {
       if (quantity > availableQuantity) {
         throw new Error(
           `Недостаточно деталей для создания поддона. ` +
-            `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
-            `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
+          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+          `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
         );
       }
 

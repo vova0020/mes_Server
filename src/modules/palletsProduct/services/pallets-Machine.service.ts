@@ -918,6 +918,12 @@ export class PalletMachineService {
           'pallet:event',
           { status: 'updated' },
         );
+        // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'buffer_settings:event',
+          { status: 'updated' },
+        );
 
         return {
           message: 'Поддон успешно перемещен в буфер',
