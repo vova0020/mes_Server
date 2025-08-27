@@ -80,6 +80,7 @@ export class RoomService {
    */
 
   async leaveMasterCeh(socket: Socket): Promise<void> {
+    this.logger.warn(`🔍 LEAVE_MASTER_CEH CALLED for socket ${socket.id}`);
     await socket.leave(ROOMS.MASTER_CEH);
     this.logger.log(`Socket ${socket.id} left master ceh`);
   }
@@ -95,6 +96,7 @@ export class RoomService {
   }
 
   async leaveMachines(socket: Socket): Promise<void> {
+    this.logger.warn(`🔍 LEAVE_MACHINES CALLED for socket ${socket.id}`);
     await socket.leave(ROOMS.MACHINES);
     this.logger.log(`Socket ${socket.id} left machines`);
   }
@@ -158,6 +160,15 @@ export class RoomService {
    * @returns Promise<boolean> - true если отключение успешно, false если комната не найдена
    */
   async leaveRoom(socket: Socket, roomName: string): Promise<boolean> {
+    // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    this.logger.warn(
+      `🔍 LEAVE_ROOM CALLED: Socket ${socket.id} attempting to leave room: ${roomName}`,
+    );
+    
+    // Получаем стек вызовов для понимания, откуда вызывается метод
+    const stack = new Error().stack;
+    this.logger.warn(`📍 CALL STACK: ${stack}`);
+
     // Проверяем существование комнаты аналогично joinRoom
     const allowedRooms = Object.values(ROOMS);
     if (!allowedRooms.includes(roomName)) {
@@ -171,7 +182,7 @@ export class RoomService {
     // Отключаем пользователя от комнаты
     await socket.leave(roomName);
     // Логируем успешное отключение
-    this.logger.log(`Socket ${socket.id} left room: ${roomName}`);
+    this.logger.warn(`✅ Socket ${socket.id} left room: ${roomName}`);
     return true;
   }
 

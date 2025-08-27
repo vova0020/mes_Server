@@ -20,6 +20,8 @@ export class OrderInfoDto {
     nullable: true,
   })
   progress: number | null;
+
+
 }
 
 export class DetailInfoDto {
@@ -54,6 +56,9 @@ export class TaskItemDto {
 
   @ApiProperty({ description: 'Название этапа обработки', example: 'Присадка' })
   processStepName: string;
+
+  @ApiProperty({ description: 'Приоритет детали на станке', example: 5 })
+  priority: number;
 
   @ApiProperty({ description: 'Количество деталей для обработки', example: 10 })
   quantity: number;

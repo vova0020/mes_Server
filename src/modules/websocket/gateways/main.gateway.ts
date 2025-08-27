@@ -118,6 +118,13 @@ export class MainGateway
    * @param client - объект Socket представляющий соединение с клиентом
    */
   async handleConnection(client: Socket) {
+    // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Отслеживаем все события от клиента
+    client.onAny((event, ...args) => {
+      this.logger.warn(
+        `📡 CLIENT EVENT: ${client.id} sent event "${event}" with data:`,
+        args,
+      );
+    });
     try {
       /**
        * БАЗОВАЯ НАСТРОЙКА ПОЛЬЗОВАТЕЛЯ
@@ -252,19 +259,42 @@ export class MainGateway
    */
   @SubscribeMessage('leave_room')
   async handleLeaveRoom(
-    @MessageBody() data: { room: string },
+    @MessageBody() data: { room: string; force?: boolean },
     @ConnectedSocket() client: Socket,
   ) {
-    // Валидация аналогична handleJoinRoom
+    // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    this.logger.warn(
+      `🔍 LEAVE_ROOM REQUEST: Client ${client.id} requested to leave room: ${data?.room}`,
+    );
+
+    // Валидация аналогично handleJoinRoom
     if (!data?.room) {
       client.emit('error', { message: 'room is required' });
       return;
     }
 
+    // ОПЦИОНАЛЬНАЯ ЗАЩИТА: игнорируем автоматические запросы на выход
+    // Раскомментируйте следующие строки, если хотите заблокировать автоматический выход
+    /*
+    if (!data.force) {
+      this.logger.warn(`🚫 BLOCKED automatic leave request for room: ${data.room}`);
+      client.emit('leave_blocked', {
+        room: data.room,
+        message: 'Automatic leave requests are blocked. Use force: true to leave manually.',
+      });
+      return;
+    }
+    */
+
     // Попытка выхода из комнаты
     const success = await this.roomService.leaveRoom(client, data.room);
 
     if (success) {
+      // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ
+      this.logger.warn(
+        `✅ CLIENT LEFT ROOM: ${client.id} successfully left ${data.room}`,
+      );
+      
       // Подтверждение успешного выхода
       client.emit('left', {
         room: data.room,
@@ -313,6 +343,52 @@ export class MainGateway
   async handleJoinDirector(@ConnectedSocket() client: Socket) {
     await this.roomService.joinDirector(client);
     client.emit('joined', { room: ROOMS.DIRECTOR });
+  }
+
+  /**
+   * === МЕТОДЫ ОТЛАДКИ ===
+   * Методы для отладки и мониторинга WebSocket соединений
+   */
+
+  /**
+   * Отладочный метод для получения информации о клиентах в комнатах
+   */
+  @SubscribeMessage('debug_rooms')
+  async handleDebugRooms(@ConnectedSocket() client: Socket) {
+    const roomsInfo: any = {};
+    
+    // Проходим по всем комнатам
+    Object.values(ROOMS).forEach((roomName) => {
+      const room = this.server.sockets.adapter.rooms.get(roomName);
+      if (room) {
+        roomsInfo[roomName] = {
+          clientCount: room.size,
+          clients: Array.from(room),
+        };
+      } else {
+        roomsInfo[roomName] = {
+          clientCount: 0,
+          clients: [],
+        };
+      }
+    });
+
+    // Проверяем, в каких комнатах находится текущий клиент
+    const clientRooms: string[] = [];
+    Object.values(ROOMS).forEach((roomName) => {
+      const room = this.server.sockets.adapter.rooms.get(roomName);
+      if (room && room.has(client.id)) {
+        clientRooms.push(roomName);
+      }
+    });
+
+    this.logger.warn(`📊 DEBUG ROOMS INFO:`, roomsInfo);
+    
+    client.emit('debug_rooms_response', {
+      allRooms: roomsInfo,
+      yourRooms: clientRooms,
+      yourSocketId: client.id,
+    });
   }
 
   /**

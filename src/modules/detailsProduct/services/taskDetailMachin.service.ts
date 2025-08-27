@@ -98,7 +98,7 @@ export class TaskDetailService {
 
     const routeStageIds = relevantRouteStages.map((rs) => rs.routeStageId);
 
-    // Получаем ID поддонов, которые назначены на данный ��танок
+    // Получаем ID поддонов, которые назначены на данный cтанок
     const assignedPalletIds = machineAssignments.map(
       (assignment) => assignment.palletId,
     );
@@ -174,6 +174,7 @@ export class TaskDetailService {
             latestProgress?.routeStage.stage.stageName || 'Не определен',
           quantity: 1, // Количество поддонов, может быть изменено позже
           status: latestProgress?.status || 'PENDING',
+          priority: 0, // Будет обновлено позже из PartMachineAssignment
           readyForProcessing: 0,
           distributed: 0,
           completed: 0,
@@ -211,6 +212,7 @@ export class TaskDetailService {
           processStepName: progress.routeStage.stage.stageName,
           quantity: 1,
           status: progress.status,
+          priority: 0, // Будет обновлено позже из PartMachineAssignment
           readyForProcessing: 0,
           distributed: 0,
           completed: 0,
@@ -245,6 +247,21 @@ export class TaskDetailService {
         }
       }
     }
+
+    // Получаем приоритеты деталей на станке
+    const partPriorities = await this.prisma.partMachineAssignment.findMany({
+      where: {
+        machineId,
+        partId: { in: Array.from(detailIds) },
+      },
+      select: {
+        partId: true,
+        priority: true,
+      },
+    });
+
+    const priorityMap = new Map<number, number>();
+    partPriorities.forEach(p => priorityMap.set(p.partId, p.priority));
 
     // Подсчитываем статистику для каждой детали
     for (const partId of detailIds) {
@@ -337,6 +354,7 @@ export class TaskDetailService {
         detailMap.set(partId, {
           ...detailItem,
           quantity: part.pallets.length, // Общее количество поддонов
+          priority: priorityMap.get(partId) || 0,
           readyForProcessing,
           distributed: 0, // Не используется для станков
           completed,

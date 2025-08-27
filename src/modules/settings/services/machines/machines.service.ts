@@ -172,6 +172,19 @@ export class MachinesService {
         'machine_setting:event',
         { status: 'updated' },
       );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          // 'room:machines',
+          // 'room:machinesnosmen',
+          // 'room:technologist',
+          // 'room:masterypack',
+          // 'room:director',
+        ],
+        'machine:event',
+        { status: 'updated' },
+      );
 
 
       const executionTime = Date.now() - startTime;
@@ -234,6 +247,20 @@ export class MachinesService {
         { status: 'updated' },
       );
 
+       // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          // 'room:machines',
+          // 'room:machinesnosmen',
+          // 'room:technologist',
+          // 'room:masterypack',
+          // 'room:director',
+        ],
+        'machine:event',
+        { status: 'updated' },
+      );
+
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `✅ Успешно обновлен станок "${result.machineName}" (ID: ${id}) за ${executionTime}ms`,
@@ -292,6 +319,20 @@ export class MachinesService {
           'room:director',
         ],
         'machine_setting:event',
+        { status: 'updated' },
+      );
+
+       // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          // 'room:machines',
+          // 'room:machinesnosmen',
+          // 'room:technologist',
+          // 'room:masterypack',
+          // 'room:director',
+        ],
+        'machine:event',
         { status: 'updated' },
       );
 
@@ -394,6 +435,20 @@ export class MachinesService {
         { status: 'updated' },
       );
 
+       // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          // 'room:machines',
+          // 'room:machinesnosmen',
+          // 'room:technologist',
+          // 'room:masterypack',
+          // 'room:director',
+        ],
+        'machine:event',
+        { status: 'updated' },
+      );
+
       console.log(
         `✅ MachinesService.addStage: Успешно создана связь (ID: ${result.machineStageId})`,
       );
@@ -464,6 +519,20 @@ export class MachinesService {
           'room:director',
         ],
         'machine_setting:event',
+        { status: 'updated' },
+      );
+
+       // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          // 'room:machines',
+          // 'room:machinesnosmen',
+          // 'room:technologist',
+          // 'room:masterypack',
+          // 'room:director',
+        ],
+        'machine:event',
         { status: 'updated' },
       );
 

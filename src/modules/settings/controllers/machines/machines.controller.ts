@@ -27,13 +27,15 @@ import { MachinesService } from '../../services/machines/machines.service';
 // DTO для создания станка с валидацией
 export class CreateMachineDto {
   @IsString({ message: 'Название станка должно быть строкой' })
-  @MaxLength(100, { message: 'Название станка не должно превышать 100 символов' })
+  @MaxLength(100, {
+    message: 'Название станка не должно превышать 100 символов',
+  })
   machineName: string;
 
-  @IsEnum(['ACTIVE', 'INACTIVE', 'MAINTENANCE'], {
-    message: 'Статeс должен быть ACTIVE, INACTIVE или MAINTENANCE',
+  @IsEnum(['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'BROKEN'], {
+    message: 'Статeс должен быть ACTIVE, BROKEN, INACTIVE или MAINTENANCE',
   })
-  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'BROKEN';
 
   @IsNumber({}, { message: 'Рекомендуемая нагрузка должна быть числом' })
   @Min(0, { message: 'Рекомендуемая нагрузка не может быть отрицательной' })
@@ -41,7 +43,9 @@ export class CreateMachineDto {
   recommendedLoad: number;
 
   @IsString({ message: 'Единица измерения нагрузки должна быть строкой' })
-  @MaxLength(20, { message: 'Единица измерения не должна превышать 20 символов' })
+  @MaxLength(20, {
+    message: 'Единица измерения не должна превышать 20 символов',
+  })
   loadUnit: string;
 
   @IsBoolean({ message: 'Изменяемость задач должна быть булевым значением' })
@@ -58,14 +62,16 @@ export class CreateMachineDto {
 export class UpdateMachineDto {
   @IsOptional()
   @IsString({ message: 'Название станка должно быть строкой' })
-  @MaxLength(100, { message: 'Название станка не должно превышать 100 символов' })
+  @MaxLength(100, {
+    message: 'Название станка не должно превышать 100 символов',
+  })
   machineName?: string;
 
   @IsOptional()
-  @IsEnum(['ACTIVE', 'INACTIVE', 'MAINTENANCE'], {
-    message: 'Статус должен быть ACTIVE, INACTIVE или MAINTENANCE',
+  @IsEnum(['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'BROKEN'], {
+    message: 'Статус должен быть ACTIVE, BROKEN, INACTIVE или MAINTENANCE',
   })
-  status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+  status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'BROKEN';
 
   @IsOptional()
   @IsNumber({}, { message: 'Рекомендуемая нагрузка должна быть числом' })
@@ -75,7 +81,9 @@ export class UpdateMachineDto {
 
   @IsOptional()
   @IsString({ message: 'Единица измерения нагрузки должна быть строкой' })
-  @MaxLength(20, { message: 'Единица измерения не должна превышать 20 символов' })
+  @MaxLength(20, {
+    message: 'Единица измерения не должна превышать 20 символов',
+  })
   loadUnit?: string;
 
   @IsOptional()
@@ -127,10 +135,7 @@ export class MachineSubstageDto {
   }),
 )
 export class MachinesController {
-  constructor(
-    private readonly machinesService: MachinesService,
-
-  ) {
+  constructor(private readonly machinesService: MachinesService) {
     console.log('🎮 MachinesController: Контроллер инициализирован');
   }
 
@@ -351,8 +356,6 @@ export class MachinesController {
         `✅ POST /machines - Успешно создан станок "${newMachine.machineName}" (ID: ${newMachine.machineId}) за ${duration}ms`,
       );
 
-     
-
       return newMachine;
     } catch (error) {
       console.error('❌ POST /machines - Ошибка при создании станка:', error);
@@ -392,8 +395,6 @@ export class MachinesController {
         `✅ PUT /machines/${id} - Успешно обновлен станок "${updatedMachine.machineName}" за ${duration}ms`,
       );
 
-     
-
       return updatedMachine;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -429,7 +430,6 @@ export class MachinesController {
         `✅ DELETE /machines/${id} - Успешно удален станок "${deletedMachine.machineName}" за ${duration}ms`,
       );
 
-      
       return { message: 'Станок успешно удален' };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -473,7 +473,6 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления о добавлении связи с этапом',
       );
-      
 
       return result;
     } catch (error) {
@@ -511,7 +510,6 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления об удалении связи с этапом',
       );
-     
 
       return { message: 'Связь с этапом успешно удалена' };
     } catch (error) {
@@ -556,7 +554,6 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления о добавлении связи с подэтапом',
       );
-      
 
       return result;
     } catch (error) {
@@ -594,7 +591,6 @@ export class MachinesController {
       console.log(
         '📡 Отправка WebSocket уведомления об удалении связи с подэтапом',
       );
-      
 
       return { message: 'Связь с подэтапом успешно удалена' };
     } catch (error) {
