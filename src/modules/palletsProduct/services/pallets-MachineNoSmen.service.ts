@@ -402,7 +402,7 @@ export class PalletMachineNoSmenService {
         'IN_PROGRESS',
       );
 
-      // 8. Обновляем буфер (если поддон был в ячейке)
+      // 8. При переводе в статус IN_PROGRESS убираем поддон из буфера
       const bufferPlacement = await prisma.palletBufferCell.findFirst({
         where: { palletId, removedAt: null },
         include: {
@@ -435,6 +435,10 @@ export class PalletMachineNoSmenService {
           where: { cellId: bufferPlacement.cellId },
           data: { currentLoad: newLoad, status: newStatus },
         });
+        
+        this.logger.log(
+          `Поддон ${palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
+        );
       }
 
       this.logger.log(
@@ -678,6 +682,18 @@ export class PalletMachineNoSmenService {
         { status: 'updated' },
       );
 
+       // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machinesnosmen'],
+        'order:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'package:event',
+        { status: 'updated' },
+      );
       return {
         message: 'Обработка поддона завершена',
         assignment: {
@@ -824,18 +840,24 @@ export class PalletMachineNoSmenService {
             currentLoad: effectivePalletsCount,
           },
         });
+       // Отправляем WebSocket уведомление о событии поддона
+        this.socketService.emitToMultipleRooms(
+          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+          'detail:event',
+          { status: 'updated' },
+        );
         // Отправляем WebSocket уведомление о событии поддона
         this.socketService.emitToMultipleRooms(
           ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
           'pallet:event',
           { status: 'updated' },
         );
-        // Отправляем WebSocket уведомление о событии поддона
-        this.socketService.emitToMultipleRooms(
-          ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
-          'buffer_settings:event',
-          { status: 'updated' },
-        );
+        // // Отправляем WebSocket уведомление о событии поддона
+        // this.socketService.emitToMultipleRooms(
+        //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        //   'buffer_settings:event',
+        //   { status: 'updated' },
+        // );
 
         return {
           message: 'Поддон успешно перемещен в буфер',

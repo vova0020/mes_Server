@@ -153,7 +153,9 @@ export class DetailsMasterService {
     const machineIds = segmentMachines.map((machine) => machine.machineId);
 
     // Получаем ID подэтапов для текущего участка
-    const currentSegmentSubstageIds = segmentExists.productionStagesLevel2.map((s) => s.substageId);
+    const currentSegmentSubstageIds = segmentExists.productionStagesLevel2.map(
+      (s) => s.substageId,
+    );
 
     // Находим все пакеты, связанные с заказом, но фильтруем только детали, которые проходят через указанный этап
     const packages = await this.prisma.package.findMany({
@@ -167,14 +169,15 @@ export class DetailsMasterService {
                   some: {
                     OR: [
                       { stageId: segmentId },
-                      { substageId: { in: currentSegmentSubstageIds } }
-                    ]
-                  }
-                }
-              }
-            }
+                      { substageId: { in: currentSegmentSubstageIds } },
+                    ],
+                  },
+                },
+              },
+            },
           },
           include: {
+            package: true,
             part: {
               include: {
                 route: {
@@ -231,8 +234,10 @@ export class DetailsMasterService {
     });
 
     // Фильтруем пакеты, оставляя только те, которые содержат детали для данного этапа
-    const filteredPackages = packages.filter(pkg => pkg.productionPackageParts.length > 0);
-    
+    const filteredPackages = packages.filter(
+      (pkg) => pkg.productionPackageParts.length > 0,
+    );
+
     // Если нет подходящих пакетов, возвращаем пустой массив
     if (filteredPackages.length === 0) {
       return [];
@@ -489,6 +494,7 @@ export class DetailsMasterService {
             readyForProcessing,
             distributed,
             completed,
+            packageCode: packageItem.packageCode,
           });
         } else {
           // Деталь уже есть в карте, просто обновляем ссылку

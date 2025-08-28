@@ -48,6 +48,7 @@ export class DetailsMasterController {
           readyForProcessing: { type: 'number', example: 8 },
           distributed: { type: 'number', example: 8 },
           completed: { type: 'number', example: 5 },
+          packageCode: { type: 'string', example: 'A-123-45' },
         },
       },
     },

@@ -251,43 +251,8 @@ export class PalletsMasterService {
         },
       });
 
-      // 7. Обновляем буфер (если паллетка была в ячейке)
-      const bufferPlacement = await prisma.palletBufferCell.findFirst({
-        where: { palletId, removedAt: null },
-        include: {
-          cell: {
-            include: {
-              palletBufferCells: { where: { removedAt: null } },
-            },
-          },
-        },
-      });
-      if (bufferPlacement) {
-        // закрываем старую запись о размещении
-        await prisma.palletBufferCell.update({
-          where: { palletCellId: bufferPlacement.palletCellId },
-          data: { removedAt: new Date() },
-        });
-
-        const remaining = bufferPlacement.cell.palletBufferCells.filter(
-          (p) => p.palletId !== palletId,
-        );
-        const newLoad = remaining.length;
-        const newStatus =
-          newLoad === 0
-            ? 'AVAILABLE'
-            : newLoad >= Number(bufferPlacement.cell.capacity)
-              ? 'OCCUPIED'
-              : 'AVAILABLE';
-
-        await prisma.bufferCell.update({
-          where: { cellId: bufferPlacement.cellId },
-          data: { currentLoad: newLoad, status: newStatus },
-        });
-        this.logger.log(
-          `Ячейка ${bufferPlacement.cell.cellCode}: загрузка ${newLoad}/${bufferPlacement.cell.capacity}, статус ${newStatus}`,
-        );
-      }
+      // 7. При назначении на станок поддон остается в буфере
+      // Буфер будет обновлен только при переводе в статус IN_PROGRESS
 
       // 8. Создаём или обновляем прогресс этапа для этой паллетки
       const existingProgress = await prisma.palletStageProgress.findFirst({
@@ -609,7 +574,7 @@ export class PalletsMasterService {
 
   /**
    * Обновить статус операции
-   */
+   */ 
   async updateOperationStatus(
     operationId: number,
     status: OperationCompletionStatus,
@@ -673,6 +638,46 @@ export class PalletsMasterService {
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
         updateData.status = TaskStatus.IN_PROGRESS;
         updateData.completedAt = null;
+        
+        // При переводе в статус IN_PROGRESS убираем поддон из буфера
+        const bufferPlacement = await this.prisma.palletBufferCell.findFirst({
+          where: { palletId: machineAssignment.pallet.palletId, removedAt: null },
+          include: {
+            cell: {
+              include: {
+                palletBufferCells: { where: { removedAt: null } },
+              },
+            },
+          },
+        });
+        
+        if (bufferPlacement) {
+          // Закрываем запись о размещении в буфере
+          await this.prisma.palletBufferCell.update({
+            where: { palletCellId: bufferPlacement.palletCellId },
+            data: { removedAt: new Date() },
+          });
+
+          const remaining = bufferPlacement.cell.palletBufferCells.filter(
+            (p) => p.palletId !== machineAssignment.pallet.palletId,
+          );
+          const newLoad = remaining.length;
+          const newStatus =
+            newLoad === 0
+              ? 'AVAILABLE'
+              : newLoad >= Number(bufferPlacement.cell.capacity)
+                ? 'OCCUPIED'
+                : 'AVAILABLE';
+
+          await this.prisma.bufferCell.update({
+            where: { cellId: bufferPlacement.cellId },
+            data: { currentLoad: newLoad, status: newStatus },
+          });
+          
+          this.logger.log(
+            `Поддон ${machineAssignment.pallet.palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
+          );
+        }
       } else if (status === OperationCompletionStatus.PARTIALLY_COMPLETED) {
         // Для частично выполненных операций пока оставляем IN_PROGRESS
         updateData.status = TaskStatus.IN_PROGRESS;
@@ -747,6 +752,24 @@ export class PalletsMasterService {
 
       this.logger.log(`Операция ${operationId} обновлена: ${message}`);
 
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machinesnosmen'],
+        'order:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'package:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],

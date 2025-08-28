@@ -95,7 +95,7 @@ export class MachinMasterService {
       // Получаем все станки данного участка через связь MachineStage
       const machines = await this.prisma.machine.findMany({
         where: {
-          noSmenTask: false, // Исключаем станки с noSmenTask: true
+          // noSmenTask: false, // Исключаем станки с noSmenTask: true
           machinesStages: {
             some: {
               stageId: stageId,
@@ -217,8 +217,8 @@ export class MachinMasterService {
           status: machine.status,
           load_unit: machine.loadUnit,
           recommendedLoad: Number(machine.recommendedLoad),
-          plannedQuantity,
-          completedQuantity,
+          plannedQuantity: Math.round(plannedQuantity),
+          completedQuantity: Math.round(completedQuantity),
         };
       });
 
