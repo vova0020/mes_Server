@@ -76,7 +76,7 @@ export class MachinsService {
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = updatedMachine.machinesStages[0]?.stage || null;
 
-   // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
         'room:masterceh',
@@ -86,6 +86,11 @@ export class MachinsService {
         'room:machinesypack',
       ],
       'machine:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'machine_setting:event',
       { status: 'updated' },
     );
 

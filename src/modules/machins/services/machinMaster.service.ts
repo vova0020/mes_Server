@@ -416,6 +416,12 @@ export class MachinMasterService {
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines'],
+        'machine:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
         'detail:event',
         { status: 'updated' },
       );

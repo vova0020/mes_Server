@@ -82,6 +82,18 @@ export class PackingTaskManagementService {
       'package:event',
       { status: 'updated' },
     );
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
+      'machine:event',
+      { status: 'updated' },
+    );
     // // Отправляем WebSocket уведомление о событии
     // this.socketService.emitToMultipleRooms(
     //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
@@ -404,7 +416,13 @@ export class PackingTaskManagementService {
 
     // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
-      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
       'package:event',
       { status: 'updated' },
     );
@@ -601,21 +619,15 @@ export class PackingTaskManagementService {
     const order = await tx.order.findUnique({
       where: { orderId },
       include: {
-        packages: {
-          include: {
-            packingTasks: true,
-          },
-        },
+        packages: true,
       },
     });
 
     if (!order) return;
 
-    // Проверяем, все ли упаковки завершены
-    const allPackagesCompleted = order.packages.every((pkg) =>
-      pkg.packingTasks.every(
-        (task) => task.status === PackingTaskStatus.COMPLETED,
-      ),
+    // Проверяем, все ли упаковки завершены по их статусу
+    const allPackagesCompleted = order.packages.every(
+      (pkg) => pkg.packingStatus === PackageStatus.COMPLETED,
     );
 
     if (allPackagesCompleted && !order.isCompleted) {

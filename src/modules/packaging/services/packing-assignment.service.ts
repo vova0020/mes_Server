@@ -171,6 +171,14 @@ export class PackingAssignmentService {
       }
     }
 
+    // Проверяем готовность упаковки к назначению
+    const readyForPackaging = await this.checkPackageReadiness(dto.packageId);
+    if (readyForPackaging < productionPackage.quantity.toNumber()) {
+      throw new BadRequestException(
+        `Упаковка не готова к назначению. Готово: ${readyForPackaging}, требуется: ${productionPackage.quantity.toNumber()}`,
+      );
+    }
+
     // Ищем существующее задание для этого пакета (независимо от станка)
     const existingTask = await this.prisma.packingTask.findFirst({
       where: {
@@ -483,6 +491,120 @@ export class PackingAssignmentService {
         packingCompletedAt,
       },
     });
+  }
+
+  // Проверка готовности упаковки к назначению
+  private async checkPackageReadiness(packageId: number): Promise<number> {
+    const packageData = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: {
+        quantity: true,
+        productionPackageParts: {
+          select: {
+            quantity: true,
+            part: {
+              select: {
+                partCode: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!packageData) return 0;
+
+    const totalPackages = packageData.quantity.toNumber();
+    
+    // Получаем состав упаковки
+    const composition = await this.prisma.packageComposition.findMany({
+      where: { packageId },
+      include: {
+        route: {
+          include: {
+            routeStages: {
+              include: {
+                stage: true,
+              },
+              orderBy: { sequenceNumber: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    let minReadyPackages = Infinity;
+
+    for (const comp of composition) {
+      const totalRequired = comp.quantity.toNumber();
+      const requiredPerPackage = totalRequired / totalPackages;
+      const route = comp.route;
+
+      // Находим финальный этап маршрута (не упаковочный)
+      const nonFinalStages = route.routeStages.filter(
+        (rs) => !rs.stage.finalStage,
+      );
+      const lastNonFinalStage = nonFinalStages[nonFinalStages.length - 1];
+
+      if (!lastNonFinalStage) continue;
+
+      // Получаем поддоны, которые завершили все этапы маршрута
+      const completedPallets = await this.prisma.pallet.findMany({
+        where: {
+          part: {
+            partCode: comp.partCode,
+          },
+          palletStageProgress: {
+            some: {
+              routeStageId: lastNonFinalStage.routeStageId,
+              status: 'COMPLETED',
+            },
+          },
+        },
+        select: {
+          quantity: true,
+        },
+      });
+
+      const totalCompletedQuantity = completedPallets.reduce(
+        (sum, pallet) => sum + pallet.quantity.toNumber(),
+        0,
+      );
+
+      const possiblePackages = Math.floor(
+        totalCompletedQuantity / requiredPerPackage,
+      );
+      minReadyPackages = Math.min(minReadyPackages, possiblePackages);
+    }
+
+    const baseReadyForPackaging =
+      minReadyPackages === Infinity
+        ? 0
+        : Math.min(minReadyPackages, totalPackages);
+
+    // Получаем статистику распределенных упаковок
+    const distributed = await this.getDistributedPackages(packageId);
+
+    return Math.max(0, baseReadyForPackaging - distributed);
+  }
+
+  // Получение количества распределенных упаковок
+  private async getDistributedPackages(packageId: number): Promise<number> {
+    const packingTasks = await this.prisma.packingTask.findMany({
+      where: {
+        packageId,
+        status: {
+          in: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED'],
+        },
+      },
+    });
+
+    const packageData = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: { quantity: true },
+    });
+
+    return packingTasks.length > 0 ? packageData?.quantity.toNumber() || 0 : 0;
   }
 
   // Вспомогательный метод для преобразования данных в DTO ответа

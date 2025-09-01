@@ -298,6 +298,12 @@ export class PalletsMasterService {
         'machine_task:event',
         { status: 'updated' },
       );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'machine:event',
+        { status: 'updated' },
+      );
 
       this.logger.log(
         `Создано задание ${machineAssignment.assignmentId} → статус этапа: ${stageProgress.status}`,
@@ -822,6 +828,12 @@ export class PalletsMasterService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine:event',
         { status: 'updated' },
       );
 

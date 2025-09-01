@@ -74,94 +74,77 @@ export class OrdersYpackService {
         let available = 0;
         let completed = 0;
 
-        // Собираем все детали из всех упаковок заказа
-        const allParts = order.packages.flatMap((pkg) =>
-          pkg.productionPackageParts.map((ppp) => ({
+        // Считаем общее количество упаковок в заказе
+        const totalPackages = order.packages.reduce((sum, pkg) => sum + pkg.quantity.toNumber(), 0);
+        let completedPackages = 0;
+        let availablePackages = 0;
+
+        // Для каждой упаковки проверяем статус по указанному этапу
+        order.packages.forEach((pkg) => {
+          const packageQuantity = pkg.quantity.toNumber();
+          
+          // Проверяем все детали в упаковке
+          const allPartsInPackage = pkg.productionPackageParts.map((ppp) => ({
             part: ppp.part,
             quantity: ppp.quantity.toNumber(),
-          })),
-        );
+          }));
 
-        let totalQuantityForStage = 0;
-        let completedQuantity = 0;
-        let availableQuantity = 0;
-
-        // Для каждой детали анализируем прогресс по указанному этапу
-        allParts.forEach(({ part, quantity }) => {
-          const routeStages = part.route.routeStages;
-          const stageIndex = routeStages.findIndex(
-            (rs) => rs.stage.stageId === stageId,
+          // Проверяем, есть ли детали этой упаковки на указанном этапе
+          const hasStage = allPartsInPackage.some(({ part }) =>
+            part.route.routeStages.some((rs) => rs.stage.stageId === stageId)
           );
 
-          if (stageIndex !== -1) {
-            const routeStage = routeStages[stageIndex];
+          if (!hasStage) return;
 
-            // Если есть поддоны, считаем по ним
-            if (part.pallets && part.pallets.length > 0) {
-              // Считаем totalQuantityForStage по фактическому количеству на поддонах
-              const totalPalletQuantity = part.pallets.reduce((sum, pallet) => sum + pallet.quantity.toNumber(), 0);
-              totalQuantityForStage += totalPalletQuantity;
-              part.pallets.forEach((pallet) => {
-                const palletQuantity = pallet.quantity.toNumber();
-                const palletProgress = pallet.palletStageProgress.find(
-                  (p) => p.routeStageId === routeStage.routeStageId,
-                );
+          // Если упаковка имеет статус COMPLETED, считаем её выполненной
+          if (pkg.packingStatus === 'COMPLETED') {
+            completedPackages += packageQuantity;
+          }
 
-                // Считаем выполненные
-                if (palletProgress && palletProgress.status === 'COMPLETED') {
-                  completedQuantity += palletQuantity;
-                }
+          // Для доступности проверяем детали
+          let anyPartAvailable = false;
+          allPartsInPackage.forEach(({ part }) => {
+            const routeStages = part.route.routeStages;
+            const stageIndex = routeStages.findIndex(
+              (rs) => rs.stage.stageId === stageId,
+            );
 
-                // Считаем доступные независимо от статуса текущего этапа
-                if (stageIndex === 0) {
-                  availableQuantity += palletQuantity;
-                } else {
+            if (stageIndex !== -1) {
+              // Проверяем доступность
+              if (part.pallets && part.pallets.length > 0) {
+                const anyPalletAvailable = part.pallets.some((pallet) => {
+                  if (stageIndex === 0) return true;
                   const prevStage = routeStages[stageIndex - 1];
                   const prevPalletProgress = pallet.palletStageProgress.find(
                     (p) => p.routeStageId === prevStage.routeStageId,
                   );
-                  if (prevPalletProgress && prevPalletProgress.status === 'COMPLETED') {
-                    availableQuantity += palletQuantity;
-                  }
-                }
-              });
-            } else {
-              // Если поддонов нет, используем прогресс детали
-              totalQuantityForStage += quantity;
-              const progress = part.partRouteProgress.find(
-                (p) => p.routeStageId === routeStage.routeStageId,
-              );
-
-              // Считаем выполненные
-              if (progress && progress.status === 'COMPLETED') {
-                completedQuantity += quantity;
-              }
-
-              // Считаем доступные независимо от статуса текущего этапа
-              if (stageIndex === 0) {
-                availableQuantity += quantity;
+                  return prevPalletProgress && prevPalletProgress.status === 'COMPLETED';
+                });
+                if (anyPalletAvailable) anyPartAvailable = true;
               } else {
-                const prevStage = routeStages[stageIndex - 1];
-                const prevProgress = part.partRouteProgress.find(
-                  (p) => p.routeStageId === prevStage.routeStageId,
-                );
-                if (prevProgress && prevProgress.status === 'COMPLETED') {
-                  availableQuantity += quantity;
+                if (stageIndex === 0) {
+                  anyPartAvailable = true;
+                } else {
+                  const prevStage = routeStages[stageIndex - 1];
+                  const prevProgress = part.partRouteProgress.find(
+                    (p) => p.routeStageId === prevStage.routeStageId,
+                  );
+                  if (prevProgress && prevProgress.status === 'COMPLETED') {
+                    anyPartAvailable = true;
+                  }
                 }
               }
             }
+          });
+
+          if (anyPartAvailable) {
+            availablePackages += packageQuantity;
           }
         });
 
         // Рассчитываем проценты
-        available =
-          totalQuantityForStage > 0
-            ? Math.round((availableQuantity / totalQuantityForStage) * 100)
-            : 0;
-        completed =
-          totalQuantityForStage > 0
-            ? Math.round((completedQuantity / totalQuantityForStage) * 100)
-            : 0;
+        available = totalPackages > 0 ? Math.round((availablePackages / totalPackages) * 100) : 0;
+        completed = totalPackages > 0 ? Math.round((completedPackages / totalPackages) * 100) : 0;
 
         return {
           id: order.orderId,
