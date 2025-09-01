@@ -19,7 +19,7 @@ export class PartPalletsService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) {}
+  ) { }
 
   // Получение поддонов по ID детали
   async getPalletsByPartId(
@@ -185,17 +185,17 @@ export class PartPalletsService {
         assignedToPackage: pallet.packageAssignments.length > 0,
         currentCell: currentBufferCell
           ? {
-              cellId: currentBufferCell.cell.cellId,
-              cellCode: currentBufferCell.cell.cellCode,
-              status: currentBufferCell.cell.status as string,
-              capacity: currentBufferCell.cell.capacity.toNumber(),
-              currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
-              buffer: {
-                bufferId: currentBufferCell.cell.buffer.bufferId,
-                bufferName: currentBufferCell.cell.buffer.bufferName,
-                location: currentBufferCell.cell.buffer.location,
-              },
-            }
+            cellId: currentBufferCell.cell.cellId,
+            cellCode: currentBufferCell.cell.cellCode,
+            status: currentBufferCell.cell.status as string,
+            capacity: currentBufferCell.cell.capacity.toNumber(),
+            currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
+            buffer: {
+              bufferId: currentBufferCell.cell.buffer.bufferId,
+              bufferName: currentBufferCell.cell.buffer.bufferName,
+              location: currentBufferCell.cell.buffer.location,
+            },
+          }
           : undefined,
         placedAt: currentBufferCell?.placedAt,
         machineAssignments: pallet.machineAssignments.map((assignment) => ({
@@ -354,17 +354,17 @@ export class PartPalletsService {
       assignedToPackage: palletRaw.packageAssignments.length > 0,
       currentCell: currentBufferCell
         ? {
-            cellId: currentBufferCell.cell.cellId,
-            cellCode: currentBufferCell.cell.cellCode,
-            status: currentBufferCell.cell.status as string,
-            capacity: currentBufferCell.cell.capacity.toNumber(),
-            currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
-            buffer: {
-              bufferId: currentBufferCell.cell.buffer.bufferId,
-              bufferName: currentBufferCell.cell.buffer.bufferName,
-              location: currentBufferCell.cell.buffer.location,
-            },
-          }
+          cellId: currentBufferCell.cell.cellId,
+          cellCode: currentBufferCell.cell.cellCode,
+          status: currentBufferCell.cell.status as string,
+          capacity: currentBufferCell.cell.capacity.toNumber(),
+          currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
+          buffer: {
+            bufferId: currentBufferCell.cell.buffer.bufferId,
+            bufferName: currentBufferCell.cell.buffer.bufferName,
+            location: currentBufferCell.cell.buffer.location,
+          },
+        }
         : undefined,
       placedAt: currentBufferCell?.placedAt,
       machineAssignments: palletRaw.machineAssignments.map((assignment) => ({
@@ -516,8 +516,38 @@ export class PartPalletsService {
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
         'package:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
+        'machine:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
+        'pallet:event',
         { status: 'updated' },
       );
 

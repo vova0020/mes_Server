@@ -117,6 +117,26 @@ export class PalletMachineService {
       throw new Error(errorMsg);
     }
 
+    // Проверяем, что предыдущий этап пройден (если это не первый этап)
+    const allRouteStages = pallet.part.route?.routeStages || [];
+    const currentStageIndex = allRouteStages.findIndex(
+      (rs) => rs.routeStageId === currentRouteStage.routeStageId,
+    );
+    
+    if (currentStageIndex > 0) {
+      // Это не первый этап, проверяем предыдущий
+      const previousRouteStage = allRouteStages[currentStageIndex - 1];
+      const previousStageProgress = pallet.palletStageProgress.find(
+        (progress) => progress.routeStage.routeStageId === previousRouteStage.routeStageId,
+      );
+      
+      if (!previousStageProgress || previousStageProgress.status !== 'COMPLETED') {
+        const errorMsg = `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`;
+        this.logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+
     // Проверяем, может ли станок выполнять этот этап
     const canProcessStage =
       machine.machinesStages.some(
@@ -621,7 +641,7 @@ export class PalletMachineService {
 
         if (allStagesCompleted) {
           // Создаем задачи упаковки для данной детали
-          await this.createPackingTasks(prisma, assignment.pallet.partId);
+          // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       } else {
         // Проверяем, является ли следующий этап финальным
@@ -633,7 +653,7 @@ export class PalletMachineService {
         if (nextStage?.finalStage && shouldCompletePartProgress) {
           // Если следующий этап финальный и все поддоны завершили текущий этап,
           // создаем задачи упаковки
-          await this.createPackingTasks(prisma, assignment.pallet.partId);
+          // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       }
  // Отправляем WebSocket уведомление о событии поддона

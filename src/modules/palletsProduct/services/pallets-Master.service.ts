@@ -343,7 +343,7 @@ export class PalletsMasterService {
   async movePalletToBuffer(palletId: number, bufferCellId: number) {
     this.logger.log(
       `Перемещение поддона ${palletId} в буфер (ячейка ${bufferCellId})`,
-    ); 
+    );
 
     try {
       // Проверяем существование поддона
@@ -574,7 +574,7 @@ export class PalletsMasterService {
 
   /**
    * Обновить статус операции
-   */ 
+   */
   async updateOperationStatus(
     operationId: number,
     status: OperationCompletionStatus,
@@ -636,9 +636,56 @@ export class PalletsMasterService {
         updateData.status = TaskStatus.COMPLETED;
         updateData.completedAt = new Date();
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
+        // Проверяем, что предыдущий этап пройден (если это не первый этап)
+        const pallet = await this.prisma.pallet.findUnique({
+          where: { palletId: machineAssignment.pallet.palletId },
+          include: {
+            part: {
+              include: {
+                route: {
+                  include: {
+                    routeStages: {
+                      include: { stage: true },
+                      orderBy: { sequenceNumber: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
+            palletStageProgress: {
+              include: {
+                routeStage: { include: { stage: true } },
+              },
+            },
+          },
+        });
+
+        if (!pallet) {
+          throw new Error(`Поддон с ID ${machineAssignment.pallet.palletId} не найден`);
+        }
+
+        const allRouteStages = pallet.part.route?.routeStages || [];
+        const currentStageIndex = allRouteStages.findIndex(
+          (rs) => rs.routeStageId === stageProgress.routeStageId,
+        );
+
+        if (currentStageIndex > 0) {
+          // Это не первый этап, проверяем предыдущий
+          const previousRouteStage = allRouteStages[currentStageIndex - 1];
+          const previousStageProgress = pallet.palletStageProgress.find(
+            (progress) => progress.routeStage.routeStageId === previousRouteStage.routeStageId,
+          );
+
+          if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
+            throw new Error(
+              `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
+            );
+          }
+        }
+
         updateData.status = TaskStatus.IN_PROGRESS;
         updateData.completedAt = null;
-        
+
         // При переводе в статус IN_PROGRESS убираем поддон из буфера
         const bufferPlacement = await this.prisma.palletBufferCell.findFirst({
           where: { palletId: machineAssignment.pallet.palletId, removedAt: null },
@@ -650,7 +697,7 @@ export class PalletsMasterService {
             },
           },
         });
-        
+
         if (bufferPlacement) {
           // Закрываем запись о размещении в буфере
           await this.prisma.palletBufferCell.update({
@@ -673,7 +720,7 @@ export class PalletsMasterService {
             where: { cellId: bufferPlacement.cellId },
             data: { currentLoad: newLoad, status: newStatus },
           });
-          
+
           this.logger.log(
             `Поддон ${machineAssignment.pallet.palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
           );
@@ -720,11 +767,12 @@ export class PalletsMasterService {
           );
         }
 
-        // Проверяем, является ли следующий этап финальным (упаковка)
-        await this.checkAndCreatePackingTask(
-          machineAssignment.pallet.partId,
-          stageProgress.routeStageId,
-        );
+        // отключено: не создаём задачу упаковки
+        // await this.checkAndCreatePackingTask(
+        //   machineAssignment.pallet.partId,
+        //   stageProgress.routeStageId,
+        // );
+
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
         await this.updatePartStatusIfNeeded(
           this.prisma,

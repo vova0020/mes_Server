@@ -11,7 +11,7 @@ export class PackagingService {
     // Проверяем статус заказа - не показываем завершенные заказы
     const order = await this.prisma.order.findUnique({
       where: { orderId },
-      select: { isCompleted: true, status: true }
+      select: { isCompleted: true, status: true },
     });
 
     if (!order || order.isCompleted || order.status === 'COMPLETED') {
@@ -86,12 +86,14 @@ export class PackagingService {
 
         // Рассчитываем переменные
         const totalQuantity = pkg.quantity.toNumber();
-        const { readyForPackaging, assembled } =
+        const { baseReadyForPackaging, assembled } =
           await this.calculatePackageStatistics(
             pkg.packageId,
             pkg.productionPackageParts,
             totalQuantity,
           );
+        
+        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
 
         return {
           id: pkg.packageId,
@@ -220,12 +222,14 @@ export class PackagingService {
 
         // Рассчитываем переменные
         const totalQuantity = pkg.quantity.toNumber();
-        const { readyForPackaging, assembled } =
+        const { baseReadyForPackaging, assembled } =
           await this.calculatePackageStatistics(
             pkg.packageId,
             pkg.productionPackageParts,
             totalQuantity,
           );
+        
+        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
 
         return {
           id: pkg.packageId,
@@ -299,20 +303,82 @@ export class PackagingService {
     packageParts: any[],
     totalPackages: number,
   ) {
-    let minReadyPackages = Infinity;
-    
-    // Подсчитываем сколько упаковок можно собрать на основе готовых деталей
-    for (const packagePart of packageParts) {
-      const partId = packagePart.part.partId;
-      const requiredPerPackage = packagePart.quantity.toNumber();
+    // Получаем состав упаковки из package_composition
+    const composition = await this.prisma.packageComposition.findMany({
+      where: { packageId },
+      include: {
+        route: {
+          include: {
+            routeStages: {
+              include: {
+                stage: true
+              },
+              orderBy: { sequenceNumber: 'asc' }
+            }
+          }
+        }
+      }
+    });
 
-      // Получаем количество готовых деталей (со статусом COMPLETED или AWAITING_PACKAGING)
-      const readyPallets = await this.prisma.pallet.findMany({
+    let minReadyPackages = Infinity;
+
+    // Подсчитываем сколько упаковок готово к упаковке
+    for (const comp of composition) {
+      const totalRequired = comp.quantity.toNumber();
+      const requiredPerPackage = totalRequired / totalPackages;
+      const route = comp.route;
+
+      // Находим финальный этап маршрута (не упаковочный)
+      const nonFinalStages = route.routeStages.filter(
+        (rs) => !rs.stage.finalStage,
+      );
+      const lastNonFinalStage = nonFinalStages[nonFinalStages.length - 1];
+
+      if (!lastNonFinalStage) continue;
+
+      // Получаем поддоны по partCode, которые завершили все этапы маршрута
+      const completedPallets = await this.prisma.pallet.findMany({
         where: {
-          partId,
           part: {
-            status: {
-              in: ['COMPLETED', 'AWAITING_PACKAGING']
+            partCode: comp.partCode
+          },
+          palletStageProgress: {
+            some: {
+              routeStageId: lastNonFinalStage.routeStageId,
+              status: 'COMPLETED',
+            },
+          },
+        },
+        select: {
+          quantity: true,
+        },
+      });
+
+      const totalCompletedQuantity = completedPallets.reduce(
+        (sum, pallet) => sum + pallet.quantity.toNumber(),
+        0,
+      );
+
+      const possiblePackages = Math.floor(totalCompletedQuantity / requiredPerPackage);
+      minReadyPackages = Math.min(minReadyPackages, possiblePackages);
+    }
+
+    let baseReadyForPackaging = minReadyPackages === Infinity ? 0 : Math.min(minReadyPackages, totalPackages);
+
+    // Подсчитываем сколько упаковок реально скомплектовано
+    let minAssembledPackages = Infinity;
+
+    for (const comp of composition) {
+      const totalRequired = comp.quantity.toNumber();
+      const requiredPerPackage = totalRequired / totalPackages;
+
+      // Получаем назначенные поддоны для этой детали в данной упаковке
+      const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
+        where: {
+          packageId,
+          pallet: {
+            part: {
+              partCode: comp.partCode
             }
           }
         },
@@ -321,31 +387,77 @@ export class PackagingService {
         }
       });
 
-      const totalReadyQuantity = readyPallets.reduce(
-        (sum, pallet) => sum + pallet.quantity.toNumber(),
-        0
+      const totalAssignedQuantity = assignedPallets.reduce(
+        (sum, assignment) => sum + assignment.quantity.toNumber(),
+        0,
       );
 
-      const possiblePackages = Math.floor(totalReadyQuantity / requiredPerPackage);
-      minReadyPackages = Math.min(minReadyPackages, possiblePackages);
+      const assembledForThisPart = Math.floor(
+        totalAssignedQuantity / requiredPerPackage,
+      );
+      minAssembledPackages = Math.min(
+        minAssembledPackages,
+        assembledForThisPart,
+      );
     }
 
-    const readyForPackaging = minReadyPackages === Infinity ? 0 : minReadyPackages;
+    const assembled =
+      minAssembledPackages === Infinity ? 0 : minAssembledPackages;
 
-    // Подсчитываем сколько упаковок реально скомплектовано (изъято из буфера)
-    let assembled = 0;
+    return {
+      baseReadyForPackaging,
+      assembled,
+    };
+  }
+
+  // Получение статистики упаковочных задач
+  private async getPackingStatistics(packageId: number, composition?: any[]) {
+    // Получаем данные упаковки
+    const packageData = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: {
+        packingStatus: true,
+        quantity: true,
+      },
+    });
+
+    if (!packageData) {
+      return { distributed: 0, completed: 0 };
+    }
+
+    const totalQuantity = packageData.quantity.toNumber();
+
+    // Если composition не передан, используем старую логику
+    if (!composition) {
+      const packingTasks = await this.prisma.packingTask.findMany({
+        where: {
+          packageId,
+          status: {
+            in: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED'],
+          },
+        },
+      });
+      
+      const distributed = packingTasks.length > 0 ? totalQuantity : 0;
+      const completed = packageData.packingStatus === 'COMPLETED' ? totalQuantity : 0;
+      
+      return { distributed, completed };
+    }
+
+    // Новая логика с composition - distributed на основе назначенных поддонов
+    let minDistributedPackages = Infinity;
     
-    // Проверяем для каждой детали в упаковке, сколько поддонов назначено
-    for (const packagePart of packageParts) {
-      const partId = packagePart.part.partId;
-      const requiredPerPackage = packagePart.quantity.toNumber();
+    for (const comp of composition) {
+      const totalRequired = comp.quantity.toNumber();
+      const requiredPerPackage = totalRequired / totalQuantity;
 
-      // Получаем назначенные поддоны для этой детали в данной упаковке
       const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
         where: {
           packageId,
           pallet: {
-            partId
+            part: {
+              partCode: comp.partCode
+            }
           }
         },
         select: {
@@ -358,45 +470,16 @@ export class PackagingService {
         0
       );
 
-      const assembledForThisPart = Math.floor(totalAssignedQuantity / requiredPerPackage);
-      
-      // Минимальное количество среди всех деталей определяет количество собранных упаковок
-      if (assembled === 0) {
-        assembled = assembledForThisPart;
-      } else {
-        assembled = Math.min(assembled, assembledForThisPart);
-      }
+      const distributedForThisPart = Math.floor(totalAssignedQuantity / requiredPerPackage);
+      minDistributedPackages = Math.min(minDistributedPackages, distributedForThisPart);
     }
 
-    return {
-      readyForPackaging,
-      assembled
-    };
-  }
-
-  // Получение статистики упаковочных задач
-  private async getPackingStatistics(packageId: number) {
-    // Получаем количество распределенных задач упаковки
-    const distributedTasks = await this.prisma.packingTask.count({
-      where: {
-        packageId,
-        status: {
-          in: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED']
-        }
-      }
-    });
-
-    // Получаем количество завершенных упаковок (по статусу COMPLETED)
-    const packageData = await this.prisma.package.findUnique({
-      where: { packageId },
-      select: { packingStatus: true }
-    });
-
-    const completed = packageData?.packingStatus === 'COMPLETED' ? 1 : 0;
+    const distributed = minDistributedPackages === Infinity ? 0 : minDistributedPackages;
+    const completed = packageData.packingStatus === 'COMPLETED' ? totalQuantity : 0;
 
     return {
-      distributed: distributedTasks,
-      completed
+      distributed,
+      completed,
     };
   }
 }

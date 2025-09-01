@@ -26,7 +26,7 @@ export class PackingAssignmentService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) {}
+  ) { }
 
   /**
    * Получить все станки упаковки по ID участка с дополнительной информацией
@@ -261,8 +261,27 @@ export class PackingAssignmentService {
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
         'package:event',
+        { status: 'updated' },
+      );
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
+        'machine:event',
         { status: 'updated' },
       );
 
@@ -375,7 +394,12 @@ export class PackingAssignmentService {
     }
 
     const tasks = await this.prisma.packingTask.findMany({
-      where: { machineId },
+      where: {
+        machineId,
+        status: {
+          not: 'COMPLETED', // исключаем завершённые
+        },
+      },
       orderBy: [{ priority: 'desc' }, { assignedAt: 'asc' }],
       include: {
         package: {
@@ -502,11 +526,11 @@ export class PackingAssignmentService {
       },
       assignedUser: task.assignedUser
         ? {
-            userId: task.assignedUser.userId,
-            login: task.assignedUser.login,
-            firstName: task.assignedUser.userDetail?.firstName,
-            lastName: task.assignedUser.userDetail?.lastName,
-          }
+          userId: task.assignedUser.userId,
+          login: task.assignedUser.login,
+          firstName: task.assignedUser.userDetail?.firstName,
+          lastName: task.assignedUser.userDetail?.lastName,
+        }
         : undefined,
       productionPackage: productionPackageInfo,
     };

@@ -15,7 +15,7 @@ export class PalletMachineNoSmenService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   /**
    * Получить все поддоны по ID детали
@@ -106,16 +106,16 @@ export class PalletMachineNoSmenService {
       // Если есть запись прогресса — конструируем объект, иначе null
       const currentOperation = stageProgress
         ? {
-          id: stageProgress.pspId,
-          status: stageProgress.status,
-          startedAt: new Date(),
-          completedAt: stageProgress.completedAt ?? undefined,
-          processStep: {
-            id: currentRouteStage.stageId,
-            name: currentRouteStage.stage.stageName,
-            sequence: Number(currentRouteStage.sequenceNumber),
-          },
-        }
+            id: stageProgress.pspId,
+            status: stageProgress.status,
+            startedAt: new Date(),
+            completedAt: stageProgress.completedAt ?? undefined,
+            processStep: {
+              id: currentRouteStage.stageId,
+              name: currentRouteStage.stage.stageName,
+              sequence: Number(currentRouteStage.sequenceNumber),
+            },
+          }
         : null;
 
       return {
@@ -126,19 +126,19 @@ export class PalletMachineNoSmenService {
 
         bufferCell: currentBuffer
           ? {
-            id: currentBuffer.cell.cellId,
-            code: currentBuffer.cell.cellCode,
-            bufferId: currentBuffer.cell.bufferId,
-            bufferName: currentBuffer.cell.buffer?.bufferName,
-          }
+              id: currentBuffer.cell.cellId,
+              code: currentBuffer.cell.cellCode,
+              bufferId: currentBuffer.cell.bufferId,
+              bufferName: currentBuffer.cell.buffer?.bufferName,
+            }
           : null,
 
         machine: currentMachine?.machine
           ? {
-            id: currentMachine.machine.machineId,
-            name: currentMachine.machine.machineName,
-            status: currentMachine.machine.status,
-          }
+              id: currentMachine.machine.machineId,
+              name: currentMachine.machine.machineName,
+              status: currentMachine.machine.status,
+            }
           : null,
 
         currentOperation,
@@ -243,6 +243,31 @@ export class PalletMachineNoSmenService {
         throw new Error(
           `Станок ${machineId} не может выполнять этап ${stageId}`,
         );
+      }
+
+      // Проверяем, что предыдущий этап пройден (если это не первый этап)
+      const allRouteStages = pallet.part.route.routeStages;
+      const currentStageIndex = allRouteStages.findIndex(
+        (rs) => rs.routeStageId === targetRouteStage.routeStageId,
+      );
+
+      if (currentStageIndex > 0) {
+        // Это не первый этап, проверяем предыдущий
+        const previousRouteStage = allRouteStages[currentStageIndex - 1];
+        const previousStageProgress = pallet.palletStageProgress.find(
+          (progress) =>
+            progress.routeStage.routeStageId ===
+            previousRouteStage.routeStageId,
+        );
+
+        if (
+          !previousStageProgress ||
+          previousStageProgress.status !== TaskStatus.COMPLETED
+        ) {
+          throw new Error(
+            `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
+          );
+        }
       }
 
       // --- УБРАНО: массовое создание записей прогресса для всех этапов ---
@@ -435,7 +460,7 @@ export class PalletMachineNoSmenService {
           where: { cellId: bufferPlacement.cellId },
           data: { currentLoad: newLoad, status: newStatus },
         });
-        
+
         this.logger.log(
           `Поддон ${palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
         );
@@ -648,19 +673,21 @@ export class PalletMachineNoSmenService {
         );
 
         if (allStagesCompleted) {
-          await this.createPackingTasks(prisma, assignment.pallet.partId);
+          // Создание задач упаковки временно отключено.
+          // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       } else {
         // используем уже загруженные данные, если они есть, иначе запрашиваем
         const nextStageInfo = nextStageProdLevel
           ? nextStageProdLevel
           : await prisma.productionStageLevel1.findUnique({
-            where: { stageId: nextRouteStage.stageId },
-            select: { finalStage: true },
-          });
+              where: { stageId: nextRouteStage.stageId },
+              select: { finalStage: true },
+            });
 
         if (nextStageInfo?.finalStage && shouldCompletePartProgress) {
-          await this.createPackingTasks(prisma, assignment.pallet.partId);
+          // Создание задач упаковки временно отключено.
+          // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       }
 
@@ -682,7 +709,7 @@ export class PalletMachineNoSmenService {
         { status: 'updated' },
       );
 
-       // Отправляем WebSocket уведомление о событии поддона
+      // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machinesnosmen'],
         'order:event',
@@ -840,7 +867,7 @@ export class PalletMachineNoSmenService {
             currentLoad: effectivePalletsCount,
           },
         });
-       // Отправляем WebSocket уведомление о событии поддона
+        // Отправляем WebSocket уведомление о событии поддона
         this.socketService.emitToMultipleRooms(
           ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
           'detail:event',
@@ -912,8 +939,8 @@ export class PalletMachineNoSmenService {
       if (quantity > availableQuantity) {
         throw new Error(
           `Недостаточно деталей для создания поддона. ` +
-          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
-          `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
+            `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+            `(общее количество: ${part.totalQuantity}, уже распределено: ${allocatedQuantity})`,
         );
       }
 

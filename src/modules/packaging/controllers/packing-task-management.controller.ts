@@ -15,6 +15,9 @@ import {
   MoveTaskToMachineDto,
   UpdateTaskStatusDto,
   AssignUserToTaskDto,
+  SetTaskPriorityDto,
+  StartTaskDto,
+  CompleteTaskDto,
 } from '../dto/packing-task-management.dto';
 import { PackingAssignmentResponseDto } from '../dto/packing-assignment-response.dto';
 
@@ -29,8 +32,9 @@ export class PackingTaskManagementController {
   @HttpCode(HttpStatus.OK)
   async markTaskAsInProgress(
     @Param('taskId', ParseIntPipe) taskId: number,
+    @Body() dto: StartTaskDto,
   ): Promise<PackingAssignmentResponseDto> {
-    return this.packingTaskManagementService.markTaskAsInProgress(taskId);
+    return this.packingTaskManagementService.markTaskAsInProgress(taskId, dto);
   }
 
   // Отметить задание как выполнено
@@ -38,8 +42,9 @@ export class PackingTaskManagementController {
   @HttpCode(HttpStatus.OK)
   async markTaskAsCompleted(
     @Param('taskId', ParseIntPipe) taskId: number,
+    @Body() dto: CompleteTaskDto,
   ): Promise<PackingAssignmentResponseDto> {
-    return this.packingTaskManagementService.markTaskAsCompleted(taskId);
+    return this.packingTaskManagementService.markTaskAsCompleted(taskId, dto);
   }
 
   // Удалить задание у станка
@@ -87,5 +92,15 @@ export class PackingTaskManagementController {
     @Param('userId', ParseIntPipe) userId: number,
   ): Promise<PackingAssignmentResponseDto[]> {
     return this.packingTaskManagementService.getTasksByUser(userId);
+  }
+
+  // Назначить приоритет заданию
+  @Put(':taskId/priority')
+  @HttpCode(HttpStatus.OK)
+  async setTaskPriority(
+    @Param('taskId', ParseIntPipe) taskId: number,
+    @Body() dto: SetTaskPriorityDto,
+  ): Promise<PackingAssignmentResponseDto> {
+    return this.packingTaskManagementService.setTaskPriority(taskId, dto);
   }
 }

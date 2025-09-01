@@ -8,6 +8,9 @@ import {
   MoveTaskToMachineDto,
   UpdateTaskStatusDto,
   AssignUserToTaskDto,
+  SetTaskPriorityDto,
+  StartTaskDto,
+  CompleteTaskDto,
 } from '../dto/packing-task-management.dto';
 import {
   PackingAssignmentResponseDto,
@@ -21,11 +24,12 @@ export class PackingTaskManagementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
-  ) {}
+  ) { }
 
   // Отметить задание как взято в работу
   async markTaskAsInProgress(
     taskId: number,
+    dto: StartTaskDto,
   ): Promise<PackingAssignmentResponseDto> {
     const existingTask = await this.prisma.packingTask.findUnique({
       where: { taskId },
@@ -46,6 +50,7 @@ export class PackingTaskManagementService {
       where: { taskId },
       data: {
         status: PackingTaskStatus.IN_PROGRESS,
+        machineId: dto.machineId,
       },
       include: {
         package: {
@@ -67,10 +72,22 @@ export class PackingTaskManagementService {
 
     // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
-      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
       'package:event',
       { status: 'updated' },
     );
+    // // Отправляем WebSocket уведомление о событии
+    // this.socketService.emitToMultipleRooms(
+    //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+    //   'package:event',
+    //   { status: 'updated' },
+    // );
 
     return this.mapToResponseDto(updatedTask);
   }
@@ -78,6 +95,7 @@ export class PackingTaskManagementService {
   // Отметить задание как выполнено
   async markTaskAsCompleted(
     taskId: number,
+    dto: CompleteTaskDto,
   ): Promise<PackingAssignmentResponseDto> {
     const existingTask = await this.prisma.packingTask.findUnique({
       where: { taskId },
@@ -119,6 +137,7 @@ export class PackingTaskManagementService {
         data: {
           status: PackingTaskStatus.COMPLETED,
           completedAt: new Date(),
+          machineId: dto.machineId,
         },
         include: {
           package: {
@@ -146,8 +165,38 @@ export class PackingTaskManagementService {
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
+        'order:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
         'package:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        [
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+          'room:masterypack',
+          'room:machinesypack',
+        ],
+        'machine:event',
         { status: 'updated' },
       );
 
@@ -179,8 +228,26 @@ export class PackingTaskManagementService {
 
     // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
-      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
       'package:event',
+      { status: 'updated' },
+    );
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
+      'machine:event',
       { status: 'updated' },
     );
   }
@@ -254,8 +321,26 @@ export class PackingTaskManagementService {
 
     // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
-      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
       'package:event',
+      { status: 'updated' },
+    );
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:masterypack',
+        'room:machinesypack',
+      ],
+      'machine:event',
       { status: 'updated' },
     );
 
@@ -415,6 +500,49 @@ export class PackingTaskManagementService {
     });
 
     return tasks.map((task) => this.mapToResponseDto(task));
+  }
+
+  // Назначить приоритет заданию
+  async setTaskPriority(
+    taskId: number,
+    dto: SetTaskPriorityDto,
+  ): Promise<PackingAssignmentResponseDto> {
+    const existingTask = await this.prisma.packingTask.findUnique({
+      where: { taskId },
+    });
+
+    if (!existingTask) {
+      throw new NotFoundException(`Задание с ID ${taskId} не найдено`);
+    }
+
+    const updatedTask = await this.prisma.packingTask.update({
+      where: { taskId },
+      data: {
+        priority: dto.priority,
+      },
+      include: {
+        package: {
+          include: {
+            order: true,
+          },
+        },
+        machine: true,
+        assignedUser: {
+          include: {
+            userDetail: true,
+          },
+        },
+      },
+    });
+
+    // Отправляем WebSocket уведомление о событии
+    this.socketService.emitToMultipleRooms(
+      ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      'package:event',
+      { status: 'updated' },
+    );
+
+    return this.mapToResponseDto(updatedTask);
   }
 
   // Вычитание запасов для завершенной упаковки
@@ -589,11 +717,11 @@ export class PackingTaskManagementService {
       },
       assignedUser: task.assignedUser
         ? {
-            userId: task.assignedUser.userId,
-            login: task.assignedUser.login,
-            firstName: task.assignedUser.userDetail?.firstName,
-            lastName: task.assignedUser.userDetail?.lastName,
-          }
+          userId: task.assignedUser.userId,
+          login: task.assignedUser.login,
+          firstName: task.assignedUser.userDetail?.firstName,
+          lastName: task.assignedUser.userDetail?.lastName,
+        }
         : undefined,
       productionPackage: productionPackageInfo,
     };
