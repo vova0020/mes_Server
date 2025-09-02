@@ -56,7 +56,6 @@ export class PalletMachineService {
           orderBy: {
             pspId: 'desc',
           },
-          take: 1,
         },
       },
     });
@@ -127,7 +126,7 @@ export class PalletMachineService {
       // Это не первый этап, проверяем предыдущий
       const previousRouteStage = allRouteStages[currentStageIndex - 1];
       const previousStageProgress = pallet.palletStageProgress.find(
-        (progress) => progress.routeStage.routeStageId === previousRouteStage.routeStageId,
+        (progress) => progress.routeStageId === previousRouteStage.routeStageId,
       );
       
       if (!previousStageProgress || previousStageProgress.status !== 'COMPLETED') {
