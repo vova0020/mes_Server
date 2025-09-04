@@ -20,7 +20,7 @@ export class MachinMasterService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) {}
+  ) { }
 
   // Получение списка станков с включением связанных данных
   async getMachines(stageId?: number) {
@@ -182,9 +182,9 @@ export class MachinMasterService {
           // Расчет в квадратных метрах
           plannedQuantity = machine.machineAssignments.reduce(
             (total, assignment) => {
-              const size = assignment.pallet.part.size;
+              const part = assignment.pallet.part;
               const quantity = Number(assignment.pallet.quantity);
-              return total + this.calculateSquareMeters(size, quantity);
+              return total + this.calculateSquareMeters(part, quantity);
             },
             0,
           );
@@ -195,9 +195,84 @@ export class MachinMasterService {
           );
           completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
-              const size = assignment.pallet.part.size;
+              const part = assignment.pallet.part;
               const quantity = Number(assignment.pallet.quantity);
-              return total + this.calculateSquareMeters(size, quantity);
+              return total + this.calculateSquareMeters(part, quantity);
+            },
+            0,
+          );
+        } else if (machine.loadUnit === 'м³') {
+          // Расчет в кубических метрах
+          plannedQuantity = machine.machineAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateCubicMeters(part, quantity);
+            },
+            0,
+          );
+
+          // Получаем завершенные назначения для расчета выполненного количества в м³
+          const machineCompletedAssignments = completedAssignments.filter(
+            (assignment) => assignment.machine.machineId === machine.machineId,
+          );
+          completedQuantity = machineCompletedAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateCubicMeters(part, quantity);
+            },
+            0,
+          );
+        } else if (machine.loadUnit === 'м') {
+          // Расчет в метрах
+          plannedQuantity = machine.machineAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              if (part.finishedLength != null) {
+                return total + (part.finishedLength * quantity) / 1000;
+              }
+              return total;
+            },
+            0,
+          );
+
+          // Получаем завершенные назначения для расчета выполненного количества в м
+          const machineCompletedAssignments = completedAssignments.filter(
+            (assignment) => assignment.machine.machineId === machine.machineId,
+          );
+          completedQuantity = machineCompletedAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              if (part.finishedLength != null) {
+                return total + (part.finishedLength * quantity) / 1000;
+              }
+              return total;
+            },
+            0,
+          );
+        } else if (machine.loadUnit === 'м обработки торца') {
+          // Расчет периметра обработки торца
+          plannedQuantity = machine.machineAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateEdgeProcessingMeters(part, quantity);
+            },
+            0,
+          );
+
+          // Получаем завершенные назначения для расчета выполненного количества
+          const machineCompletedAssignments = completedAssignments.filter(
+            (assignment) => assignment.machine.machineId === machine.machineId,
+          );
+          completedQuantity = machineCompletedAssignments.reduce(
+            (total, assignment) => {
+              const part = assignment.pallet.part;
+              const quantity = Number(assignment.pallet.quantity);
+              return total + this.calculateEdgeProcessingMeters(part, quantity);
             },
             0,
           );
@@ -211,13 +286,27 @@ export class MachinMasterService {
             completedQuantityByMachineId[machine.machineId] || 0;
         }
 
+        function getPlannedQuantity(plannedQuantity, machine) {
+          if (machine.loadUnit === 'м²') {
+            return Number(plannedQuantity.toFixed(0));
+          } else if (machine.loadUnit === 'м³') {
+            return Number(plannedQuantity.toFixed(2));
+          } else if (machine.loadUnit === 'м') {
+            return Number(plannedQuantity.toFixed(0));
+          } else if (machine.loadUnit === 'м обработки торца') {
+            return Number(plannedQuantity.toFixed(0));
+          } else {
+            return Number(plannedQuantity.toFixed(0));
+          }
+        }
+
         return {
           id: machine.machineId,
           name: machine.machineName,
           status: machine.status,
           load_unit: machine.loadUnit,
           recommendedLoad: Number(machine.recommendedLoad),
-          plannedQuantity: Math.round(plannedQuantity),
+          plannedQuantity: getPlannedQuantity(plannedQuantity, machine),
           completedQuantity: Math.round(completedQuantity),
         };
       });
@@ -449,23 +538,111 @@ export class MachinMasterService {
    * @returns Объект с сообщением об успешном перемещении
    */
   /**
-   * Вычисляет площадь в квадратных метрах на основе размера детали и количества
-   * @param size Размер детали в формате "750x300"
+   * Вычисляет площадь в квадратных метрах на основе данных детали
+   * @param part Объект детали с размерами
    * @param quantity Количество деталей
    * @returns Площадь в квадратных метрах
    */
-  private calculateSquareMeters(size: string, quantity: number): number {
-    if (!size || !size.includes('x')) {
+  private calculateSquareMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+
+    this.logger.debug(
+      `Calculating square meters: length=${length}, width=${width}, quantity=${quantity}`,
+    );
+
+    if (!length || !width || length <= 0 || width <= 0) {
+      this.logger.debug(`Invalid dimensions for square meters, returning 0`);
       return 0;
     }
 
-    const dimensions = size.split('x').map((dim) => parseFloat(dim.trim()));
-    if (dimensions.length !== 2 || dimensions.some((dim) => isNaN(dim))) {
+    const result = (length * width * quantity) / 1000000;
+    this.logger.debug(`Square meters result: ${result}`);
+
+    // Переводим из мм в м² (делим на 1000000)
+    return result;
+  }
+
+  /**
+   * Вычисляет объем в кубических метрах на основе данных детали
+   * @param part Объект детали с размерами
+   * @param quantity Количество деталей
+   * @returns Объем в кубических метрах
+   */
+  private calculateCubicMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+    const thickness = part.thickness;
+
+    // Добавляем логирование для отладки
+    this.logger.debug(
+      `Calculating cubic meters: length=${length}, width=${width}, thickness=${thickness}, quantity=${quantity}`,
+    );
+
+    if (
+      !length ||
+      !width ||
+      !thickness ||
+      length <= 0 ||
+      width <= 0 ||
+      thickness <= 0
+    ) {
+      this.logger.debug(`Invalid dimensions, returning 0`);
       return 0;
     }
 
-    const [width, height] = dimensions;
-    return (width * height * quantity) / 1000000;
+    const result = (length * width * thickness * quantity) / 1000000000;
+    this.logger.debug(`Cubic meters result: ${result}`);
+
+    // Переводим из мм³ в м³ (делим на 1000000000)
+    return result;
+  }
+
+  /**
+   * Вычисляет метры обработки торца на основе периметра с условиями
+   * @param part Объект детали с размерами и данными об облицовке
+   * @param quantity Количество деталей
+   * @returns Метры обработки торца
+   */
+  private calculateEdgeProcessingMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+
+    this.logger.debug(
+      `Calculating edge processing meters: length=${length}, width=${width}, quantity=${quantity}`,
+    );
+
+    if (!length || !width || length <= 0 || width <= 0) {
+      this.logger.debug(`Invalid dimensions for edge processing, returning 0`);
+      return 0;
+    }
+
+    let perimeter = 0;
+
+    // Добавляем длину если заполнена edgingNameL1
+    if (part.edgingNameL1) {
+      perimeter += length;
+    }
+
+    // Добавляем длину если заполнена edgingNameL2
+    if (part.edgingNameL2) {
+      perimeter += length;
+    }
+
+    // Добавляем ширину если заполнена edgingNameW1
+    if (part.edgingNameW1) {
+      perimeter += width;
+    }
+
+    // Добавляем ширину если заполнена edgingNameW2
+    if (part.edgingNameW2) {
+      perimeter += width;
+    }
+
+    const result = (perimeter * quantity) / 1000; // Переводим из мм в м
+    this.logger.debug(`Edge processing meters result: ${result}`);
+
+    return result;
   }
 
   async moveTaskToMachine(

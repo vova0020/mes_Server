@@ -125,6 +125,15 @@ export class ProductionOrdersService {
               partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
               routeId: packageDetail.routeId || 1, // Используем маршрут из справочника или дефолтный
               quantity: packageDetail.quantity * packageDto.quantity, // Общее количество с учетом количества упаковок
+              thickness: detailDirectory.thickness, // Общее количество с учетом количества упаковок
+              thicknessWithEdging: detailDirectory.thicknessWithEdging, // Общее количество с учетом количества упаковок
+              finishedLength: detailDirectory.finishedLength, // Общее количество с учетом количества упаковок
+              finishedWidth: detailDirectory.finishedWidth, // Общее количество с учетом количества упаковок
+              groove: detailDirectory.groove, // Общее количество с учетом количества упаковок
+              edgingNameL1: detailDirectory.edgingNameL1, // Общее количество с учетом количества упаковок
+              edgingNameL2: detailDirectory.edgingNameL2, // Общее количество с учетом количества упаковок
+              edgingNameW1: detailDirectory.edgingNameW1, // Общее количество с учетом количества упаковок
+              edgingNameW2: detailDirectory.edgingNameW2, // Общее количество с учетом количества упаковок
             },
           });
         }

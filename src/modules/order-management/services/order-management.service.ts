@@ -18,7 +18,7 @@ export class OrderManagementService {
   constructor(
     private readonly prismaService: PrismaService,
     private socketService: SocketService,
-  ) {}
+  ) { }
 
   /**
    * Получить все заказы с базовой информацией
@@ -100,7 +100,10 @@ export class OrderManagementService {
     this.validateStatusTransition(currentStatus, newStatus);
 
     // При переходе в LAUNCH_PERMITTED объединяем детали
-    if (newStatus === OrderStatus.LAUNCH_PERMITTED && !order.partsConsolidated) {
+    if (
+      newStatus === OrderStatus.LAUNCH_PERMITTED &&
+      !order.partsConsolidated
+    ) {
       await this.consolidateParts(orderId);
     }
 
@@ -109,10 +112,16 @@ export class OrderManagementService {
       where: { orderId },
       data: {
         status: newStatus,
-        launchPermission: newStatus === OrderStatus.LAUNCH_PERMITTED || newStatus === OrderStatus.IN_PROGRESS,
+        launchPermission:
+          newStatus === OrderStatus.LAUNCH_PERMITTED ||
+          newStatus === OrderStatus.IN_PROGRESS,
         isCompleted: newStatus === OrderStatus.COMPLETED,
-        completedAt: newStatus === OrderStatus.COMPLETED ? new Date() : undefined,
-        partsConsolidated: newStatus === OrderStatus.LAUNCH_PERMITTED ? true : order.partsConsolidated,
+        completedAt:
+          newStatus === OrderStatus.COMPLETED ? new Date() : undefined,
+        partsConsolidated:
+          newStatus === OrderStatus.LAUNCH_PERMITTED
+            ? true
+            : order.partsConsolidated,
       },
     });
 
@@ -129,7 +138,6 @@ export class OrderManagementService {
       'order:event',
       { status: 'updated' },
     );
-
 
     return {
       orderId,
@@ -153,9 +161,11 @@ export class OrderManagementService {
     }
 
     const currentStatus = order.status as OrderStatus;
-    
+
     // Можно отложить только предварительные и утвержденные заказы
-    if (![OrderStatus.PRELIMINARY, OrderStatus.APPROVED].includes(currentStatus)) {
+    if (
+      ![OrderStatus.PRELIMINARY, OrderStatus.APPROVED].includes(currentStatus)
+    ) {
       throw new BadRequestException(
         `Нельзя отложить заказ со статусом ${currentStatus}`,
       );
@@ -169,7 +179,7 @@ export class OrderManagementService {
       },
     });
 
-   // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
         'room:masterceh',
@@ -182,7 +192,6 @@ export class OrderManagementService {
       'order:event',
       { status: 'updated' },
     );
-
 
     return {
       orderId,
@@ -221,12 +230,14 @@ export class OrderManagementService {
     }
 
     // Проверяем, что детали не прошли этапы производства
-    const hasProgressedParts = order.packages.some(pkg =>
-      pkg.productionPackageParts.some(ppp =>
-        ppp.part.partRouteProgress.some(progress =>
-          progress.status === 'COMPLETED' || progress.status === 'IN_PROGRESS'
-        )
-      )
+    const hasProgressedParts = order.packages.some((pkg) =>
+      pkg.productionPackageParts.some((ppp) =>
+        ppp.part.partRouteProgress.some(
+          (progress) =>
+            progress.status === 'COMPLETED' ||
+            progress.status === 'IN_PROGRESS',
+        ),
+      ),
     );
 
     if (hasProgressedParts) {
@@ -239,7 +250,7 @@ export class OrderManagementService {
       where: { orderId },
     });
 
-   // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
         'room:masterceh',
@@ -253,18 +264,27 @@ export class OrderManagementService {
       { status: 'updated' },
     );
 
-
     return { message: `Заказ ${orderId} успешно удален` };
   }
 
   /**
    * Проверка валидности перехода между статусами
    */
-  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
+  private validateStatusTransition(
+    currentStatus: OrderStatus,
+    newStatus: OrderStatus,
+  ): void {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.PRELIMINARY]: [OrderStatus.APPROVED, OrderStatus.POSTPONED],
-      [OrderStatus.APPROVED]: [OrderStatus.LAUNCH_PERMITTED, OrderStatus.PRELIMINARY, OrderStatus.POSTPONED],
-      [OrderStatus.LAUNCH_PERMITTED]: [OrderStatus.IN_PROGRESS, OrderStatus.APPROVED],
+      [OrderStatus.APPROVED]: [
+        OrderStatus.LAUNCH_PERMITTED,
+        OrderStatus.PRELIMINARY,
+        OrderStatus.POSTPONED,
+      ],
+      [OrderStatus.LAUNCH_PERMITTED]: [
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.APPROVED,
+      ],
       [OrderStatus.IN_PROGRESS]: [OrderStatus.COMPLETED],
       [OrderStatus.COMPLETED]: [], // Завершенный заказ нельзя изменить
       [OrderStatus.POSTPONED]: [OrderStatus.PRELIMINARY, OrderStatus.APPROVED], // Из отложенного можно вернуть
@@ -278,13 +298,14 @@ export class OrderManagementService {
   }
 
   /**
-   * Преобразование заказа в форм��т для списка заказов
+   * Преобразование заказа в формат для списка заказов
    */
   private mapOrderToListResponse(order: any): OrderListResponseDto {
     const packagesCount = order.packages?.length || 0;
-    const totalPartsCount = order.packages?.reduce((total: number, pkg: any) => {
-      return total + (pkg.productionPackageParts?.length || 0);
-    }, 0) || 0;
+    const totalPartsCount =
+      order.packages?.reduce((total: number, pkg: any) => {
+        return total + (pkg.productionPackageParts?.length || 0);
+      }, 0) || 0;
 
     return {
       orderId: order.orderId,
@@ -321,30 +342,56 @@ export class OrderManagementService {
     if (!order) return;
 
     // Группируем детали по коду и маршруту
-    const consolidatedParts = new Map<string, {
-      partCode: string;
-      partName: string;
-      partSize: string;
-      routeId: number;
-      totalQuantity: number;
-      packages: { packageId: number; quantity: number }[];
-    }>();
+    const consolidatedParts = new Map<
+      string,
+      {
+        partCode: string;
+        partName: string;
+        partSize: string;
+        routeId: number;
+        thickness?: number;
+        thicknessWithEdging?: number;
+        finishedLength?: number;
+        finishedWidth?: number;
+        groove?: string;
+        edgingNameL1: string; // Общее количество с учетом количества упаковок
+        edgingNameL2: string; // Общее количество с учетом количества упаковок
+        edgingNameW1: string; // Общее количество с учетом количества упаковок
+        edgingNameW2: string; // Общее количество с учетом количества упаковок
+        totalQuantity: number;
+        packages: { packageId: number; quantity: number }[];
+      }
+    >();
 
-    order.packages.forEach(pkg => {
-      pkg.composition.forEach(comp => {
+    order.packages.forEach((pkg) => {
+      pkg.composition.forEach((comp) => {
         const key = `${comp.partCode}_${comp.routeId}`;
         if (consolidatedParts.has(key)) {
           const existing = consolidatedParts.get(key)!;
           existing.totalQuantity += Number(comp.quantity);
-          existing.packages.push({ packageId: pkg.packageId, quantity: Number(comp.quantity) });
+          existing.packages.push({
+            packageId: pkg.packageId,
+            quantity: Number(comp.quantity),
+          });
         } else {
           consolidatedParts.set(key, {
             partCode: comp.partCode,
             partName: comp.partName,
             partSize: comp.partSize,
             routeId: comp.routeId,
+            thickness: comp.thickness ?? undefined,
+            thicknessWithEdging: comp.thicknessWithEdging ?? undefined,
+            finishedLength: comp.finishedLength ?? undefined,
+            finishedWidth: comp.finishedWidth ?? undefined,
+            groove: comp.groove ?? undefined,
+            edgingNameL1: comp.edgingNameL1 ?? "", // Общее количество с учетом количества упаковок
+            edgingNameL2: comp.edgingNameL2 ?? "", // Общее количество с учетом количества упаковок
+            edgingNameW1: comp.edgingNameW1 ?? "", // Общее количество с учетом количества упаковок
+            edgingNameW2: comp.edgingNameW2 ?? "", // Общее количество с учетом количества упаковок
             totalQuantity: Number(comp.quantity),
-            packages: [{ packageId: pkg.packageId, quantity: Number(comp.quantity) }],
+            packages: [
+              { packageId: pkg.packageId, quantity: Number(comp.quantity) },
+            ],
           });
         }
       });
@@ -360,6 +407,11 @@ export class OrderManagementService {
           totalQuantity: partData.totalQuantity,
           status: 'PENDING',
           routeId: partData.routeId,
+          thickness: partData.thickness ?? undefined,
+          thicknessWithEdging: partData.thicknessWithEdging ?? undefined,
+          finishedLength: partData.finishedLength ?? undefined,
+          finishedWidth: partData.finishedWidth ?? undefined,
+          groove: partData.groove ?? undefined,
         },
       });
 
@@ -394,23 +446,25 @@ export class OrderManagementService {
         isCompleted: order.isCompleted,
         priority: order.priority,
       },
-      packages: order.packages?.map((pkg: any) => ({
-        packageId: pkg.packageId,
-        packageCode: pkg.packageCode,
-        packageName: pkg.packageName,
-        quantity: Number(pkg.quantity),
-        completionPercentage: Number(pkg.completionPercentage),
-        // Всегда показываем исходный состав из композиции
-        details: pkg.composition?.map((comp: any) => ({
-          partId: comp.compositionId,
-          partCode: comp.partCode,
-          partName: comp.partName,
-          totalQuantity: Number(comp.quantity),
-          status: 'PENDING',
-          size: comp.partSize,
-          materialId: null,
+      packages:
+        order.packages?.map((pkg: any) => ({
+          packageId: pkg.packageId,
+          packageCode: pkg.packageCode,
+          packageName: pkg.packageName,
+          quantity: Number(pkg.quantity),
+          completionPercentage: Number(pkg.completionPercentage),
+          // Всегда показываем исходный состав из композиции
+          details:
+            pkg.composition?.map((comp: any) => ({
+              partId: comp.compositionId,
+              partCode: comp.partCode,
+              partName: comp.partName,
+              totalQuantity: Number(comp.quantity),
+              status: 'PENDING',
+              size: comp.partSize,
+              materialId: null,
+            })) || [],
         })) || [],
-      })) || [],
     };
   }
 }

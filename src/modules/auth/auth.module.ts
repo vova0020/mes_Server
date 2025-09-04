@@ -14,7 +14,7 @@ import { SharedModule } from '../../shared/shared.module';
       imports: [ConfigModule],
       useFactory: async () => ({
         secret: process.env.JWT_SECRET || 'YOUR_SECRET_KEY',
-        signOptions: { expiresIn: '1h' },
+        signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
       }),
       inject: [ConfigService],
     }),

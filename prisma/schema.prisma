@@ -32,19 +32,19 @@ model User {
 
   // связи:
   /// Детальная информация о пользователе (ФИО, телефон и т.д.)
-  userDetail   UserDetail?
+  userDetail            UserDetail?
   /// Назначенные пользователю глобальные роли
-  userRoles    UserRole[]
+  userRoles             UserRole[]
   /// Логи попыток входа пользователя
-  loginLogs    LoginLog[]
+  loginLogs             LoginLog[]
   /// Связанные комплектовщики (если пользователь является комплектовщиком)
-  pickers      Picker[]
+  pickers               Picker[]
   /// Задачи упаковки, назначенные пользователю
-  packingTasks PackingTask[] @relation("AssignedUser")
+  packingTasks          PackingTask[] @relation("AssignedUser")
   /// Привязки ролей к различным контекстам (станок, этап и т.д.)
-  roleBindings RoleBinding[]
+  roleBindings          RoleBinding[]
   /// Рекламации, созданные пользователем
-  reportedReclamations Reclamation[] @relation("ReclamationReportedBy")
+  reportedReclamations  Reclamation[] @relation("ReclamationReportedBy")
   /// Рекламации, подтвержденные пользователем
   confirmedReclamations Reclamation[] @relation("ReclamationConfirmedBy")
 
@@ -173,25 +173,25 @@ enum OrderStatus {
 /// Таблица orders: заказы на производство
 model Order {
   /// Первичный ключ заказа
-  orderId              Int       @id @default(autoincrement()) @map("order_id")
+  orderId              Int         @id @default(autoincrement()) @map("order_id")
   /// Номер производственной партии
-  batchNumber          String    @map("batch_number")
+  batchNumber          String      @map("batch_number")
   /// Название или описание заказа
-  orderName            String    @map("order_name")
+  orderName            String      @map("order_name")
   /// Процент выполнения заказа
-  completionPercentage Decimal   @map("completion_percentage")
+  completionPercentage Decimal     @map("completion_percentage")
   /// Дата создания заказа
-  createdAt            DateTime  @default(now()) @map("created_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
   /// Дата последнего обновления заказа
-  updatedAt            DateTime?  @updatedAt @map("updated_at")
+  updatedAt            DateTime?   @updatedAt @map("updated_at")
   /// Дата завершения заказа (если есть)
-  completedAt          DateTime? @map("completed_at")
+  completedAt          DateTime?   @map("completed_at")
   /// Флаг, разрешён ли запуск заказа в производство
-  launchPermission     Boolean   @map("launch_permission")
+  launchPermission     Boolean     @map("launch_permission")
   /// Флаг завершённости заказа
-  isCompleted          Boolean   @map("is_completed")
+  isCompleted          Boolean     @map("is_completed")
   /// Требуемая дата выполнения заказа
-  requiredDate         DateTime  @map("required_date")
+  requiredDate         DateTime    @map("required_date")
   /// Статус заказа
   status               OrderStatus @default(PRELIMINARY)
   /// Приоритет заказа (чем больше число, тем выше приоритет)
@@ -199,9 +199,9 @@ model Order {
 
   // связи:
   /// Упаковочные единицы, связанные с заказом
-  packages Package[]
+  packages          Package[]
   /// Флаг, указывающий что детали были объединены при запуске
-  partsConsolidated Boolean @default(false) @map("parts_consolidated")
+  partsConsolidated Boolean   @default(false) @map("parts_consolidated")
 
   @@map("orders")
 }
@@ -236,9 +236,9 @@ model Package {
   productionPackageParts ProductionPackagePart[]
 
   /// Задачи упаковки, назначенные на эту упаковочную единицу
-  packingTasks PackingTask[] @relation("AssignedPackage")
+  packingTasks      PackingTask[]             @relation("AssignedPackage")
   /// Исходный состав упаковки (для отображения)
-  composition  PackageComposition[]
+  composition       PackageComposition[]
   /// Назначения поддонов на упаковки
   palletAssignments PalletPackageAssignment[]
 
@@ -248,19 +248,37 @@ model Package {
 /// Таблица package_composition: исходный состав упаковок (для отображения)
 model PackageComposition {
   /// Первичный ключ записи
-  compositionId Int     @id @default(autoincrement()) @map("composition_id")
+  compositionId       Int     @id @default(autoincrement()) @map("composition_id")
   /// Внешний ключ на упаковку
-  packageId     Int     @map("package_id")
+  packageId           Int     @map("package_id")
   /// Код детали
-  partCode      String  @map("part_code")
+  partCode            String  @map("part_code")
   /// Название детали
-  partName      String  @map("part_name")
+  partName            String  @map("part_name")
   /// Размер детали
-  partSize      String  @map("part_size")
+  partSize            String  @map("part_size")
   /// ID маршрута обработки
-  routeId       Int     @map("route_id")
+  routeId             Int     @map("route_id")
+  /// Толщина детали
+  thickness           Float?  @map("thickness")
+  /// Толщина с учетом облицовки пласти
+  thicknessWithEdging Float?  @map("thickness_with_edging")
+  /// Готовая деталь [L]
+  finishedLength      Float?  @map("finished_length")
+  /// Готовая деталь [W]
+  finishedWidth       Float?  @map("finished_width")
+  /// Паз
+  groove              String? @map("groove")
+  /// Наименование облицовки кромки [L1]
+  edgingNameL1        String? @map("edging_name_l1")
+  /// Наименование облицовки кромки [L2]
+  edgingNameL2        String? @map("edging_name_l2")
+  /// Наименование облицовки кромки [W1]
+  edgingNameW1        String? @map("edging_name_w1")
+  /// Наименование облицовки кромки [W2]
+  edgingNameW2        String? @map("edging_name_w2")
   /// Количество данной детали в упаковке
-  quantity      Decimal
+  quantity            Decimal
 
   // связи:
   /// Ссылка на упаковку
@@ -303,15 +321,35 @@ enum PartStatus {
 /// Таблица parts: детали, проходящие через производство
 model Part {
   /// Первичный ключ детали
-  partId           Int        @id @default(autoincrement()) @map("part_id")
+  partId              Int     @id @default(autoincrement()) @map("part_id")
   /// Код детали
-  partCode         String     @map("part_code")
+  partCode            String  @map("part_code")
   /// Название детали
-  partName         String     @map("part_name")
+  partName            String  @map("part_name")
   /// Внешний ключ на материал
-  materialId       Int?       @map("material_id")
+  materialId          Int?    @map("material_id")
   /// Размеры или спецификации детали
-  size             String
+  size                String
+  /// Толщина детали
+  thickness           Float?  @map("thickness")
+  /// Толщина с учетом облицовки пласти
+  thicknessWithEdging Float?  @map("thickness_with_edging")
+  /// Готовая деталь [L]
+  finishedLength      Float?  @map("finished_length")
+  /// Готовая деталь [W]
+  finishedWidth       Float?  @map("finished_width")
+  /// Паз
+  groove              String? @map("groove")
+
+  /// Наименование облицовки кромки [L1]
+  edgingNameL1 String? @map("edging_name_l1")
+  /// Наименование облицовки кромки [L2]
+  edgingNameL2 String? @map("edging_name_l2")
+  /// Наименование облицовки кромки [W1]
+  edgingNameW1 String? @map("edging_name_w1")
+  /// Наименование облицовки кромки [W2]
+  edgingNameW2 String? @map("edging_name_w2")
+
   /// Общее количество деталей
   totalQuantity    Decimal    @map("total_quantity")
   /// Текущий статус детали
@@ -388,7 +426,7 @@ model Pallet {
 
   // связи:
   /// Ссылка на деталь
-  part                Part                  @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  part                Part                      @relation(fields: [partId], references: [partId], onDelete: Cascade)
   /// История размещения поддона в буферах
   palletBufferCells   PalletBufferCell[]
   /// Назначения станков для обработки на поддоне
@@ -681,11 +719,11 @@ model Route {
   lineId    Int?   @map("line_id")
 
   // связи: какие этапы и какие детали связаны с этим маршрутом
-  productionLine        ProductionLine?          @relation(fields: [lineId], references: [lineId])
-  routeStages           RouteStage[] // все этапы и подэтапы в рамках этого маршрута
-  parts                 Part[] // детали, которым присвоен этот маршрут
-  packageDetailRoutes   PackageDetailDirectory[] // связи с деталями в упаковках
-  packageCompositions   PackageComposition[] // исходный состав упаковок
+  productionLine      ProductionLine?          @relation(fields: [lineId], references: [lineId])
+  routeStages         RouteStage[] // все этапы и подэтапы в рамках этого маршрута
+  parts               Part[] // детали, которым присвоен этот маршрут
+  packageDetailRoutes PackageDetailDirectory[] // связи с деталями в упаковках
+  packageCompositions PackageComposition[] // исходный состав упаковок
 
   @@map("routes")
 }
@@ -932,7 +970,6 @@ model SubassemblyProgress {
   @@map("subassembly_progress")
 }
 
-
 // ========================================
 // 11. Модуль справочников упаковок и деталей
 // ========================================
@@ -940,11 +977,11 @@ model SubassemblyProgress {
 /// Таблица с справочником упаковок
 model PackageDirectory {
   /// PK
-  packageId      Int               @id @default(autoincrement()) @map("package_id")
+  packageId   Int    @id @default(autoincrement()) @map("package_id")
   /// Уникальный артикул/код упаковки
-  packageCode    String            @unique @map("package_code")
+  packageCode String @unique @map("package_code")
   /// Название упаковки
-  packageName    String            @map("package_name")
+  packageName String @map("package_name")
 
   /// Связь «многие-ко-многим» через промежуточную таблицу
   packageDetails PackageDetailDirectory[]
@@ -955,64 +992,64 @@ model PackageDirectory {
 /// Таблица с справочника деталями
 model DetailDirectory {
   /// PK
-  id                       Int               @id @default(autoincrement()) @map("detail_id")
+  id                  Int      @id @default(autoincrement()) @map("detail_id")
   /// Уникальный артикул детали
-  partSku                  String            @unique @map("part_sku")
+  partSku             String   @unique @map("part_sku")
   /// Наименование детали
-  partName                 String            @map("part_name")
+  partName            String   @map("part_name")
   /// Наименование материала
-  materialName             String            @map("material_name")
+  materialName        String   @map("material_name")
   /// Артикул материала
-  materialSku              String            @map("material_sku")
+  materialSku         String   @map("material_sku")
   /// Толщина детали
-  thickness                Float?            @map("thickness")
+  thickness           Float?   @map("thickness")
   /// Толщина с учетом облицовки пласти
-  thicknessWithEdging      Float?            @map("thickness_with_edging")
+  thicknessWithEdging Float?   @map("thickness_with_edging")
   /// Готовая деталь [L]
-  finishedLength           Float?            @map("finished_length")
+  finishedLength      Float?   @map("finished_length")
   /// Готовая деталь [W]
-  finishedWidth            Float?            @map("finished_width")
+  finishedWidth       Float?   @map("finished_width")
   /// Паз
-  groove                   String?           @map("groove")
+  groove              String?  @map("groove")
   /// Артикул облицовки кромки [L1]
-  edgingSkuL1              String?           @map("edging_sku_l1")
+  edgingSkuL1         String?  @map("edging_sku_l1")
   /// Наименование облицовки кромки [L1]
-  edgingNameL1             String?           @map("edging_name_l1")
+  edgingNameL1        String?  @map("edging_name_l1")
   /// Артикул облицовки кромки [L2]
-  edgingSkuL2              String?           @map("edging_sku_l2")
+  edgingSkuL2         String?  @map("edging_sku_l2")
   /// Наименование облицовки кромки [L2]
-  edgingNameL2             String?           @map("edging_name_l2")
+  edgingNameL2        String?  @map("edging_name_l2")
   /// Артикул облицовки кромки [W1]
-  edgingSkuW1              String?           @map("edging_sku_w1")
+  edgingSkuW1         String?  @map("edging_sku_w1")
   /// Наименование облицовки кромки [W1]
-  edgingNameW1             String?           @map("edging_name_w1")
+  edgingNameW1        String?  @map("edging_name_w1")
   /// Артикул облицовки кромки [W2]
-  edgingSkuW2              String?           @map("edging_sku_w2")
+  edgingSkuW2         String?  @map("edging_sku_w2")
   /// Наименование облицовки кромки [W2]
-  edgingNameW2             String?           @map("edging_name_w2")
+  edgingNameW2        String?  @map("edging_name_w2")
   /// Пластик (лицевая)
-  plasticFace              String?           @map("plastic_face")
+  plasticFace         String?  @map("plastic_face")
   /// Пластик (лицевая) артикул
-  plasticFaceSku           String?           @map("plastic_face_sku")
+  plasticFaceSku      String?  @map("plastic_face_sku")
   /// Пластик (нелицевая)
-  plasticBack              String?           @map("plastic_back")
+  plasticBack         String?  @map("plastic_back")
   /// Пластик (нелицевая) артикул
-  plasticBackSku           String?           @map("plastic_back_sku")
+  plasticBackSku      String?  @map("plastic_back_sku")
   /// ПФ
-  pf                       Boolean?           @map("pf")
+  pf                  Boolean? @map("pf")
   /// Артикул ПФ (для детали)
-  pfSku                    String?           @map("pf_sku")
+  pfSku               String?  @map("pf_sku")
   /// СБ деталь
-  sbPart                   Boolean?           @map("sb_part")
+  sbPart              Boolean? @map("sb_part")
   /// ПФ СБ
-  pfSb                     Boolean?           @map("pf_sb")
+  pfSb                Boolean? @map("pf_sb")
   /// Артикул СБ детали (для ПФ СБ)
-  sbPartSku                String?           @map("sb_part_sku")
+  sbPartSku           String?  @map("sb_part_sku")
   /// Подстопное место на конвейере
-  conveyorPosition                Float?           @map("conveyor_Position")
+  conveyorPosition    Float?   @map("conveyor_Position")
 
   /// Связь «многие-ко-многим» через промежуточную таблицу
-  packageDetails           PackageDetailDirectory[]
+  packageDetails PackageDetailDirectory[]
 
   @@map("detail_directory")
 }
@@ -1027,16 +1064,15 @@ model PackageDetailDirectory {
   routeId   Int?
 
   /// Количество деталей в упаковке
-  quantity  Int
+  quantity Int
 
-  package   PackageDirectory @relation(fields: [packageId], references: [packageId])
-  detail    DetailDirectory  @relation(fields: [detailId],  references: [id])
-  route     Route?           @relation(fields: [routeId], references: [routeId])
+  package PackageDirectory @relation(fields: [packageId], references: [packageId])
+  detail  DetailDirectory  @relation(fields: [detailId], references: [id])
+  route   Route?           @relation(fields: [routeId], references: [routeId])
 
   @@id([packageId, detailId])
   @@map("package_detail_directory")
 }
-
 
 // ========================================
 // Дополнительные модели для отслеживания прогресса
@@ -1119,13 +1155,13 @@ model MachineAssignment {
 /// Назначения поддонов на упаковки (для отслеживания какие поддоны изъяты для конкретной упаковки)
 model PalletPackageAssignment {
   /// Уникальный идентификатор назначения
-  assignmentId Int     @id @default(autoincrement()) @map("assignment_id")
+  assignmentId Int      @id @default(autoincrement()) @map("assignment_id")
   /// Ссылка на поддон
-  palletId     Int     @map("pallet_id")
+  palletId     Int      @map("pallet_id")
   /// Ссылка на упаковку
-  packageId    Int     @map("package_id")
+  packageId    Int      @map("package_id")
   /// Количество деталей из поддона, назначенных на упаковку
-  quantity     Decimal @map("quantity")
+  quantity     Decimal  @map("quantity")
   /// Время назначения
   assignedAt   DateTime @default(now()) @map("assigned_at")
 
@@ -1162,31 +1198,31 @@ model PartMachineAssignment {
 
 /// Основная запись рекламации
 model Reclamation {
-  reclamationId   Int       @id @default(autoincrement()) @map("reclamation_id")
-  partId          Int       @map("part_id")
-  quantity        Decimal   @map("quantity")
-  routeStageId    Int       @map("route_stage_id")
-  machineId       Int?       @map("machine_id")
-  palletId        Int?      @map("pallet_id")
-  reportedById    Int?      @map("reported_by_id")
-  confirmedById   Int?      @map("confirmed_by_id")
-  status          String    @default("NEW") @map("status")
-  qualityAction   String?   @map("quality_action")
-  note            String?   @map("note")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  processedAt     DateTime? @map("processed_at")
+  reclamationId Int       @id @default(autoincrement()) @map("reclamation_id")
+  partId        Int       @map("part_id")
+  quantity      Decimal   @map("quantity")
+  routeStageId  Int       @map("route_stage_id")
+  machineId     Int?      @map("machine_id")
+  palletId      Int?      @map("pallet_id")
+  reportedById  Int?      @map("reported_by_id")
+  confirmedById Int?      @map("confirmed_by_id")
+  status        String    @default("NEW") @map("status")
+  qualityAction String?   @map("quality_action")
+  note          String?   @map("note")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  processedAt   DateTime? @map("processed_at")
 
   // relations
-  part         Part                    @relation(fields: [partId], references: [partId], onDelete: Cascade)
-  routeStage   RouteStage              @relation(fields: [routeStageId], references: [routeStageId])
-  machine      Machine?                 @relation(fields: [machineId], references: [machineId])
-  pallet       Pallet?                 @relation(fields: [palletId], references: [palletId], onDelete: SetNull)
-  reportedBy   User?                   @relation("ReclamationReportedBy", fields: [reportedById], references: [userId])
-  confirmedBy  User?                   @relation("ReclamationConfirmedBy", fields: [confirmedById], references: [userId])
-  defects      ReclamationDefect[]
-  attachments  ReclamationAttachment[]
-  audits       ReclamationAudit[]
-  movements    InventoryMovement[]
+  part        Part                    @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  routeStage  RouteStage              @relation(fields: [routeStageId], references: [routeStageId])
+  machine     Machine?                @relation(fields: [machineId], references: [machineId])
+  pallet      Pallet?                 @relation(fields: [palletId], references: [palletId], onDelete: SetNull)
+  reportedBy  User?                   @relation("ReclamationReportedBy", fields: [reportedById], references: [userId])
+  confirmedBy User?                   @relation("ReclamationConfirmedBy", fields: [confirmedById], references: [userId])
+  defects     ReclamationDefect[]
+  attachments ReclamationAttachment[]
+  audits      ReclamationAudit[]
+  movements   InventoryMovement[]
 
   @@index([partId])
   @@index([routeStageId])
@@ -1198,12 +1234,13 @@ model Reclamation {
 
 /// Справочник причин брака
 model DefectType {
-  defectTypeId Int    @id @default(autoincrement()) @map("defect_type_id")
-  code         String @unique
+  defectTypeId Int     @id @default(autoincrement()) @map("defect_type_id")
+  code         String  @unique
   name         String
   description  String?
 
   reclamations ReclamationDefect[]
+
   @@map("defect_types")
 }
 
@@ -1232,6 +1269,7 @@ model ReclamationAttachment {
   createdAt     DateTime @default(now()) @map("created_at")
 
   reclamation Reclamation @relation(fields: [reclamationId], references: [reclamationId], onDelete: Cascade)
+
   @@index([reclamationId])
   @@map("reclamation_attachments")
 }
@@ -1247,9 +1285,9 @@ model InventoryMovement {
   userId              Int?     @map("user_id")
   createdAt           DateTime @default(now()) @map("created_at")
 
-  part           Part?        @relation(fields: [partId], references: [partId])
-  pallet         Pallet?      @relation(fields: [palletId], references: [palletId])
-  sourceReclam   Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
+  part         Part?        @relation(fields: [partId], references: [partId])
+  pallet       Pallet?      @relation(fields: [palletId], references: [palletId])
+  sourceReclam Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
 
   @@index([partId])
   @@index([palletId])
