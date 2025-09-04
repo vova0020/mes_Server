@@ -137,7 +137,7 @@ export class RoutesService {
     );
 
     try {
-      const { routeName, lineId } = createRouteDto;
+      const { routeName, lineId, stages } = createRouteDto;
 
       // Если указан lineId, проверяем существование производственной линии
       if (lineId) {
@@ -156,12 +156,38 @@ export class RoutesService {
         }
       }
 
-      // Создаем маршрут
-      const route = await this.prisma.route.create({
-        data: {
-          routeName,
-          lineId,
-        },
+      // Создаем маршрут в транзакции
+      const route = await this.prisma.$transaction(async (prisma) => {
+        // Создаем маршрут
+        const newRoute = await prisma.route.create({
+          data: {
+            routeName,
+            lineId,
+          },
+        });
+
+        // Создаем этапы маршрута, если они переданы
+        if (stages && stages.length > 0) {
+          const sortedStages = stages.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+          
+          for (let i = 0; i < sortedStages.length; i++) {
+            const stage = sortedStages[i];
+            await prisma.routeStage.create({
+              data: {
+                routeId: newRoute.routeId,
+                stageId: stage.stageId,
+                substageId: stage.substageId || null,
+                sequenceNumber: stage.sequenceNumber || (i + 1),
+              },
+            });
+          }
+
+          this.logger.log(
+            `Создано ${stages.length} этапов для маршрута ID: ${newRoute.routeId}`,
+          );
+        }
+
+        return newRoute;
       });
 
       this.logger.log(
@@ -303,17 +329,21 @@ export class RoutesService {
             `Обновление этапов маршрута ID: ${routeId}`,
           );
 
-          if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
+          if (updateRouteDto.stages && updateRouteDto.stages.length > 0) {
             // Получаем существующие этапы
             const existingStages = await prisma.routeStage.findMany({
               where: { routeId },
               orderBy: { sequenceNumber: 'asc' },
             });
 
+            const sortedStages = updateRouteDto.stages.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+
             // Обновляем существующие этапы или создаем новые
-            for (let i = 0; i < updateRouteDto.stageIds.length; i++) {
-              const stageId = Number(updateRouteDto.stageIds[i]);
-              const sequenceNumber = i + 1;
+            for (let i = 0; i < sortedStages.length; i++) {
+              const stage = sortedStages[i];
+              const stageId = Number(stage.stageId);
+              const substageId = stage.substageId ? Number(stage.substageId) : null;
+              const sequenceNumber = stage.sequenceNumber || (i + 1);
 
               if (i < existingStages.length) {
                 // Обновляем существующий этап
@@ -321,6 +351,7 @@ export class RoutesService {
                   where: { routeStageId: existingStages[i].routeStageId },
                   data: {
                     stageId,
+                    substageId,
                     sequenceNumber,
                   },
                 });
@@ -330,6 +361,7 @@ export class RoutesService {
                   data: {
                     routeId,
                     stageId,
+                    substageId,
                     sequenceNumber,
                   },
                 });
@@ -337,8 +369,8 @@ export class RoutesService {
             }
 
             // Проверяем и удаляем лишние этапы, если новых меньше чем было
-            if (existingStages.length > updateRouteDto.stageIds.length) {
-              const stagesToDelete = existingStages.slice(updateRouteDto.stageIds.length);
+            if (existingStages.length > sortedStages.length) {
+              const stagesToDelete = existingStages.slice(sortedStages.length);
 
               // Проверяем, не используются ли этапы в производстве
               for (const stage of stagesToDelete) {
@@ -364,6 +396,62 @@ export class RoutesService {
               this.logger.log(
                 `Удалено ${stagesToDelete.length} лишних этапов из маршрута ID: ${routeId}`
               );
+            }
+
+            this.logger.log(
+              `Обновлено ${sortedStages.length} этапов маршрута ID: ${routeId}`,
+            );
+          } else if (updateRouteDto.stageIds && updateRouteDto.stageIds.length > 0) {
+            // Обратная совместимость для stageIds (без substageId)
+            const existingStages = await prisma.routeStage.findMany({
+              where: { routeId },
+              orderBy: { sequenceNumber: 'asc' },
+            });
+
+            for (let i = 0; i < updateRouteDto.stageIds.length; i++) {
+              const stageId = Number(updateRouteDto.stageIds[i]);
+              const sequenceNumber = i + 1;
+
+              if (i < existingStages.length) {
+                await prisma.routeStage.update({
+                  where: { routeStageId: existingStages[i].routeStageId },
+                  data: {
+                    stageId,
+                    sequenceNumber,
+                  },
+                });
+              } else {
+                await prisma.routeStage.create({
+                  data: {
+                    routeId,
+                    stageId,
+                    sequenceNumber,
+                  },
+                });
+              }
+            }
+
+            if (existingStages.length > updateRouteDto.stageIds.length) {
+              const stagesToDelete = existingStages.slice(updateRouteDto.stageIds.length);
+              
+              for (const stage of stagesToDelete) {
+                const usageCount = await prisma.partRouteProgress.count({
+                  where: { routeStageId: stage.routeStageId },
+                });
+
+                if (usageCount > 0) {
+                  throw new BadRequestException(
+                    `Невозможно удалить этап маршрута. Этап используется в ${usageCount} деталях на производстве`
+                  );
+                }
+              }
+
+              const stageIdsToDelete = stagesToDelete.map(stage => stage.routeStageId);
+              await prisma.routeStage.deleteMany({
+                where: {
+                  routeStageId: { in: stageIdsToDelete },
+                },
+              });
             }
 
             this.logger.log(
