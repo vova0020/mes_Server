@@ -305,6 +305,7 @@ export class MachinMasterService {
           name: machine.machineName,
           status: machine.status,
           load_unit: machine.loadUnit,
+          noSmenTask: machine.noSmenTask,
           recommendedLoad: Number(machine.recommendedLoad),
           plannedQuantity: getPlannedQuantity(plannedQuantity, machine),
           completedQuantity: Math.round(completedQuantity),

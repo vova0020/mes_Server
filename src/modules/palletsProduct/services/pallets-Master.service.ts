@@ -304,6 +304,11 @@ export class PalletsMasterService {
         'machine:event',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
 
       this.logger.log(
         `Создано задание ${machineAssignment.assignmentId} → статус этапа: ${stageProgress.status}`,
@@ -836,6 +841,11 @@ export class PalletsMasterService {
         'machine:event',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
 
       const currentMachine = machineAssignment.machine;
 
@@ -1093,6 +1103,11 @@ export class PalletsMasterService {
         'detail:event',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
 
       return {
         message: 'Поддон успешно создан',
@@ -1193,6 +1208,11 @@ export class PalletsMasterService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
         { status: 'updated' },
       );
 
@@ -1297,6 +1317,11 @@ export class PalletsMasterService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
         { status: 'updated' },
       );
 

@@ -28,6 +28,8 @@ export const EVENTS = {
   ORDER_EVENT: 'order:event',
   /** Событие о создании заказа */
   ORDER_CREATED: 'order:created',
+  /** Событие для статистики заказов */
+  ORDER_STATS: 'order:stats',
 
   /**
  * === СОБЫТИЯ УПАКОВОК ===

@@ -69,8 +69,8 @@ export class PalletMachineService {
     const machine = await this.prisma.machine.findUnique({
       where: { machineId: machineId },
       include: {
-        machinesStages: { 
-          include: { 
+        machinesStages: {
+          include: {
             stage: true,
           },
         },
@@ -121,15 +121,18 @@ export class PalletMachineService {
     const currentStageIndex = allRouteStages.findIndex(
       (rs) => rs.routeStageId === currentRouteStage.routeStageId,
     );
-    
+
     if (currentStageIndex > 0) {
       // Это не первый этап, проверяем предыдущий
       const previousRouteStage = allRouteStages[currentStageIndex - 1];
       const previousStageProgress = pallet.palletStageProgress.find(
         (progress) => progress.routeStageId === previousRouteStage.routeStageId,
       );
-      
-      if (!previousStageProgress || previousStageProgress.status !== 'COMPLETED') {
+
+      if (
+        !previousStageProgress ||
+        previousStageProgress.status !== 'COMPLETED'
+      ) {
         const errorMsg = `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
@@ -230,7 +233,7 @@ export class PalletMachineService {
           },
         },
       });
-      
+
       if (bufferPlacement) {
         // Закрываем запись о размещении в буфере
         await this.prisma.palletBufferCell.update({
@@ -253,7 +256,7 @@ export class PalletMachineService {
           where: { cellId: bufferPlacement.cellId },
           data: { currentLoad: newLoad, status: newStatus },
         });
-        
+
         this.logger.log(
           `Поддон ${palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
         );
@@ -274,6 +277,12 @@ export class PalletMachineService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'detail:event',
+        { status: 'updated' },
+      );
+
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
         { status: 'updated' },
       );
 
@@ -332,7 +341,7 @@ export class PalletMachineService {
           },
         },
       });
-      
+
       if (bufferPlacement) {
         // Закрываем запись о размещении в буфере
         await prisma.palletBufferCell.update({
@@ -355,7 +364,7 @@ export class PalletMachineService {
           where: { cellId: bufferPlacement.cellId },
           data: { currentLoad: newLoad, status: newStatus },
         });
-        
+
         this.logger.log(
           `Поддон ${palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
         );
@@ -390,16 +399,16 @@ export class PalletMachineService {
 
     // Отправляем WebSocket уведомления ПОСЛЕ завершения транзакции
     this.logger.log(`Отправка WebSocket событий для поддона ${palletId}`);
-    
+
     // Проверяем, инициализирован ли WebSocket сервер
     const server = this.socketService.getServer();
     if (!server) {
       this.logger.error('WebSocket сервер не инициализирован!');
       return result;
     }
-    
+
     this.logger.log(`WebSocket сервер найден, отправляем события...`);
-    
+
     this.socketService.emitToMultipleRooms(
       ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
       'pallet:event',
@@ -410,7 +419,12 @@ export class PalletMachineService {
       'detail:event',
       { status: 'updated', palletId },
     );
-    
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
+      { status: 'updated' },
+    );
+
     this.logger.log(`WebSocket события отправлены для поддона ${palletId}`);
 
     return result;
@@ -655,7 +669,7 @@ export class PalletMachineService {
           // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       }
- // Отправляем WebSocket уведомление о событии поддона
+      // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machinesnosmen'],
         'order:event',
@@ -677,6 +691,11 @@ export class PalletMachineService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
         { status: 'updated' },
       );
 
@@ -1474,6 +1493,11 @@ export class PalletMachineService {
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
         { status: 'updated' },
       );
 

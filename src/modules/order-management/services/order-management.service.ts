@@ -138,6 +138,11 @@ export class OrderManagementService {
       'order:event',
       { status: 'updated' },
     );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
+      { status: 'updated' },
+    );
 
     return {
       orderId,
@@ -190,6 +195,11 @@ export class OrderManagementService {
         'room:director',
       ],
       'order:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
       { status: 'updated' },
     );
 
@@ -261,6 +271,11 @@ export class OrderManagementService {
         'room:director',
       ],
       'order:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
       { status: 'updated' },
     );
 

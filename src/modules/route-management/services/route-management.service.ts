@@ -272,6 +272,11 @@ export class RouteManagementService {
       'order:event',
       { status: 'updated' },
     );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
+      { status: 'updated' },
+    );
 
 
     return result;

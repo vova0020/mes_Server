@@ -94,6 +94,12 @@ export class PackingTaskManagementService {
       'machine:event',
       { status: 'updated' },
     );
+
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
+      { status: 'updated' },
+    );
     // // Отправляем WebSocket уведомление о событии
     // this.socketService.emitToMultipleRooms(
     //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
@@ -212,6 +218,12 @@ export class PackingTaskManagementService {
         { status: 'updated' },
       );
 
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+
       return this.mapToResponseDto(updatedTask);
     });
   }
@@ -263,6 +275,7 @@ export class PackingTaskManagementService {
       { status: 'updated' },
     );
   }
+
 
   // Переместить задание на другой станок
   async moveTaskToMachine(
@@ -424,6 +437,11 @@ export class PackingTaskManagementService {
         'room:machinesypack',
       ],
       'package:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+      ['room:technologist', 'room:director'],
+      'order:stats',
       { status: 'updated' },
     );
 

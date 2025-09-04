@@ -292,6 +292,11 @@ export class PackingAssignmentService {
         'machine:event',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
 
       return this.mapToResponseDto(newTask);
     }

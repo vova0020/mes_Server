@@ -19,7 +19,7 @@ export class PartPalletsService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) { } 
 
   // Получение поддонов по ID детали
   async getPalletsByPartId(
