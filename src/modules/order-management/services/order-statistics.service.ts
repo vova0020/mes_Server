@@ -292,6 +292,7 @@ export class OrderStatisticsService {
               stageName: rs.stage.stageName,
               sequenceNumber: rs.sequenceNumber,
               completionPercentage,
+              finalStage: rs.stage.finalStage,
             };
           });
         }
@@ -338,7 +339,10 @@ export class OrderStatisticsService {
         0,
       );
 
-      part.stages.forEach((stage) => {
+      // Фильтруем только производственные этапы (не финальные)
+      const productionStages = part.stages.filter(stage => stage.finalStage === false);
+      
+      productionStages.forEach((stage) => {
         const stageWork = totalQuantityOnPallets;
         totalStageWork += stageWork;
         completedStageWork += (stageWork * stage.completionPercentage) / 100;
