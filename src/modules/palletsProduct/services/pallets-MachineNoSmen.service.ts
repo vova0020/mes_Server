@@ -1324,19 +1324,30 @@ export class PalletMachineNoSmenService {
         );
       }
 
-      // Определяем этап для рекламации
-      let routeStageId = stageId;
-      if (!routeStageId && pallet.palletStageProgress.length > 0) {
-        routeStageId = pallet.palletStageProgress[0].routeStageId;
-      } else if (!routeStageId) {
-        const firstStage = pallet.part.route?.routeStages[0];
-        if (firstStage) {
-          routeStageId = firstStage.routeStageId;
+      // Определяем корректный routeStageId
+      let routeStageId: number;
+      
+      if (stageId) {
+        // Проверяем, что указанный этап существует в маршруте детали
+        const routeStage = await prisma.routeStage.findFirst({
+          where: {
+            routeId: pallet.part.routeId,
+            stageId: stageId
+          }
+        });
+        
+        if (!routeStage) {
+          throw new Error(`Этап с ID ${stageId} не найден в маршруте детали`);
         }
-      }
-
-      if (!routeStageId) {
-        throw new Error('Не удалось определить этап для создания рекламации');
+        
+        routeStageId = routeStage.routeStageId;
+      } else {
+        // Используем первый этап маршрута
+        const firstRouteStage = pallet.part.route?.routeStages[0];
+        if (!firstRouteStage) {
+          throw new Error(`Не найден маршрут для детали с ID ${pallet.partId}`);
+        }
+        routeStageId = firstRouteStage.routeStageId;
       }
 
       // Создаем рекламацию

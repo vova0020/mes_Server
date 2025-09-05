@@ -1158,7 +1158,20 @@ export class PalletsMasterService {
 
     const pallet = await this.prisma.pallet.findUnique({
       where: { palletId },
-      include: { part: true },
+      include: { 
+        part: {
+          include: {
+            route: {
+              include: {
+                routeStages: {
+                  orderBy: { sequenceNumber: 'asc' },
+                  take: 1
+                }
+              }
+            }
+          }
+        }
+      },
     });
 
     if (!pallet) {
@@ -1172,6 +1185,32 @@ export class PalletsMasterService {
     }
 
     return await this.prisma.$transaction(async (prisma) => {
+      // Определяем корректный routeStageId
+      let routeStageId: number;
+      
+      if (stageId) {
+        // Проверяем, что указанный этап существует в маршруте детали
+        const routeStage = await prisma.routeStage.findFirst({
+          where: {
+            routeId: pallet.part.routeId,
+            stageId: stageId
+          }
+        });
+        
+        if (!routeStage) {
+          throw new Error(`Этап с ID ${stageId} не найден в маршруте детали`);
+        }
+        
+        routeStageId = routeStage.routeStageId;
+      } else {
+        // Используем первый этап маршрута
+        const firstRouteStage = pallet.part.route?.routeStages[0];
+        if (!firstRouteStage) {
+          throw new Error(`Не найден маршрут для детали с ID ${pallet.partId}`);
+        }
+        routeStageId = firstRouteStage.routeStageId;
+      }
+
       // Создаем рекламацию
       const reclamation = await prisma.reclamation.create({
         data: {
@@ -1181,7 +1220,7 @@ export class PalletsMasterService {
           reportedById,
           palletId,
           machineId: machineId || null,
-          routeStageId: stageId || 1,
+          routeStageId,
           status: 'REPORTED',
         },
         include: { part: true },
