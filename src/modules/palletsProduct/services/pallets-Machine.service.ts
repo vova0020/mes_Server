@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
 import { SocketService } from '../../websocket/services/socket.service';
+import { RedistributePalletPartsResponseDto } from '../dto/pallet-master.dto';
 
 @Injectable()
 export class PalletMachineService {
@@ -90,40 +91,46 @@ export class PalletMachineService {
       throw new NotFoundException(`Станок с ID ${machineId} не найден`);
     }
 
-    // Определяем текущий этап обработки поддона
+    // Находим этапы, которые может выполнять данный станок
+    const machineStageIds = [
+      ...machine.machinesStages.map((ms) => ms.stageId),
+      ...machine.machineSubstages.map((ms) => ms.substage.stageId),
+    ];
+
+    // Определяем текущий этап обработки поддона для данного станка
     let currentRouteStage: any = null;
 
-    // Если есть прогресс по этапам, берем последний незавершенный или следующий
-    if (pallet.palletStageProgress.length > 0) {
-      const lastProgress = pallet.palletStageProgress[0];
-      if (lastProgress.status !== 'COMPLETED') {
-        currentRouteStage = lastProgress.routeStage;
-      } else {
-        // Ищем следующий этап в маршруте
-        const currentSequence = lastProgress.routeStage.sequenceNumber;
-        currentRouteStage = pallet.part.route?.routeStages.find(
-          (rs) => rs.sequenceNumber > currentSequence,
-        );
-      }
-    } else if (pallet.part.route && pallet.part.route.routeStages.length > 0) {
-      // Если нет прогресса, берем первый этап из маршрута
-      currentRouteStage = pallet.part.route.routeStages[0];
-    }
+    // Ищем этап в маршруте, который может выполнять этот станок
+    const allRouteStages = pallet.part.route?.routeStages || [];
+    const machineRouteStage = allRouteStages.find((rs) =>
+      machineStageIds.includes(rs.stageId),
+    );
 
-    if (!currentRouteStage) {
-      const errorMsg = `У поддона ${palletId} не определен текущий этап обработки`;
+    if (!machineRouteStage) {
+      const errorMsg = `Станок ${machineId} не может выполнять ни один из этапов маршрута поддона ${palletId}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
 
-    // Проверяем, что предыдущий этап пройден (если это не первый этап)
-    const allRouteStages = pallet.part.route?.routeStages || [];
+    // Проверяем, есть ли уже прогресс для этого этапа
+    const existingProgress = pallet.palletStageProgress.find(
+      (progress) => progress.routeStageId === machineRouteStage.routeStageId,
+    );
+
+    if (existingProgress && existingProgress.status === 'COMPLETED') {
+      const errorMsg = `Этап "${machineRouteStage.stage.stageName}" для поддона ${palletId} уже завершен`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    currentRouteStage = machineRouteStage;
+
+    // Проверяем последовательность этапов
     const currentStageIndex = allRouteStages.findIndex(
       (rs) => rs.routeStageId === currentRouteStage.routeStageId,
     );
 
     if (currentStageIndex > 0) {
-      // Это не первый этап, проверяем предыдущий
       const previousRouteStage = allRouteStages[currentStageIndex - 1];
       const previousStageProgress = pallet.palletStageProgress.find(
         (progress) => progress.routeStageId === previousRouteStage.routeStageId,
@@ -133,39 +140,35 @@ export class PalletMachineService {
         !previousStageProgress ||
         previousStageProgress.status !== 'COMPLETED'
       ) {
-        const errorMsg = `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`;
+        const errorMsg = `Нельзя взять поддон ${palletId} в работу на этапе "${currentRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
       }
     }
 
-    // Проверяем, может ли станок выполнять этот этап
-    const canProcessStage =
-      machine.machinesStages.some(
-        (ms) => ms.stageId === currentRouteStage.stageId,
-      ) ||
-      (currentRouteStage.substageId &&
-        machine.machineSubstages.some(
-          (ms) => ms.substageId === currentRouteStage.substageId,
-        ));
+    // Проверка возможности выполнения этапа уже выполнена выше при поиске machineRouteStage
 
-    if (!canProcessStage) {
-      const errorMsg = `Станок ${machineId} не может выполнять текущий этап обработки поддона ${palletId}`;
-      this.logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    // Проверяем, что поддон еще не находится в обработке на ДРУГОМ станке
-    const existingAssignment = await this.prisma.machineAssignment.findFirst({
+    // Проверяем, что поддон не находится в процессе обработки на другом станке для того же этапа
+    const conflictingAssignment = await this.prisma.machineAssignment.findFirst({
       where: {
         palletId: palletId,
-        completedAt: null, // Активное назначение
-        machineId: { not: machineId }, // На другом станке
+        completedAt: null,
+        machineId: { not: machineId },
+        machine: {
+          machinesStages: {
+            some: {
+              stageId: currentRouteStage.stageId
+            }
+          }
+        }
       },
+      include: {
+        machine: true
+      }
     });
 
-    if (existingAssignment) {
-      const errorMsg = `Поддон ${palletId} уже находится в обработке на станке ${existingAssignment.machineId}`;
+    if (conflictingAssignment) {
+      const errorMsg = `Поддон ${palletId} уже находится в обработке на станке ${conflictingAssignment.machineId} для этапа "${currentRouteStage.stage.stageName}"`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -1433,7 +1436,7 @@ export class PalletMachineService {
 
       // Определяем корректный routeStageId
       let routeStageId: number;
-      
+
       if (stageId) {
         // Проверяем, что указанный этап существует в маршруте детали
         const routeStage = await prisma.routeStage.findFirst({
@@ -1442,11 +1445,11 @@ export class PalletMachineService {
             stageId: stageId
           }
         });
-        
+
         if (!routeStage) {
           throw new Error(`Этап с ID ${stageId} не найден в маршруте детали`);
         }
-        
+
         routeStageId = routeStage.routeStageId;
       } else {
         // Используем первый этап маршрута
@@ -1528,4 +1531,210 @@ export class PalletMachineService {
       };
     });
   }
+  /**
+   * Перераспределить детали между поддонами (для станка с сменным заданием)
+   * Отличие от станка без сменного задания: новые поддоны записываются в задания станка
+   */
+  async redistributePalletParts(
+    sourcePalletId: number,
+    distributions: {
+      targetPalletId?: number;
+      quantity: number;
+      palletName?: string;
+    }[],
+    machineId?: number,
+  ): Promise<RedistributePalletPartsResponseDto> {
+    this.logger.log(`Перераспределение деталей с поддона ${sourcePalletId}`);
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // Получаем исходный поддон
+      const sourcePallet = await prisma.pallet.findUnique({
+        where: { palletId: sourcePalletId },
+        include: { part: true },
+      });
+
+      if (!sourcePallet) {
+        throw new NotFoundException(`Поддон с ID ${sourcePalletId} не найден`);
+      }
+
+      const totalDistributedQuantity = distributions.reduce(
+        (sum, dist) => sum + dist.quantity,
+        0,
+      );
+
+      if (totalDistributedQuantity > Number(sourcePallet.quantity)) {
+        throw new Error(
+          `Общее количество для перераспределения (${totalDistributedQuantity}) превышает количество на исходном поддоне (${sourcePallet.quantity})`,
+        );
+      }
+
+      // Если указан machineId, получаем информацию о задании на этом станке
+      let targetStageProgress: any = null;
+
+      if (machineId) {
+        // Проверяем существование станка
+        const machine = await prisma.machine.findUnique({
+          where: { machineId },
+        });
+
+        if (!machine) {
+          throw new NotFoundException(`Станок с ID ${machineId} не найден`);
+        }
+
+        // Получаем текущий прогресс этапа для исходного поддона на указанном станке
+        const assignment = await prisma.machineAssignment.findFirst({
+          where: {
+            palletId: sourcePalletId,
+            machineId,
+            completedAt: null,
+          },
+        });
+
+        if (assignment) {
+          targetStageProgress = await prisma.palletStageProgress.findFirst({
+            where: {
+              palletId: sourcePalletId,
+              status: { in: ['PENDING', 'IN_PROGRESS'] },
+            },
+            include: { routeStage: true },
+          });
+        }
+      }
+
+      const createdPallets: { id: number; name: string; quantity: number }[] = [];
+      const updatedPallets: {
+        id: number;
+        name: string;
+        newQuantity: number;
+      }[] = [];
+
+      for (const distribution of distributions) {
+        if (distribution.targetPalletId) {
+          // Добавляем к существующему поддону
+          const targetPallet = await prisma.pallet.findUnique({
+            where: { palletId: distribution.targetPalletId },
+          });
+
+          if (!targetPallet) {
+            throw new NotFoundException(
+              `Целевой поддон с ID ${distribution.targetPalletId} не найден`,
+            );
+          }
+
+          if (targetPallet.partId !== sourcePallet.partId) {
+            throw new Error(
+              `Целевой поддон содержит другую деталь (${targetPallet.partId} != ${sourcePallet.partId})`,
+            );
+          }
+
+          const newQuantity = Number(targetPallet.quantity) + distribution.quantity;
+          await prisma.pallet.update({
+            where: { palletId: distribution.targetPalletId },
+            data: { quantity: newQuantity },
+          });
+
+          updatedPallets.push({
+            id: targetPallet.palletId,
+            name: targetPallet.palletName,
+            newQuantity,
+          });
+        } else {
+          // Создаем новый поддон
+          const palletName =
+            distribution.palletName ||
+            `${sourcePallet.palletName}-${Date.now()}`;
+
+          const newPallet = await prisma.pallet.create({
+            data: {
+              partId: sourcePallet.partId,
+              palletName,
+              quantity: distribution.quantity,
+            },
+          });
+
+          // КЛЮЧЕВОЕ ОТЛИЧИЕ: если указан machineId, создаем задание для нового поддона
+          if (machineId) {
+            // Создаем назначение на указанный станок
+            await prisma.machineAssignment.create({
+              data: {
+                palletId: newPallet.palletId,
+                machineId: machineId,
+                assignedAt: new Date(),
+              },
+            });
+
+            // Если есть прогресс этапа, создаем такой же для нового поддона
+            if (targetStageProgress) {
+              await prisma.palletStageProgress.create({
+                data: {
+                  palletId: newPallet.palletId,
+                  routeStageId: targetStageProgress.routeStageId,
+                  status: targetStageProgress.status,
+                },
+              });
+            }
+
+            this.logger.log(
+              `Создано задание для нового поддона ${newPallet.palletId} на станке ${machineId}`,
+            );
+          }
+
+          createdPallets.push({
+            id: newPallet.palletId,
+            name: newPallet.palletName,
+            quantity: Number(newPallet.quantity),
+          });
+        }
+      }
+
+      // Обновляем или удаляем исходный поддон
+      const remainingQuantity = Number(sourcePallet.quantity) - totalDistributedQuantity;
+      let sourcePalletDeleted = false;
+
+      if (remainingQuantity === 0) {
+        // Если исходный поддон полностью распределен, удаляем его
+        await prisma.pallet.delete({
+          where: { palletId: sourcePalletId },
+        });
+        sourcePalletDeleted = true;
+      } else {
+        // Обновляем количество на исходном поддоне
+        await prisma.pallet.update({
+          where: { palletId: sourcePalletId },
+          data: { quantity: remainingQuantity },
+        });
+      }
+
+      this.logger.log(
+        `Перераспределение завершено: создано ${createdPallets.length} поддонов, обновлено ${updatedPallets.length} поддонов`,
+      );
+
+      // Отправляем WebSocket уведомления
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Детали успешно перераспределены',
+        result: {
+          sourcePalletDeleted,
+          createdPallets,
+          updatedPallets,
+        },
+      };
+    });
+  }
+
 }

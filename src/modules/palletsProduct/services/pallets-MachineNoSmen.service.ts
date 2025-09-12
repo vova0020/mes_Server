@@ -1398,6 +1398,11 @@ export class PalletMachineNoSmenService {
         'order:stats',
         { status: 'updated' },
       );
+       this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
 
       return {
         message: 'Детали успешно отбракованы',
@@ -1543,6 +1548,11 @@ export class PalletMachineNoSmenService {
       this.socketService.emitToMultipleRooms(
         ['room:technologist', 'room:director'],
         'order:stats',
+        { status: 'updated' },
+      );
+       this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
         { status: 'updated' },
       );
 

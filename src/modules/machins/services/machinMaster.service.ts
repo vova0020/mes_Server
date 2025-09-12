@@ -693,14 +693,30 @@ export class MachinMasterService {
           data: { machineId: targetMachineId },
         });
 
-        // б) обновляем PartMachineAssignment для той же детали
-        await tx.partMachineAssignment.updateMany({
+        // б) удаляем старую запись и создаем новую для PartMachineAssignment
+        await tx.partMachineAssignment.deleteMany({
           where: {
             machineId: assignment.machineId, // старый станок
             partId: assignment.pallet.part.partId,
           },
-          data: {
-            machineId: targetMachineId, // новый станок
+        });
+        
+        // создаем новую запись для нового станка
+        await tx.partMachineAssignment.upsert({
+          where: {
+            machine_part_unique: {
+              machineId: targetMachineId,
+              partId: assignment.pallet.part.partId,
+            },
+          },
+          update: {
+            assignedAt: new Date(),
+          },
+          create: {
+            machineId: targetMachineId,
+            partId: assignment.pallet.part.partId,
+            priority: 0,
+            assignedAt: new Date(),
           },
         });
       });

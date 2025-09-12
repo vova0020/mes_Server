@@ -198,11 +198,11 @@ export class PalletsMasterService {
       if (!machine) {
         throw new NotFoundException(`Станок с ID ${machineId} не найден`);
       }
-      if (machine.status !== 'ACTIVE') {
-        throw new Error(
-          `Станок ${machine.machineName} (ID: ${machineId}) не готов к работе. Текущий статус: ${machine.status}`,
-        );
-      }
+      // if (machine.status !== 'ACTIVE') {
+      //   throw new Error(
+      //     `Станок ${machine.machineName} (ID: ${machineId}) не готов к работе. Текущий статус: ${machine.status}`,
+      //   );
+      // }
 
       // 3. Проверяем этап и находим routeStage
       const routeStage = pallet.part.route.routeStages[0];
@@ -212,11 +212,9 @@ export class PalletsMasterService {
         );
       }
 
-      // 4. Завершаем всё старое назначение этого паллета на станок
-      await prisma.machineAssignment.updateMany({
-        where: { palletId, completedAt: null },
-        data: { completedAt: new Date() },
-      });
+      // 4. НЕ завершаем старые назначения автоматически
+      // Мастер может планировать работу заранее, назначая поддоны на разные этапы
+      // Назначения завершаются только при фактическом выполнении работы
 
       // 5. Создаём новое назначение паллета на станок
       const machineAssignment = await prisma.machineAssignment.create({
@@ -276,8 +274,8 @@ export class PalletsMasterService {
         });
       }
 
-      // Обновляем статус детали на IN_PROGRESS
-      await this.updatePartStatusIfNeeded(prisma, pallet.partId, 'IN_PROGRESS');
+      // НЕ обновляем статус детали автоматически при назначении на станок
+      // Статус будет обновлен только при фактическом выполнении работы станком
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
@@ -625,10 +623,70 @@ export class PalletsMasterService {
         );
       }
 
-      const stageProgress = machineAssignment.pallet.palletStageProgress[0];
+      // Получаем полную информацию о поддоне и маршруте для проверки последовательности этапов
+      const pallet = await this.prisma.pallet.findUnique({
+        where: { palletId: machineAssignment.pallet.palletId },
+        include: {
+          part: {
+            include: {
+              route: {
+                include: {
+                  routeStages: {
+                    include: { stage: true },
+                    orderBy: { sequenceNumber: 'asc' },
+                  },
+                },
+              },
+            },
+          },
+          palletStageProgress: {
+            include: {
+              routeStage: { include: { stage: true } },
+            },
+          },
+        },
+      });
+
+      if (!pallet) {
+        throw new Error(`Поддон с ID ${machineAssignment.pallet.palletId} не найден`);
+      }
+
+      // Находим этапы, которые может выполнять данный станок
+      const machineStages = await this.prisma.machineStage.findMany({
+        where: { machineId: machineAssignment.machineId },
+        select: { stageId: true }
+      });
+      const machineStageIds = machineStages.map(ms => ms.stageId);
+
+      // Ищем прогресс этапа, который соответствует этому станку
+      const stageProgress = machineAssignment.pallet.palletStageProgress.find(progress => 
+        machineStageIds.includes(progress.routeStage?.stageId)
+      );
+      
       if (!stageProgress) {
+        // Проверяем, какой этап должен выполняться на этом станке
+        const allRouteStages = pallet.part.route?.routeStages || [];
+        const machineRouteStage = allRouteStages.find(rs => machineStageIds.includes(rs.stageId));
+        
+        if (machineRouteStage) {
+          const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === machineRouteStage.routeStageId);
+          
+          if (currentStageIndex > 0) {
+            const previousRouteStage = allRouteStages[currentStageIndex - 1];
+            const previousStageProgress = pallet.palletStageProgress.find(
+              progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
+            );
+            
+            if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
+              throw new Error(
+                `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
+              );
+            }
+          }
+        }
+        
         throw new NotFoundException(
-          `Активный прогресс этапа для операции ${operationId} не найден`,
+          `Активный прогресс этапа для операции ${operationId} на станке ${machineAssignment.machine.machineName} не найден`,
         );
       }
 
@@ -647,49 +705,19 @@ export class PalletsMasterService {
         updateData.status = TaskStatus.COMPLETED;
         updateData.completedAt = new Date();
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
-        // Проверяем, что предыдущий этап пройден (если это не первый этап)
-        const pallet = await this.prisma.pallet.findUnique({
-          where: { palletId: machineAssignment.pallet.palletId },
-          include: {
-            part: {
-              include: {
-                route: {
-                  include: {
-                    routeStages: {
-                      include: { stage: true },
-                      orderBy: { sequenceNumber: 'asc' },
-                    },
-                  },
-                },
-              },
-            },
-            palletStageProgress: {
-              include: {
-                routeStage: { include: { stage: true } },
-              },
-            },
-          },
-        });
-
-        if (!pallet) {
-          throw new Error(`Поддон с ID ${machineAssignment.pallet.palletId} не найден`);
-        }
-
+        // Проверяем последовательность этапов при переводе в IN_PROGRESS
         const allRouteStages = pallet.part.route?.routeStages || [];
-        const currentStageIndex = allRouteStages.findIndex(
-          (rs) => rs.routeStageId === stageProgress.routeStageId,
-        );
-
+        const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === stageProgress.routeStageId);
+        
         if (currentStageIndex > 0) {
-          // Это не первый этап, проверяем предыдущий
           const previousRouteStage = allRouteStages[currentStageIndex - 1];
           const previousStageProgress = pallet.palletStageProgress.find(
-            (progress) => progress.routeStage.routeStageId === previousRouteStage.routeStageId,
+            progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
           );
-
+          
           if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
             throw new Error(
-              `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
+              `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${stageProgress.routeStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
             );
           }
         }
@@ -949,7 +977,6 @@ export class PalletsMasterService {
                 orderBy: {
                   pspId: 'desc',
                 },
-                take: 1,
               },
             },
           },
@@ -966,11 +993,22 @@ export class PalletsMasterService {
         return [];
       }
 
+      // Получаем этапы станка
+      const machineStages = await this.prisma.machineStage.findMany({
+        where: { machineId },
+        select: { stageId: true }
+      });
+      const machineStageIds = machineStages.map(ms => ms.stageId);
+
       // Формируем ответ с данными из связанных таблиц
       const tasks = machineAssignments.map((assignment) => {
         const pallet = assignment.pallet;
         const part = pallet.part;
-        const stageProgress = pallet.palletStageProgress[0];
+        
+        // Находим прогресс этапа для данного станка
+        const stageProgress = pallet.palletStageProgress.find(progress => 
+          machineStageIds.includes(progress.routeStage?.stageId)
+        );
 
         // Получаем информацию о заказе через связь с пакетом
         const packagePart = part.productionPackageParts[0];
@@ -1106,6 +1144,11 @@ export class PalletsMasterService {
       this.socketService.emitToMultipleRooms(
         ['room:technologist', 'room:director'],
         'order:stats',
+        { status: 'updated' },
+      );
+       this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
         { status: 'updated' },
       );
 
@@ -1252,6 +1295,11 @@ export class PalletsMasterService {
       this.socketService.emitToMultipleRooms(
         ['room:technologist', 'room:director'],
         'order:stats',
+        { status: 'updated' },
+      );
+       this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
         { status: 'updated' },
       );
 

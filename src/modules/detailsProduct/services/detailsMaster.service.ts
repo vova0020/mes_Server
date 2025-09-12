@@ -329,6 +329,11 @@ export class DetailsMasterService {
             }
           }
 
+          // Находим подэтап для текущего участка в маршруте детали
+          const currentSubstage = route?.routeStages.find(
+            (stage) => stage.stageId === segmentId && stage.substageId
+          )?.substage;
+
           // Вычисляем распределение по статусам с учетом участка
           // readyForProcessing - поддоны прошли предыдущие этапы, но еще НЕ обрабатывались и НЕ распределялись на этом этапе
           // distributed - сумма количества поддонов, распределенных на станки (но еще не завершенных)
@@ -494,13 +499,26 @@ export class DetailsMasterService {
             readyForProcessing,
             distributed,
             completed,
-            packageCode: packageItem.packageCode,
+            packages: [{
+              packageId: packageItem.packageId,
+              packageCode: packageItem.packageCode,
+              packageName: packageItem.packageName,
+              quantity: Number(packagePart.quantity)
+            }],
+            substage: currentSubstage ? {
+              substageId: currentSubstage.substageId,
+              substageName: currentSubstage.substageName
+            } : null,
           });
         } else {
-          // Деталь уже есть в карте, просто обновляем ссылку
-          // totalQuantity берется из part.totalQuantity, а не суммируется из пакетов
+          // Деталь уже есть в карте, добавляем информацию о новой упаковке
           const currentDetail = detailsMap.get(part.partId);
-          // Не изменяем totalQuantity, так как это общее количество детали из БД
+          currentDetail.packages.push({
+            packageId: packageItem.packageId,
+            packageCode: packageItem.packageCode,
+            packageName: packageItem.packageName,
+            quantity: Number(packagePart.quantity)
+          });
           detailsMap.set(part.partId, currentDetail);
         }
       }

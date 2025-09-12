@@ -8,6 +8,9 @@ import {
   HttpException,
   HttpStatus,
   Query,
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +18,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { PalletMachineService } from '../services/pallets-Machine.service';
 import {
@@ -22,14 +26,17 @@ import {
   CompletePalletProcessingDto,
   MovePalletToBufferDto,
 } from '../dto/pallet.dto';
-import { DefectPalletPartsDto } from '../dto/pallet-master.dto';
+import { DefectPalletPartsDto, RedistributePalletPartsDto, RedistributePalletPartsResponseDto } from '../dto/pallet-master.dto';
 
 import { PalletsResponseDto } from '../dto/pallet-machin.dto';
 import { PalletsMachineTaskService } from '../services/pallets-Machine-task.service';
+import { Logger } from '@nestjs/common';
 
 @ApiTags('Операции с поддонами на станке')
 @Controller('machins/pallets')
 export class PalletMachinController {
+  private readonly logger = new Logger(PalletMachinController.name);
+
   constructor(
     private readonly palletService: PalletMachineService,
     private readonly palletsMachineTaskService: PalletsMachineTaskService,
@@ -207,6 +214,37 @@ export class PalletMachinController {
         error.message || 'Ошибка при отбраковке деталей',
         HttpStatus.BAD_REQUEST,
       );
+    }
+  }
+
+  @Post('redistribute-parts')
+  @ApiOperation({ summary: 'Перераспределить детали между поддонами' })
+  @ApiBody({ type: RedistributePalletPartsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно перераспределены',
+    type: RedistributePalletPartsResponseDto,
+  })
+  async redistributePalletParts(@Body() redistributeDto: RedistributePalletPartsDto & { machineId?: number }): Promise<RedistributePalletPartsResponseDto> {
+    this.logger.log(
+      `Перераспределение деталей с поддона ${redistributeDto.sourcePalletId}`,
+    );
+
+    try {
+      return await this.palletService.redistributePalletParts(
+        redistributeDto.sourcePalletId,
+        redistributeDto.distributions,
+        redistributeDto.machineId,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при перераспределении: ${error.message}`);
+      throw new InternalServerErrorException('Ошибка при перераспределении деталей');
     }
   }
 }
