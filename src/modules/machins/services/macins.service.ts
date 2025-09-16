@@ -30,6 +30,83 @@ export class MachinsService {
       throw new NotFoundException(`Станок с ID ${id} не найден`);
     }
 
+    // Получаем завершенные назначения для расчета выполненного количества
+    const completedAssignments = await this.prisma.machineAssignment.findMany({
+      where: {
+        machineId: id,
+        completedAt: {
+          not: null,
+        },
+        // Фильтруем по времени сброса счетчика если оно есть
+        ...(machine.counterResetAt && {
+          completedAt: {
+            gte: machine.counterResetAt,
+          },
+        }),
+      },
+      include: {
+        pallet: {
+          select: {
+            quantity: true,
+            part: true,
+          },
+        },
+      },
+    });
+
+    // Фильтруем завершенные операции после сброса счетчика
+    const filteredAssignments = completedAssignments.filter((assignment) => {
+      const isAfterReset = machine.counterResetAt && assignment.completedAt
+        ? assignment.completedAt > machine.counterResetAt 
+        : true;
+      return isAfterReset;
+    });
+
+    // Рассчитываем выполненное количество в зависимости от единицы измерения
+    let completedQuantity: number;
+
+    if (machine.loadUnit === 'м²') {
+      completedQuantity = filteredAssignments.reduce((total, assignment) => {
+        const part = assignment.pallet.part;
+        const quantity = Number(assignment.pallet.quantity);
+        return total + this.calculateSquareMeters(part, quantity);
+      }, 0);
+    } else if (machine.loadUnit === 'м³') {
+      completedQuantity = filteredAssignments.reduce((total, assignment) => {
+        const part = assignment.pallet.part;
+        const quantity = Number(assignment.pallet.quantity);
+        return total + this.calculateCubicMeters(part, quantity);
+      }, 0);
+    } else if (machine.loadUnit === 'м') {
+      completedQuantity = filteredAssignments.reduce((total, assignment) => {
+        const part = assignment.pallet.part;
+        const quantity = Number(assignment.pallet.quantity);
+        if (part.finishedLength != null) {
+          return total + (part.finishedLength * quantity) / 1000;
+        }
+        return total;
+      }, 0);
+    } else if (machine.loadUnit === 'м обработки торца') {
+      completedQuantity = filteredAssignments.reduce((total, assignment) => {
+        const part = assignment.pallet.part;
+        const quantity = Number(assignment.pallet.quantity);
+        return total + this.calculateEdgeProcessingMeters(part, quantity);
+      }, 0);
+    } else {
+      // Расчет в штуках
+      completedQuantity = filteredAssignments.reduce(
+        (total, assignment) => total + Number(assignment.pallet.quantity),
+        0,
+      );
+    }
+
+    // Рассчитываем процент выполнения
+    const recommendedLoad = Number(machine.recommendedLoad);
+    const roundedCompletedQuantity = Math.round(completedQuantity);
+    const completionPercentage = recommendedLoad > 0 
+      ? Math.round((roundedCompletedQuantity / recommendedLoad) * 100)
+      : 0;
+
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = machine.machinesStages[0]?.stage || null;
 
@@ -37,10 +114,12 @@ export class MachinsService {
       id: machine.machineId,
       name: machine.machineName,
       status: machine.status,
-      recommendedLoad: Number(machine.recommendedLoad),
+      recommendedLoad: recommendedLoad,
       noShiftAssignment: machine.noSmenTask,
       segmentId: firstStage?.stageId || null,
       segmentName: firstStage?.stageName || null,
+      completedQuantity: roundedCompletedQuantity,
+      completionPercentage: completionPercentage,
     };
   }
 
@@ -103,5 +182,70 @@ export class MachinsService {
       segmentId: firstStage?.stageId || null,
       segmentName: firstStage?.stageName || null,
     };
+  }
+
+  /**
+   * Вычисляет площадь в квадратных метрах на основе данных детали
+   */
+  private calculateSquareMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+
+    if (!length || !width || length <= 0 || width <= 0) {
+      return 0;
+    }
+
+    return (length * width * quantity) / 1000000;
+  }
+
+  /**
+   * Вычисляет объем в кубических метрах на основе данных детали
+   */
+  private calculateCubicMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+    const thickness = part.thickness;
+
+    if (
+      !length ||
+      !width ||
+      !thickness ||
+      length <= 0 ||
+      width <= 0 ||
+      thickness <= 0
+    ) {
+      return 0;
+    }
+
+    return (length * width * thickness * quantity) / 1000000000;
+  }
+
+  /**
+   * Вычисляет метры обработки торца на основе периметра с условиями
+   */
+  private calculateEdgeProcessingMeters(part: any, quantity: number): number {
+    const length = part.finishedLength;
+    const width = part.finishedWidth;
+
+    if (!length || !width || length <= 0 || width <= 0) {
+      return 0;
+    }
+
+    let perimeter = 0;
+
+    if (part.edgingNameL1) {
+      perimeter += length;
+    }
+    if (part.edgingNameL2) {
+      perimeter += length;
+    }
+    if (part.edgingNameW1) {
+      perimeter += width;
+    }
+    if (part.edgingNameW2) {
+      perimeter += width;
+    }
+
+    return (perimeter * quantity) / 1000;
   }
 }

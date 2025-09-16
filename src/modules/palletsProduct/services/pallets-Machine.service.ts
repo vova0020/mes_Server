@@ -672,7 +672,36 @@ export class PalletMachineService {
           // await this.createPackingTasks(prisma, assignment.pallet.partId);
         }
       }
-      // Отправляем WebSocket уведомление о событии поддона
+      // // Отправляем WebSocket уведомление о событии поддона
+      // this.socketService.emitToMultipleRooms(
+      //   ['room:masterceh', 'room:machinesnosmen'],
+      //   'order:event',
+      //   { status: 'updated' },
+      // );
+      // // Отправляем WebSocket уведомление о событии поддона
+      // this.socketService.emitToMultipleRooms(
+      //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      //   'package:event',
+      //   { status: 'updated' },
+      // );
+      // // Отправляем WebSocket уведомление о событии поддона
+      // this.socketService.emitToMultipleRooms(
+      //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      //   'pallet:event',
+      //   { status: 'updated' },
+      // );
+      // // Отправляем WebSocket уведомление о событии поддона
+      // this.socketService.emitToMultipleRooms(
+      //   ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+      //   'detail:event',
+      //   { status: 'updated' },
+      // );
+      // this.socketService.emitToMultipleRooms(
+      //   ['room:technologist', 'room:director'],
+      //   'order:stats',
+      //   { status: 'updated' },
+      // );
+         // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machinesnosmen'],
         'order:event',
@@ -687,13 +716,19 @@ export class PalletMachineService {
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'pallet:event',
         { status: 'updated' },
       );
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
-        'detail:event',
+        'machine:event',
         { status: 'updated' },
       );
       this.socketService.emitToMultipleRooms(

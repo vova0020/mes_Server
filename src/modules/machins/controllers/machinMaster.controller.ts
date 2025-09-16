@@ -178,4 +178,36 @@ export class MachinsMasterController {
     );
     return this.machinService.moveTaskToMachine(moveTaskDto);
   }
+
+  @Post('machine/:machineId/reset-counter')
+  @ApiOperation({ summary: 'Сбросить счетчик выполненных операций для станка' })
+  @ApiParam({
+    name: 'machineId',
+    type: Number,
+    description: 'ID станка',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Счетчик успешно сброшен',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Счетчик для станка Станок №1 успешно сброшен',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Станок не найден',
+  })
+  @HttpCode(HttpStatus.OK)
+  async resetMachineCounter(
+    @Param('machineId', ParseIntPipe) machineId: number,
+  ): Promise<{ message: string }> {
+    this.logger.log(`Запрос на сброс счетчика для станка с ID: ${machineId}`);
+    return this.machinService.resetMachineCounter(machineId);
+  }
 }

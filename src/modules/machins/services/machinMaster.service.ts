@@ -151,7 +151,13 @@ export class MachinMasterService {
                 part: true,
               },
             },
-            machine: true,
+            machine: {
+              select: {
+                machineId: true,
+                machineName: true,
+                counterResetAt: true,
+              },
+            },
           },
         },
       );
@@ -191,7 +197,13 @@ export class MachinMasterService {
 
           // Получаем завершенные назначения для расчета выполненного количества в м²
           const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => assignment.machine.machineId === machine.machineId,
+            (assignment) => {
+              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
+              const isAfterReset = machine.counterResetAt && assignment.completedAt
+                ? assignment.completedAt > machine.counterResetAt 
+                : true;
+              return isCorrectMachine && isAfterReset;
+            },
           );
           completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
@@ -214,7 +226,13 @@ export class MachinMasterService {
 
           // Получаем завершенные назначения для расчета выполненного количества в м³
           const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => assignment.machine.machineId === machine.machineId,
+            (assignment) => {
+              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
+              const isAfterReset = machine.counterResetAt && assignment.completedAt
+                ? assignment.completedAt > machine.counterResetAt 
+                : true;
+              return isCorrectMachine && isAfterReset;
+            },
           );
           completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
@@ -240,7 +258,13 @@ export class MachinMasterService {
 
           // Получаем завершенные назначения для расчета выполненного количества в м
           const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => assignment.machine.machineId === machine.machineId,
+            (assignment) => {
+              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
+              const isAfterReset = machine.counterResetAt && assignment.completedAt
+                ? assignment.completedAt > machine.counterResetAt 
+                : true;
+              return isCorrectMachine && isAfterReset;
+            },
           );
           completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
@@ -266,7 +290,13 @@ export class MachinMasterService {
 
           // Получаем завершенные назначения для расчета выполненного количества
           const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => assignment.machine.machineId === machine.machineId,
+            (assignment) => {
+              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
+              const isAfterReset = machine.counterResetAt && assignment.completedAt
+                ? assignment.completedAt > machine.counterResetAt 
+                : true;
+              return isCorrectMachine && isAfterReset;
+            },
           );
           completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
@@ -282,8 +312,20 @@ export class MachinMasterService {
             (total, assignment) => total + Number(assignment.pallet.quantity),
             0,
           );
-          completedQuantity =
-            completedQuantityByMachineId[machine.machineId] || 0;
+          // Фильтруем завершенные операции после сброса счетчика
+          const machineCompletedAssignments = completedAssignments.filter(
+            (assignment) => {
+              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
+              const isAfterReset = machine.counterResetAt && assignment.completedAt
+                ? assignment.completedAt > machine.counterResetAt 
+                : true;
+              return isCorrectMachine && isAfterReset;
+            },
+          );
+          completedQuantity = machineCompletedAssignments.reduce(
+            (total, assignment) => total + Number(assignment.pallet.quantity),
+            0,
+          );
         }
 
         function getPlannedQuantity(plannedQuantity, machine) {
@@ -744,6 +786,51 @@ export class MachinMasterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при перемещении задания с ID ${operationId} на станок ${targetMachineId}: ${(error as Error).message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Сбросить счетчик выполненных операций для станка
+   * @param machineId ID станка
+   * @returns Объект с сообщением об успешном сбросе
+   */
+  async resetMachineCounter(machineId: number): Promise<{ message: string }> {
+    this.logger.log(`Сброс счетчика для станка с ID: ${machineId}`);
+
+    try {
+      // Проверяем существование станка
+      const machine = await this.prisma.machine.findUnique({
+        where: { machineId },
+      });
+
+      if (!machine) {
+        throw new NotFoundException(`Станок с ID ${machineId} не найден`);
+      }
+
+      // Обновляем время сброса счетчика
+      await this.prisma.machine.update({
+        where: { machineId },
+        data: {
+          counterResetAt: new Date(),
+        },
+      });
+
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'machine:event',
+        { status: 'updated' },
+      );
+
+      this.logger.log(`Счетчик для станка с ID ${machineId} успешно сброшен`);
+      return {
+        message: `Счетчик для станка ${machine.machineName} успешно сброшен`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при сбросе счетчика для станка с ID ${machineId}: ${(error as Error).message}`,
       );
       throw error;
     }

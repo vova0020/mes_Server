@@ -335,15 +335,56 @@ export class DetailsMasterService {
           )?.substage;
 
           // Вычисляем распределение по статусам с учетом участка
-          // readyForProcessing - поддоны прошли предыдущие этапы, но еще НЕ обрабатывались и НЕ распределялись на этом этапе
-          // distributed - сумма количества поддонов, распределенных на станки (но еще не завершенных)
-          // completed - сумма количества поддонов, прошедших обработку на этом этапе
           let readyForProcessing = 0;
           let distributed = 0;
           let completed = 0;
 
-          // Анализируем поддоны для данной детали
-          for (const pallet of part.pallets) {
+          // Получаем общее количество деталей из упаковки для этой детали
+          const totalPartQuantity = Number(packagePart.quantity);
+
+          // Если поддонов нет - все totalQuantity готово к обработке
+          if (part.pallets.length === 0) {
+            readyForProcessing = Number(part.totalQuantity);
+            distributed = 0;
+            completed = 0;
+          } else if (isFirstSegment) {
+            // Для первого этапа: считаем по поддонам
+            let palletDistributed = 0;
+            let palletCompleted = 0;
+
+            for (const pallet of part.pallets) {
+              const palletQuantity = Number(pallet.quantity);
+              const currentSegmentProgress = pallet.palletStageProgress.filter(
+                (progress) =>
+                  currentSegmentStageIds.includes(progress.routeStage.stageId) ||
+                  (progress.routeStage.substageId &&
+                    currentSegmentSubstageIds.includes(
+                      progress.routeStage.substageId,
+                    )),
+              );
+
+              const currentMachineAssignments = pallet.machineAssignments.filter(
+                (assignment) => machineIds.includes(assignment.machine.machineId)
+              );
+
+              if (currentSegmentProgress.length > 0) {
+                const latestProgress = currentSegmentProgress[0];
+                if (latestProgress.status === 'COMPLETED') {
+                  palletCompleted += palletQuantity;
+                } else {
+                  palletDistributed += palletQuantity;
+                }
+              } else if (currentMachineAssignments.length > 0) {
+                palletDistributed += palletQuantity;
+              }
+            }
+
+            readyForProcessing = Math.max(0, Number(part.totalQuantity) - palletDistributed - palletCompleted);
+            distributed = palletDistributed;
+            completed = palletCompleted;
+          } else {
+            // Для остальных этапов: анализируем поддоны как раньше
+            for (const pallet of part.pallets) {
             // Используем количество деталей на конкретном поддоне
             const palletQuantity = Number(pallet.quantity);
 
@@ -441,53 +482,12 @@ export class DetailsMasterService {
               }
             }
           }
-
-          // Если нет поддонов, анализируем общий прогресс детали
-          if (part.pallets.length === 0) {
-            const partProgress = part.partRouteProgress.filter(
-              (progress) =>
-                currentSegmentStageIds.includes(progress.routeStage.stageId) ||
-                (progress.routeStage.substageId &&
-                  currentSegmentSubstageIds.includes(
-                    progress.routeStage.substageId,
-                  )),
-            );
-
-            const previousPartProgress = part.partRouteProgress.filter(
-              (progress) =>
-                previousStageIds.includes(progress.routeStage.stageId),
-            );
-
-            const isPreviousStagesCompleted =
-              isFirstSegment || // Если это первый этап
-              previousStageIds.length === 0 || // Если нет предыдущих этапов
-              (previousPartProgress.length > 0 &&
-                previousPartProgress.every(
-                  (progress) => progress.status === 'COMPLETED',
-                ));
-
-            if (partProgress.length > 0) {
-              const latestProgress = partProgress.sort(
-                (a, b) =>
-                  (b.completedAt?.getTime() || 0) -
-                  (a.completedAt?.getTime() || 0),
-              )[0];
-
-              if (latestProgress.status === 'COMPLETED') {
-                completed += Number(part.totalQuantity);
-              } else if (latestProgress.status === 'IN_PROGRESS') {
-                distributed += Number(part.totalQuantity);
-              } else if (
-                latestProgress.status === 'PENDING' &&
-                isPreviousStagesCompleted
-              ) {
-                readyForProcessing += Number(part.totalQuantity);
-              }
-            } else if (isPreviousStagesCompleted) {
-              // Нет прогресса на текущем этапе, но предыдущие завершены
-              readyForProcessing += Number(part.totalQuantity);
-            }
           }
+
+          // Ограничиваем readyForProcessing общим количеством
+          readyForProcessing = Math.min(readyForProcessing, Number(part.totalQuantity));
+          distributed = Math.min(distributed, Number(part.totalQuantity));
+          completed = Math.min(completed, Number(part.totalQuantity));
 
           detailsMap.set(part.partId, {
             id: part.partId,
@@ -513,12 +513,14 @@ export class DetailsMasterService {
         } else {
           // Деталь уже есть в карте, добавляем информацию о новой упаковке
           const currentDetail = detailsMap.get(part.partId);
+          
           currentDetail.packages.push({
             packageId: packageItem.packageId,
             packageCode: packageItem.packageCode,
             packageName: packageItem.packageName,
             quantity: Number(packagePart.quantity)
           });
+          
           detailsMap.set(part.partId, currentDetail);
         }
       }

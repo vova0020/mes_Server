@@ -380,6 +380,20 @@ export class MachineResponseDto {
     nullable: true,
   })
   segmentName: string | null;
+
+  @ApiProperty({
+    description: 'Выполненное количество операций',
+    example: 50,
+    required: false,
+  })
+  completedQuantity?: number;
+
+  @ApiProperty({
+    description: 'Процент выполнения нормы',
+    example: 75,
+    required: false,
+  })
+  completionPercentage?: number;
 }
 
 export class SegmentOrdersResponseDto {

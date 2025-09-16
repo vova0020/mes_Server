@@ -86,8 +86,17 @@ export class OrdersService {
         let completedQuantity = 0;
         let availableQuantity = 0;
 
-        // Для каждой детали анализируем прогресс по указанному этапу
+        // Группируем детали по partId чтобы избежать дублирования
+        const partMap = new Map();
         allParts.forEach(({ part, quantity }) => {
+          if (!partMap.has(part.partId)) {
+            partMap.set(part.partId, { part, totalInOrder: 0 });
+          }
+          partMap.get(part.partId).totalInOrder += quantity;
+        });
+
+        // Для каждой уникальной детали анализируем прогресс по указанному этапу
+        partMap.forEach(({ part, totalInOrder }) => {
           const routeStages = part.route.routeStages;
           const stageIndex = routeStages.findIndex(
             (rs) => rs.stage.stageId === stageId,
@@ -95,58 +104,68 @@ export class OrdersService {
 
           if (stageIndex !== -1) {
             const routeStage = routeStages[stageIndex];
+            
+            // Используем общее количество детали в заказе для расчета базы
+            totalQuantityForStage += totalInOrder;
 
-            // Если есть поддоны, считаем по ним
+            // Если есть поддоны, считаем выполненные по поддонам, доступные по общему количеству
             if (part.pallets && part.pallets.length > 0) {
-              // Считаем totalQuantityForStage по фактическому количеству на поддонах
-              const totalPalletQuantity = part.pallets.reduce((sum, pallet) => sum + pallet.quantity.toNumber(), 0);
-              totalQuantityForStage += totalPalletQuantity;
+              let palletCompletedQuantity = 0;
+              
               part.pallets.forEach((pallet) => {
                 const palletQuantity = pallet.quantity.toNumber();
                 const palletProgress = pallet.palletStageProgress.find(
                   (p) => p.routeStageId === routeStage.routeStageId,
                 );
 
-                // Считаем выполненные
+                // Считаем выполненные на поддонах (абсолютное количество)
                 if (palletProgress && palletProgress.status === 'COMPLETED') {
-                  completedQuantity += palletQuantity;
+                  palletCompletedQuantity += palletQuantity;
                 }
-
-                // Считаем доступные независимо от статуса текущего этапа
-                if (stageIndex === 0) {
-                  availableQuantity += palletQuantity;
-                } else {
+              });
+              
+              // Выполненные - только с поддонов
+              completedQuantity += palletCompletedQuantity;
+              
+              // Доступные - для первого этапа всегда все количество в заказе
+              if (stageIndex === 0) {
+                availableQuantity += totalInOrder;
+              } else {
+                // Не первый этап - доступно столько, сколько выполнено на предыдущем этапе
+                let palletAvailableQuantity = 0;
+                part.pallets.forEach((pallet) => {
+                  const palletQuantity = pallet.quantity.toNumber();
                   const prevStage = routeStages[stageIndex - 1];
                   const prevPalletProgress = pallet.palletStageProgress.find(
                     (p) => p.routeStageId === prevStage.routeStageId,
                   );
                   if (prevPalletProgress && prevPalletProgress.status === 'COMPLETED') {
-                    availableQuantity += palletQuantity;
+                    palletAvailableQuantity += palletQuantity;
                   }
-                }
-              });
+                });
+                availableQuantity += palletAvailableQuantity;
+              }
             } else {
               // Если поддонов нет, используем прогресс детали
-              totalQuantityForStage += quantity;
               const progress = part.partRouteProgress.find(
                 (p) => p.routeStageId === routeStage.routeStageId,
               );
 
               // Считаем выполненные
               if (progress && progress.status === 'COMPLETED') {
-                completedQuantity += quantity;
+                completedQuantity += totalInOrder;
               }
 
-              // Считаем доступные независимо от статуса текущего этапа
+              // Считаем доступные (без поддонов)
               if (stageIndex === 0) {
-                availableQuantity += quantity;
+                availableQuantity += totalInOrder;
               } else {
                 const prevStage = routeStages[stageIndex - 1];
                 const prevProgress = part.partRouteProgress.find(
                   (p) => p.routeStageId === prevStage.routeStageId,
                 );
                 if (prevProgress && prevProgress.status === 'COMPLETED') {
-                  availableQuantity += quantity;
+                  availableQuantity += totalInOrder;
                 }
               }
             }

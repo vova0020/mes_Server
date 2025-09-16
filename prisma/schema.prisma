@@ -659,6 +659,8 @@ model Machine {
   loadUnit        String        @map("load_unit")
   /// Флаг, запрещающий сменные задачи на этом станке
   noSmenTask      Boolean       @default(false) @map("no_smen_task")
+  /// Время последнего сброса счетчика выполненных операций
+  counterResetAt  DateTime?     @map("counter_reset_at")
 
   // связи: задачи и этапы, связанные с этим станком
   machinesStages        MachineStage[] // какие этапы 1-го уровня выполняет станок
