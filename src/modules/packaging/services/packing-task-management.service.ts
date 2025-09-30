@@ -148,13 +148,26 @@ export class PackingTaskManagementService {
       throw new BadRequestException('Задание уже завершено');
     }
 
+    const completedQty = dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+    
+    if (completedQty > existingTask.assignedQuantity.toNumber()) {
+      throw new BadRequestException(
+        `Выполненное количество (${completedQty}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
+      );
+    }
+
     return await this.prisma.$transaction(async (tx) => {
+      // Определяем статус задачи
+      const isFullyCompleted = completedQty >= existingTask.assignedQuantity.toNumber();
+      const newStatus = isFullyCompleted ? PackingTaskStatus.COMPLETED : PackingTaskStatus.PARTIALLY_COMPLETED;
+      
       // Обновляем статус задачи
       const updatedTask = await tx.packingTask.update({
         where: { taskId },
         data: {
-          status: PackingTaskStatus.COMPLETED,
-          completedAt: new Date(),
+          status: newStatus,
+          completedAt: isFullyCompleted ? new Date() : null,
+          completedQuantity: completedQty,
           machineId: dto.machineId,
         },
         include: {
@@ -390,12 +403,26 @@ export class PackingTaskManagementService {
       status: dto.status,
     };
 
+    // Обрабатываем completedQuantity если передано
+    if (dto.completedQuantity !== undefined) {
+      if (dto.completedQuantity > existingTask.assignedQuantity.toNumber()) {
+        throw new BadRequestException(
+          `Выполненное количество (${dto.completedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
+        );
+      }
+      updateData.completedQuantity = dto.completedQuantity;
+    }
+
     // Если статус меняется на COMPLETED, устанавливаем время завершения
     if (
       dto.status === PackingTaskStatus.COMPLETED &&
       existingTask.status !== PackingTaskStatus.COMPLETED
     ) {
       updateData.completedAt = new Date();
+      // Если не указано completedQuantity, считаем что выполнено полностью
+      if (dto.completedQuantity === undefined) {
+        updateData.completedQuantity = existingTask.assignedQuantity.toNumber();
+      }
     }
 
     // Если статус меняется с COMPLETED на другой, сбрасываем время завершения
@@ -682,18 +709,22 @@ export class PackingTaskManagementService {
 
     if (tasks.length === 0) {
       newStatus = PackageStatus.NOT_PROCESSED;
-    } else if (
-      tasks.every((task) => task.status === PackingTaskStatus.COMPLETED)
-    ) {
-      newStatus = PackageStatus.COMPLETED;
-    } else if (
-      tasks.some((task) => task.status === PackingTaskStatus.IN_PROGRESS)
-    ) {
-      newStatus = PackageStatus.IN_PROGRESS;
-    } else if (
-      tasks.some((task) => task.status === PackingTaskStatus.PENDING)
-    ) {
-      newStatus = PackageStatus.PENDING;
+    } else {
+      // Подсчитываем общее количество и выполненное
+      const totalAssigned = tasks.reduce((sum, task) => sum + task.assignedQuantity.toNumber(), 0);
+      const totalCompleted = tasks.reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0);
+      const packageQuantity = packageData.quantity.toNumber();
+      
+      // Проверяем, выполнена ли вся упаковка
+      if (totalCompleted >= packageQuantity) {
+        newStatus = PackageStatus.COMPLETED;
+      } else if (totalCompleted > 0) {
+        newStatus = PackageStatus.IN_PROGRESS;
+      } else if (tasks.some((task) => task.status === PackingTaskStatus.IN_PROGRESS)) {
+        newStatus = PackageStatus.IN_PROGRESS;
+      } else if (tasks.some((task) => task.status === PackingTaskStatus.PENDING)) {
+        newStatus = PackageStatus.PENDING;
+      }
     }
 
     await prisma.package.update({
@@ -735,6 +766,8 @@ export class PackingTaskManagementService {
       priority: task.priority.toNumber(),
       assignedAt: task.assignedAt,
       completedAt: task.completedAt,
+      assignedQuantity: task.assignedQuantity?.toNumber() || 0,
+      completedQuantity: task.completedQuantity?.toNumber() || 0,
       package: {
         packageId: task.package.packageId,
         packageName: task.package.packageName,

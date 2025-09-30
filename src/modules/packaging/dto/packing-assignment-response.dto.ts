@@ -52,6 +52,8 @@ export interface PackingAssignmentResponseDto {
   priority: number;
   assignedAt: Date;
   completedAt?: Date;
+  assignedQuantity: number;
+  completedQuantity: number;
   
   // Связанные данные
   package: PackageInfo;

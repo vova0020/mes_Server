@@ -242,6 +242,7 @@ model Package {
   /// Назначения поддонов на упаковки
   palletAssignments PalletPackageAssignment[]
 
+
   @@map("packages")
 }
 
@@ -672,6 +673,7 @@ model Machine {
   /// Рекламации на данном станке
   reclamations          Reclamation[]
 
+
   @@map("machines")
 }
 
@@ -924,6 +926,12 @@ model PackingTask {
   assignedAt  DateTime          @map("assigned_at")
   /// Время завершения задачи (если есть)
   completedAt DateTime?         @map("completed_at")
+  
+  // === Поля для частичного выполнения ===
+  /// Назначенное количество для выполнения
+  assignedQuantity   Decimal @default(0) @map("assigned_quantity")
+  /// Выполненное количество
+  completedQuantity  Decimal @default(0) @map("completed_quantity")
 
   // связи:
   /// Ссылка на упаковочную единицу заказа
@@ -1075,6 +1083,8 @@ model PackageDetailDirectory {
   @@id([packageId, detailId])
   @@map("package_detail_directory")
 }
+
+
 
 // ========================================
 // Дополнительные модели для отслеживания прогресса

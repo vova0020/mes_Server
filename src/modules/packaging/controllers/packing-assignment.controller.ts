@@ -19,6 +19,7 @@ import {
   UpdatePackingAssignmentDto,
   PackingAssignmentQueryDto,
 } from '../dto/packing-assignment.dto';
+
 import {
   PackingAssignmentResponseDto,
   PackingAssignmentListResponseDto,
@@ -48,6 +49,8 @@ export class PackingAssignmentController {
       stageIdNum,
     );
   }
+
+
 
   // Создание нового назначения задания на станок упаковки
   @Post()

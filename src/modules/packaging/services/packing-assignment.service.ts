@@ -134,6 +134,8 @@ export class PackingAssignmentService {
     }
   }
 
+
+
   // Создание нового назначения задания на станок упаковки или обновление существующего
   async createAssignment(
     dto: CreatePackingAssignmentDto,
@@ -171,18 +173,11 @@ export class PackingAssignmentService {
       }
     }
 
-    // Проверяем готовность упаковки к назначению
-    const readyForPackaging = await this.checkPackageReadiness(dto.packageId);
-    if (readyForPackaging < productionPackage.quantity.toNumber()) {
-      throw new BadRequestException(
-        `Упаковка не готова к назначению. Готово: ${readyForPackaging}, требуется: ${productionPackage.quantity.toNumber()}`,
-      );
-    }
-
-    // Ищем существующее задание для этого пакета (независимо от станка)
-    const existingTask = await this.prisma.packingTask.findFirst({
+    // Ищем существующее задание на том же станке для той же упаковки
+    const existingTaskOnMachine = await this.prisma.packingTask.findFirst({
       where: {
         packageId: dto.packageId,
+        machineId: dto.machineId,
         status: {
           in: [
             PackingTaskStatus.NOT_PROCESSED,
@@ -207,17 +202,46 @@ export class PackingAssignmentService {
       },
     });
 
-    if (existingTask) {
-      // Если задание существует, обновляем его
+    const requestedQuantity = dto.assignedQuantity ?? productionPackage.quantity.toNumber();
+
+    if (existingTaskOnMachine) {
+      // Обновляем существующее задание - прибавляем количество
+      const newAssignedQuantity = existingTaskOnMachine.assignedQuantity.toNumber() + requestedQuantity;
+      
+      // Проверяем общий лимит
+      const allTasks = await this.prisma.packingTask.findMany({
+        where: {
+          packageId: dto.packageId,
+          taskId: { not: existingTaskOnMachine.taskId },
+          status: {
+            in: [
+              PackingTaskStatus.NOT_PROCESSED,
+              PackingTaskStatus.PENDING,
+              PackingTaskStatus.IN_PROGRESS,
+              PackingTaskStatus.PARTIALLY_COMPLETED,
+            ],
+          },
+        },
+      });
+      
+      const otherTasksTotal = allTasks.reduce(
+        (sum, task) => sum + task.assignedQuantity.toNumber(),
+        0,
+      );
+      
+      if (otherTasksTotal + newAssignedQuantity > productionPackage.quantity.toNumber()) {
+        throw new BadRequestException(
+          `Превышено количество упаковки. Уже назначено на другие станки: ${otherTasksTotal}, на данном станке: ${existingTaskOnMachine.assignedQuantity.toNumber()}, запрашивается добавить: ${requestedQuantity}, доступно: ${productionPackage.quantity.toNumber()}`,
+        );
+      }
+
       const updatedTask = await this.prisma.packingTask.update({
-        where: { taskId: existingTask.taskId },
+        where: { taskId: existingTaskOnMachine.taskId },
         data: {
-          machineId: dto.machineId, // Обновляем станок
-          assignedTo: dto.assignedTo, // Обновляем назначенного пользователя
-          priority: dto.priority ?? existingTask.priority.toNumber(), // Обновляем приоритет или оставляем старый
-          status: PackingTaskStatus.PENDING, // Сбрасываем статус на PENDING
-          assignedAt: new Date(), // Обновляем время назначения
-          completedAt: null, // Сбрасываем время завершения
+          assignedQuantity: newAssignedQuantity,
+          assignedTo: dto.assignedTo ?? existingTaskOnMachine.assignedTo,
+          priority: dto.priority ?? existingTaskOnMachine.priority.toNumber(),
+          assignedAt: new Date(),
         },
         include: {
           package: {
@@ -239,7 +263,34 @@ export class PackingAssignmentService {
 
       return this.mapToResponseDto(updatedTask);
     } else {
-      // Если задания нет, создаем новое
+      // Проверяем общее назначенное количество для новой записи
+      const existingTasks = await this.prisma.packingTask.findMany({
+        where: {
+          packageId: dto.packageId,
+          status: {
+            in: [
+              PackingTaskStatus.NOT_PROCESSED,
+              PackingTaskStatus.PENDING,
+              PackingTaskStatus.IN_PROGRESS,
+              PackingTaskStatus.PARTIALLY_COMPLETED,
+            ],
+          },
+        },
+      });
+
+      const totalAssigned = existingTasks.reduce(
+        (sum, task) => sum + task.assignedQuantity.toNumber(),
+        0,
+      );
+
+      if (totalAssigned + requestedQuantity > productionPackage.quantity.toNumber()) {
+        throw new BadRequestException(
+          `Превышено количество упаковки. Уже назначено: ${totalAssigned}, запрашивается: ${requestedQuantity}, доступно: ${productionPackage.quantity.toNumber()}`,
+        );
+      }
+
+      // Создаем новое задание
+      const assignedQty = dto.assignedQuantity ?? productionPackage.quantity.toNumber();
       const newTask = await this.prisma.packingTask.create({
         data: {
           packageId: dto.packageId,
@@ -248,6 +299,8 @@ export class PackingAssignmentService {
           status: PackingTaskStatus.PENDING,
           priority: dto.priority ?? 0,
           assignedAt: new Date(),
+          assignedQuantity: assignedQty,
+          completedQuantity: 0,
         },
         include: {
           package: {
@@ -267,7 +320,7 @@ export class PackingAssignmentService {
       // Обновляем статус упаковки
       await this.updatePackageStatus(dto.packageId);
 
-      // Отправляем WebSocket уведомление о событии
+      // Отправляем WebSocket уведомления
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -279,8 +332,6 @@ export class PackingAssignmentService {
         'package:event',
         { status: 'updated' },
       );
-
-      // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -394,10 +445,7 @@ export class PackingAssignmentService {
   }
 
   // Получение заданий по станку
-  async getAssignmentsByMachine(
-    machineId: number,
-  ): Promise<PackingAssignmentResponseDto[]> {
-    // Проверяем существование станка
+  async getAssignmentsByMachine(machineId: number): Promise<PackingAssignmentResponseDto[]> {
     const machine = await this.prisma.machine.findUnique({
       where: { machineId },
     });
@@ -409,11 +457,8 @@ export class PackingAssignmentService {
     const tasks = await this.prisma.packingTask.findMany({
       where: {
         machineId,
-        status: {
-          not: 'COMPLETED', // исключаем завершённые
-        },
+        status: { not: 'COMPLETED' },
       },
-      orderBy: [{ priority: 'desc' }, { assignedAt: 'asc' }],
       include: {
         package: {
           include: {
@@ -427,6 +472,7 @@ export class PackingAssignmentService {
           },
         },
       },
+      orderBy: [{ priority: 'desc' }, { assignedAt: 'asc' }],
     });
 
     return tasks.map((task) => this.mapToResponseDto(task));
@@ -520,7 +566,7 @@ export class PackingAssignmentService {
     if (!packageData) return 0;
 
     const totalPackages = packageData.quantity.toNumber();
-    
+
     // Получаем состав упаковки
     const composition = await this.prisma.packageComposition.findMany({
       where: { packageId },
@@ -641,6 +687,8 @@ export class PackingAssignmentService {
       priority: task.priority.toNumber(),
       assignedAt: task.assignedAt,
       completedAt: task.completedAt,
+      assignedQuantity: task.assignedQuantity?.toNumber() || 0,
+      completedQuantity: task.completedQuantity?.toNumber() || 0,
       package: {
         packageId: task.package.packageId,
         packageName: task.package.packageName,

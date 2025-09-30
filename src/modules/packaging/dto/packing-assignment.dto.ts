@@ -22,6 +22,11 @@ export class CreatePackingAssignmentDto {
   @IsNumber({}, { message: 'Приоритет должен быть числом' })
   @Min(0, { message: 'Приоритет не может быть отрицательным' })
   priority?: number = 0; // Приоритет задачи (по умолчанию 0)
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Количество должно быть числом' })
+  @Min(0.01, { message: 'Количество должно быть больше 0' })
+  assignedQuantity?: number; // Назначенное количество для выполнения
 }
 
 // DTO дл�� обновления статуса задания упаковки

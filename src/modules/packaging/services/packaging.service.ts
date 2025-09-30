@@ -411,71 +411,28 @@ export class PackagingService {
   }
 
   // Получение статистики упаковочных задач
-  private async getPackingStatistics(packageId: number, composition?: any[]) {
-    // Получаем данные упаковки
-    const packageData = await this.prisma.package.findUnique({
+  private async getPackingStatistics(packageId: number) {
+    // Получаем все задачи упаковки для данной упаковки
+    const packingTasks = await this.prisma.packingTask.findMany({
       where: { packageId },
       select: {
-        packingStatus: true,
-        quantity: true,
+        assignedQuantity: true,
+        completedQuantity: true,
+        status: true,
       },
     });
 
-    if (!packageData) {
-      return { distributed: 0, completed: 0 };
-    }
+    // Считаем распределенное количество как сумму всех назначенных
+    const distributed = packingTasks.reduce(
+      (sum, task) => sum + task.assignedQuantity.toNumber(),
+      0,
+    );
 
-    const totalQuantity = packageData.quantity.toNumber();
-
-    // Если composition не передан, используем старую логику
-    if (!composition) {
-      const packingTasks = await this.prisma.packingTask.findMany({
-        where: {
-          packageId,
-          status: {
-            in: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED'],
-          },
-        },
-      });
-      
-      const distributed = packingTasks.length > 0 ? totalQuantity : 0;
-      const completed = packageData.packingStatus === 'COMPLETED' ? totalQuantity : 0;
-      
-      return { distributed, completed };
-    }
-
-    // Новая логика с composition - distributed на основе назначенных поддонов
-    let minDistributedPackages = Infinity;
-    
-    for (const comp of composition) {
-      const totalRequired = comp.quantity.toNumber();
-      const requiredPerPackage = totalRequired / totalQuantity;
-
-      const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
-        where: {
-          packageId,
-          pallet: {
-            part: {
-              partCode: comp.partCode
-            }
-          }
-        },
-        select: {
-          quantity: true
-        }
-      });
-
-      const totalAssignedQuantity = assignedPallets.reduce(
-        (sum, assignment) => sum + assignment.quantity.toNumber(),
-        0
-      );
-
-      const distributedForThisPart = Math.floor(totalAssignedQuantity / requiredPerPackage);
-      minDistributedPackages = Math.min(minDistributedPackages, distributedForThisPart);
-    }
-
-    const distributed = minDistributedPackages === Infinity ? 0 : minDistributedPackages;
-    const completed = packageData.packingStatus === 'COMPLETED' ? totalQuantity : 0;
+    // Считаем выполненное количество как сумму всех выполненных
+    const completed = packingTasks.reduce(
+      (sum, task) => sum + task.completedQuantity.toNumber(),
+      0,
+    );
 
     return {
       distributed,

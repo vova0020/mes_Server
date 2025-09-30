@@ -18,6 +18,12 @@ export class MoveTaskToMachineDto {
 export class UpdateTaskStatusDto {
   @IsEnum(PackingTaskStatus, { message: 'Неверный статус задания' })
   status: PackingTaskStatus;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Выполненное количество должно быть числом' })
+  @Min(0, { message: 'Выполненное количество не может быть отрицательным' })
+  @Type(() => Number)
+  completedQuantity?: number;
 }
 
 // DTO для назачения пользователя на задание
@@ -48,4 +54,10 @@ export class CompleteTaskDto {
   @IsInt({ message: 'ID станка должен быть числом' })
   @Type(() => Number)
   machineId: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Выполненное количество должно быть числом' })
+  @Min(0.01, { message: 'Выполненное количество должно быть больше 0' })
+  @Type(() => Number)
+  completedQuantity?: number;
 }
