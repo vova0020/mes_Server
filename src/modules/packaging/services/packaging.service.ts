@@ -91,6 +91,7 @@ export class PackagingService {
             pkg.packageId,
             pkg.productionPackageParts,
             totalQuantity,
+            pkg.orderId,
           );
         
         const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
@@ -227,6 +228,7 @@ export class PackagingService {
             pkg.packageId,
             pkg.productionPackageParts,
             totalQuantity,
+            pkg.orderId,
           );
         
         const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
@@ -302,6 +304,7 @@ export class PackagingService {
     packageId: number,
     packageParts: any[],
     totalPackages: number,
+    orderId: number,
   ) {
     // Получаем состав упаковки из package_composition
     const composition = await this.prisma.packageComposition.findMany({
@@ -336,25 +339,59 @@ export class PackagingService {
 
       if (!lastNonFinalStage) continue;
 
-      // Получаем поддоны по partCode, которые завершили все этапы маршрута
+      // Получаем поддоны по partCode, которые завершили ВСЕ этапы маршрута
+      const allNonFinalStageIds = nonFinalStages.map(rs => rs.routeStageId);
+      
       const completedPallets = await this.prisma.pallet.findMany({
         where: {
           part: {
-            partCode: comp.partCode
+            partCode: comp.partCode,
+            productionPackageParts: {
+              some: {
+                package: {
+                  orderId
+                }
+              }
+            }
           },
+          // Проверяем, что поддон завершил ВСЕ не-финальные этапы
           palletStageProgress: {
-            some: {
-              routeStageId: lastNonFinalStage.routeStageId,
-              status: 'COMPLETED',
-            },
-          },
+            every: {
+              OR: [
+                {
+                  routeStageId: { notIn: allNonFinalStageIds }
+                },
+                {
+                  AND: [
+                    { routeStageId: { in: allNonFinalStageIds } },
+                    { status: 'COMPLETED' }
+                  ]
+                }
+              ]
+            }
+          }
         },
-        select: {
-          quantity: true,
-        },
+        include: {
+          palletStageProgress: {
+            where: {
+              routeStageId: { in: allNonFinalStageIds }
+            }
+          }
+        }
+      });
+      
+      // Фильтруем поддоны, которые действительно завершили все этапы
+      const fullyCompletedPallets = completedPallets.filter(pallet => {
+        const completedStages = pallet.palletStageProgress
+          .filter(progress => progress.status === 'COMPLETED')
+          .map(progress => progress.routeStageId);
+        
+        return allNonFinalStageIds.every(stageId => 
+          completedStages.includes(stageId)
+        );
       });
 
-      const totalCompletedQuantity = completedPallets.reduce(
+      const totalCompletedQuantity = fullyCompletedPallets.reduce(
         (sum, pallet) => sum + pallet.quantity.toNumber(),
         0,
       );
@@ -422,9 +459,9 @@ export class PackagingService {
       },
     });
 
-    // Считаем распределенное количество как сумму всех назначенных
+    // Считаем распределенное количество как назначенное минус выполненное
     const distributed = packingTasks.reduce(
-      (sum, task) => sum + task.assignedQuantity.toNumber(),
+      (sum, task) => sum + (task.assignedQuantity.toNumber() - task.completedQuantity.toNumber()),
       0,
     );
 

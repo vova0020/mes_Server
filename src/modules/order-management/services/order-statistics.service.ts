@@ -27,6 +27,7 @@ export class OrderStatisticsService {
                         palletStageProgress: {
                           include: { routeStage: { include: { stage: true } } },
                         },
+                        packageAssignments: true,
                       },
                     },
                     partRouteProgress: {
@@ -78,9 +79,13 @@ export class OrderStatisticsService {
                     // Если деталь полностью прошла этап - 100%
                     completionPercentage = 100;
                   } else {
-                    // Иначе считаем по поддонам
+                    // Иначе считаем по поддонам (используем originalQuantity если есть)
                     const totalQuantityOnPallets = part.pallets.reduce(
-                      (sum, pallet) => sum + Number(pallet.quantity),
+                      (sum, pallet) => {
+                        // Используем originalQuantity из назначений или текущее количество
+                        const originalQty = pallet.packageAssignments?.[0]?.originalQuantity;
+                        return sum + Number(originalQty || pallet.quantity);
+                      },
                       0,
                     );
                     const completedQuantity = part.pallets.reduce(
@@ -88,10 +93,11 @@ export class OrderStatisticsService {
                         const palletProgress = pallet.palletStageProgress?.find(
                           (p) => p.routeStageId === rs.routeStageId,
                         );
+                        const originalQty = pallet.packageAssignments?.[0]?.originalQuantity;
                         return (
                           sum +
                           (palletProgress?.completedAt
-                            ? Number(pallet.quantity)
+                            ? Number(originalQty || pallet.quantity)
                             : 0)
                         );
                       },
@@ -218,10 +224,19 @@ export class OrderStatisticsService {
                 'NOT_STARTED';
 
               if (rs.stage.finalStage) {
-                // Для финального этапа (упаковка) проверяем назначение поддона на упаковку
-                const isAssignedToPacking =
-                  pallet.packageAssignments?.length > 0;
-                status = isAssignedToPacking ? 'COMPLETED' : 'NOT_STARTED';
+                // Для финального этапа (упаковка) проверяем статус упаковки
+                const assignedPackage = pallet.packageAssignments?.find(assignment => 
+                  order.packages.some(pkg => pkg.packageId === assignment.packageId)
+                );
+                if (assignedPackage) {
+                  const packageStatus = order.packages.find(pkg => 
+                    pkg.packageId === assignedPackage.packageId
+                  )?.packingStatus;
+                  status = packageStatus === 'COMPLETED' ? 'COMPLETED' : 
+                          packageStatus === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'NOT_STARTED';
+                } else {
+                  status = 'NOT_STARTED';
+                }
               } else {
                 // Для обычных этапов проверяем прогресс
                 const progress = pallet.palletStageProgress?.find(
@@ -266,16 +281,20 @@ export class OrderStatisticsService {
             } else {
               // Для обычных этапов считаем по поддонам
               const totalQuantityOnPallets = part.pallets.reduce(
-                (sum, pallet) => sum + Number(pallet.quantity),
+                (sum, pallet) => {
+                  const originalQty = pallet.packageAssignments?.[0]?.originalQuantity;
+                  return sum + Number(originalQty || pallet.quantity);
+                },
                 0,
               );
               const completedQuantity = part.pallets.reduce((sum, pallet) => {
                 const palletProgress = pallet.palletStageProgress?.find(
                   (p) => p.routeStageId === rs.routeStageId,
                 );
+                const originalQty = pallet.packageAssignments?.[0]?.originalQuantity;
                 return (
                   sum +
-                  (palletProgress?.completedAt ? Number(pallet.quantity) : 0)
+                  (palletProgress?.completedAt ? Number(originalQty || pallet.quantity) : 0)
                 );
               }, 0);
 
@@ -335,7 +354,10 @@ export class OrderStatisticsService {
 
     parts.forEach((part) => {
       const totalQuantityOnPallets = part.pallets.reduce(
-        (sum, pallet) => sum + Number(pallet.quantity),
+        (sum, pallet) => {
+          const originalQty = pallet.packageAssignments?.[0]?.originalQuantity;
+          return sum + Number(originalQty || pallet.quantity);
+        },
         0,
       );
 

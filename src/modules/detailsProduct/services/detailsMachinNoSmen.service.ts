@@ -47,6 +47,7 @@ export class DetailsMachinNoSmenService {
     const packages = await this.prisma.package.findMany({
       where: { orderId },
       include: {
+        composition: true,
         productionPackageParts: {
           include: {
             part: {
@@ -191,11 +192,17 @@ export class DetailsMachinNoSmenService {
             }
           }
 
+          // Получаем материал из PackageComposition для данной детали
+          const compositionItem = packageItem.composition.find(
+            (comp) => comp.partCode === part.partCode
+          );
+          const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
+
           detailsMap.set(part.partId, {
             id: part.partId,
             article: part.partCode,
             name: part.partName,
-            material: part.material?.materialName || 'Не указан',
+            material: materialName,
             size: part.size,
             totalNumber: Number(packagePart.quantity),
             isCompletedForSegment:

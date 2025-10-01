@@ -278,8 +278,14 @@ model PackageComposition {
   edgingNameW1        String? @map("edging_name_w1")
   /// Наименование облицовки кромки [W2]
   edgingNameW2        String? @map("edging_name_w2")
-  /// Количество данной детали в упаковке
+  /// Общее количество данной детали в заказе (quantity * quantityPerPackage)
   quantity            Decimal
+  /// Количество данной детали на 1 упаковку (фиксируется при создании заказа)
+  quantityPerPackage  Decimal @map("quantity_per_package")
+  /// Наименование материала (фиксируется при создании заказа)
+  materialName        String  @map("material_name")
+  /// Артикул материала (фиксируется при создании заказа)
+  materialSku         String  @map("material_sku")
 
   // связи:
   /// Ссылка на упаковку
@@ -424,6 +430,8 @@ model Pallet {
   palletName String  @map("pallet_name")
   /// Количество таких деталей на поддоне
   quantity   Decimal @map("quantity")
+  /// Флаг активности поддона (false = логически удален)
+  isActive   Boolean @default(true) @map("is_active")
 
   // связи:
   /// Ссылка на деталь
@@ -443,6 +451,42 @@ model Pallet {
 
   @@map("pallets")
 }
+
+/// Перечисление статусов назначения поддона на упаковку
+enum PalletAssignmentStatus {
+  ASSIGNED    // Назначен на упаковку
+  IN_PROGRESS // В процессе упаковки
+  COMPLETED   // Упаковка завершена
+  CANCELLED   // Назначение отменено
+}
+
+/// Таблица pallet_package_assignments: назначения поддонов на упаковки
+model PalletPackageAssignment {
+  /// Первичный ключ записи
+  assignmentId Int      @id @default(autoincrement()) @map("assignment_id")
+  /// Внешний ключ на поддон
+  palletId     Int      @map("pallet_id")
+  /// Внешний ключ на упаковку
+  packageId    Int      @map("package_id")
+  /// Количество деталей с поддона для упаковки
+  quantity     Decimal
+  /// Исходное количество на поддоне на момент назначения (для статистики)
+  originalQuantity Decimal @default(0) @map("original_quantity")
+  /// Использованное количество при упаковке
+  usedQuantity Decimal @default(0) @map("used_quantity")
+  /// Статус назначения
+  status       PalletAssignmentStatus @default(ASSIGNED)
+  /// Время назначения
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  // связи:
+  /// Ссылка на поддон
+  pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+  /// Ссылка на упаковку
+  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+
+  @@map("pallet_package_assignments")
+} 
 
 // ========================================
 // 3. Модуль буферов
@@ -1164,26 +1208,7 @@ model MachineAssignment {
   @@map("machine_assignments")
 }
 
-/// Назначения поддонов на упаковки (для отслеживания какие поддоны изъяты для конкретной упаковки)
-model PalletPackageAssignment {
-  /// Уникальный идентификатор назначения
-  assignmentId Int      @id @default(autoincrement()) @map("assignment_id")
-  /// Ссылка на поддон
-  palletId     Int      @map("pallet_id")
-  /// Ссылка на упаковку
-  packageId    Int      @map("package_id")
-  /// Количество деталей из поддона, назначенных на упаковку
-  quantity     Decimal  @map("quantity")
-  /// Время назначения
-  assignedAt   DateTime @default(now()) @map("assigned_at")
 
-  // связи:
-  pallet  Pallet  @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
-  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
-
-  @@unique([palletId, packageId])
-  @@map("pallet_package_assignments")
-}
 
 /// Назначения деталей на станок с указанием приоритета
 model PartMachineAssignment {
@@ -1286,26 +1311,7 @@ model ReclamationAttachment {
   @@map("reclamation_attachments")
 }
 
-/// Журнал изменений запасов
-model InventoryMovement {
-  movementId          Int      @id @default(autoincrement()) @map("movement_id")
-  partId              Int      @map("part_id")
-  palletId            Int?     @map("pallet_id")
-  deltaQuantity       Decimal  @map("delta_quantity")
-  reason              String   @map("reason")
-  sourceReclamationId Int?     @map("source_reclamation_id")
-  userId              Int?     @map("user_id")
-  createdAt           DateTime @default(now()) @map("created_at")
 
-  part         Part?        @relation(fields: [partId], references: [partId])
-  pallet       Pallet?      @relation(fields: [palletId], references: [palletId])
-  sourceReclam Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
-
-  @@index([partId])
-  @@index([palletId])
-  @@index([sourceReclamationId])
-  @@map("inventory_movements")
-}
 
 /// Расширенный лог действий с рекламациями
 model ReclamationAudit {
@@ -1320,4 +1326,37 @@ model ReclamationAudit {
 
   @@index([reclamationId])
   @@map("reclamation_audit")
+}
+
+/// Таблица inventory_movements: движения запасов
+model InventoryMovement {
+  /// Первичный ключ записи
+  movementId          Int      @id @default(autoincrement()) @map("movement_id")
+  /// Внешний ключ на деталь
+  partId              Int      @map("part_id")
+  /// Внешний ключ на поддон (опционально)
+  palletId            Int?     @map("pallet_id")
+  /// Изменение количества (может быть отрицательным)
+  deltaQuantity       Decimal  @map("delta_quantity")
+  /// Причина движения
+  reason              String   @map("reason")
+  /// Источник рекламации (опционально)
+  sourceReclamationId Int?     @map("source_reclamation_id")
+  /// Пользователь, создавший запись (опционально)
+  userId              Int?     @map("user_id")
+  /// Время движения
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  // связи:
+  /// Ссылка на деталь
+  part         Part?        @relation(fields: [partId], references: [partId])
+  /// Ссылка на поддон (опционально)
+  pallet       Pallet?      @relation(fields: [palletId], references: [palletId])
+  /// Ссылка на рекламацию (опционально)
+  sourceReclam Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
+
+  @@index([partId])
+  @@index([palletId])
+  @@index([sourceReclamationId])
+  @@map("inventory_movements")
 }

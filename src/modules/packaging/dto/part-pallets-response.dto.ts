@@ -36,6 +36,7 @@ export interface PalletDetailDto {
   palletId: number;
   palletName: string;
   quantity: number;
+  availableQuantity: number;
   status: string;
   assignedToPackage: boolean;
   currentCell?: BufferCellInfoDto;

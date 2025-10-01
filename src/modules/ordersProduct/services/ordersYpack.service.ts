@@ -50,6 +50,7 @@ export class OrdersYpackService {
                 },
               },
             },
+            packingTasks: true,
           },
         },
       },
@@ -96,11 +97,43 @@ export class OrdersYpackService {
 
           if (!hasStage) return;
 
-          // Если упаковка имеет статус COMPLETED, считаем её выполненной
-          if (pkg.packingStatus === 'COMPLETED') {
-            completedPackages += packageQuantity;
-          }
+          // Рассчитываем выполненное количество для данной упаковки
+          let packageCompletedCount = 0;
+          
+          // Проверяем все детали в упаковке на выполнение на указанном этапе
+          allPartsInPackage.forEach(({ part }) => {
+            const routeStages = part.route.routeStages;
+            const stageIndex = routeStages.findIndex(
+              (rs) => rs.stage.stageId === stageId,
+            );
 
+            if (stageIndex !== -1) {
+              const currentStage = routeStages[stageIndex];
+              
+              // Проверяем выполнение через поддоны или прогресс детали
+              if (part.pallets && part.pallets.length > 0) {
+                const completedPallets = part.pallets.filter((pallet) => {
+                  const palletProgress = pallet.palletStageProgress.find(
+                    (p) => p.routeStageId === currentStage.routeStageId,
+                  );
+                  return palletProgress && palletProgress.status === 'COMPLETED';
+                });
+                
+                if (completedPallets.length > 0) {
+                  packageCompletedCount = packageQuantity;
+                }
+              } else {
+                const partProgress = part.partRouteProgress.find(
+                  (p) => p.routeStageId === currentStage.routeStageId,
+                );
+                
+                if (partProgress && partProgress.status === 'COMPLETED') {
+                  packageCompletedCount = packageQuantity;
+                }
+              }
+            }
+          });
+          
           // Для доступности проверяем детали
           let anyPartAvailable = false;
           allPartsInPackage.forEach(({ part }) => {
@@ -142,9 +175,16 @@ export class OrdersYpackService {
           }
         });
 
+        // Считаем выполненное количество упаковок из packing_tasks
+        const completedPackagesCount = order.packages.reduce((sum, pkg) => {
+          return sum + (pkg.packingTasks || []).reduce((taskSum, task) => {
+            return taskSum + task.completedQuantity.toNumber();
+          }, 0);
+        }, 0);
+
         // Рассчитываем проценты
         available = totalPackages > 0 ? Math.round((availablePackages / totalPackages) * 100) : 0;
-        completed = totalPackages > 0 ? Math.round((completedPackages / totalPackages) * 100) : 0;
+        completed = totalPackages > 0 ? Math.round((completedPackagesCount / totalPackages) * 100) : 0;
 
         return {
           id: order.orderId,

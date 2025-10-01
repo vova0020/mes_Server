@@ -123,17 +123,20 @@ export class ProductionOrdersService {
               partCode: detailDirectory.partSku,
               partName: detailDirectory.partName,
               partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
-              routeId: packageDetail.routeId || 1, // Используем маршрут из справочника или дефолтный
-              quantity: packageDetail.quantity * packageDto.quantity, // Общее количество с учетом количества упаковок
-              thickness: detailDirectory.thickness, // Общее количество с учетом количества упаковок
-              thicknessWithEdging: detailDirectory.thicknessWithEdging, // Общее количество с учетом количества упаковок
-              finishedLength: detailDirectory.finishedLength, // Общее количество с учетом количества упаковок
-              finishedWidth: detailDirectory.finishedWidth, // Общее количество с учетом количества упаковок
-              groove: detailDirectory.groove, // Общее количество с учетом количества упаковок
-              edgingNameL1: detailDirectory.edgingNameL1, // Общее количество с учетом количества упаковок
-              edgingNameL2: detailDirectory.edgingNameL2, // Общее количество с учетом количества упаковок
-              edgingNameW1: detailDirectory.edgingNameW1, // Общее количество с учетом количества упаковок
-              edgingNameW2: detailDirectory.edgingNameW2, // Общее количество с учетом количества упаковок
+              routeId: packageDetail.routeId || 1,
+              quantity: packageDetail.quantity * packageDto.quantity, // Общее количество в заказе
+              quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
+              materialName: detailDirectory.materialName,
+              materialSku: detailDirectory.materialSku,
+              thickness: detailDirectory.thickness,
+              thicknessWithEdging: detailDirectory.thicknessWithEdging,
+              finishedLength: detailDirectory.finishedLength,
+              finishedWidth: detailDirectory.finishedWidth,
+              groove: detailDirectory.groove,
+              edgingNameL1: detailDirectory.edgingNameL1,
+              edgingNameL2: detailDirectory.edgingNameL2,
+              edgingNameW1: detailDirectory.edgingNameW1,
+              edgingNameW2: detailDirectory.edgingNameW2,
             },
           });
         }
@@ -356,8 +359,11 @@ export class ProductionOrdersService {
                 partCode: detailDirectory.partSku,
                 partName: detailDirectory.partName,
                 partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
-                routeId: packageDetail.routeId || 1, // Используем маршрут из справочника или дефолтный
-                quantity: packageDetail.quantity * packageDto.quantity, // Общее количество с учетом количества упаковок
+                routeId: packageDetail.routeId || 1,
+                quantity: packageDetail.quantity * packageDto.quantity, // Общее количество в заказе
+                quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
+                materialName: detailDirectory.materialName,
+                materialSku: detailDirectory.materialSku,
               },
             });
           }

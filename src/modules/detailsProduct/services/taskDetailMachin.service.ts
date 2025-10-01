@@ -42,6 +42,7 @@ export class TaskDetailService {
                     package: {
                       include: {
                         order: true,
+                        composition: true,
                       },
                     },
                   },
@@ -130,6 +131,7 @@ export class TaskDetailService {
                           package: {
                             include: {
                               order: true,
+                              composition: true,
                             },
                           },
                         },
@@ -163,6 +165,13 @@ export class TaskDetailService {
       const order = part.productionPackageParts[0]?.package.order;
       if (!order) continue;
 
+      // Получаем материал из PackageComposition
+      const packageComposition = part.productionPackageParts[0]?.package.composition;
+      const compositionItem = packageComposition?.find(
+        (comp) => comp.partCode === part.partCode
+      );
+      const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
+
       // Находим актуальный прогресс для этого поддона
       const latestProgress = assignment.pallet.palletStageProgress[0];
 
@@ -182,7 +191,7 @@ export class TaskDetailService {
             id: part.partId,
             article: part.partCode,
             name: part.partName,
-            material: part.material?.materialName || 'Не указан',
+            material: materialName,
             size: part.size,
             totalNumber: Number(part.totalQuantity),
           },
@@ -205,6 +214,13 @@ export class TaskDetailService {
       const order = part.productionPackageParts[0]?.package.order;
       if (!order) continue;
 
+      // Получаем материал из PackageComposition
+      const packageComposition = part.productionPackageParts[0]?.package.composition;
+      const compositionItem = packageComposition?.find(
+        (comp) => comp.partCode === part.partCode
+      );
+      const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
+
       if (!detailMap.has(partId)) {
         detailMap.set(partId, {
           operationId: progress.pspId,
@@ -220,7 +236,7 @@ export class TaskDetailService {
             id: part.partId,
             article: part.partCode,
             name: part.partName, 
-            material: part.material?.materialName || 'Не указан',
+            material: materialName,
             size: part.size,
             totalNumber: Number(part.totalQuantity),
           },

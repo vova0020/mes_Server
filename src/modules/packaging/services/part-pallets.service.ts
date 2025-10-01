@@ -19,11 +19,12 @@ export class PartPalletsService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) { } 
+  ) {}
 
   // Получение поддонов по ID детали
   async getPalletsByPartId(
     partId: number,
+    packageId?: number,
     query?: PartPalletsQueryDto,
   ): Promise<PartPalletsResponseDto> {
     // Сначала проверяем, существует ли деталь
@@ -76,7 +77,10 @@ export class PartPalletsService {
     const { page = 1, limit = 10 } = query || {};
 
     const palletsRaw = await this.prisma.pallet.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        isActive: true,
+      },
       orderBy: { palletId: 'asc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -92,6 +96,9 @@ export class PartPalletsService {
         packageAssignments: {
           select: {
             assignmentId: true,
+            packageId: true,
+            quantity: true,
+            usedQuantity: true,
           },
         },
         palletBufferCells: {
@@ -170,49 +177,72 @@ export class PartPalletsService {
 
     // Получаем общее количество поддонов для пагинации
     const totalPallets = await this.prisma.pallet.count({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        isActive: true,
+      },
     });
 
-    // Преобразуем данные
+    // Преобразуем данные - показываем все поддоны
     const pallets: PalletDetailDto[] = filteredPallets.map((pallet) => {
-      const currentBufferCell = pallet.palletBufferCells[0];
+        const currentBufferCell = pallet.palletBufferCells[0];
 
-      return {
-        palletId: pallet.palletId,
-        palletName: pallet.palletName,
-        quantity: pallet.quantity.toNumber(),
-        status: pallet.part.status as string,
-        assignedToPackage: pallet.packageAssignments.length > 0,
-        currentCell: currentBufferCell
-          ? {
-            cellId: currentBufferCell.cell.cellId,
-            cellCode: currentBufferCell.cell.cellCode,
-            status: currentBufferCell.cell.status as string,
-            capacity: currentBufferCell.cell.capacity.toNumber(),
-            currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
-            buffer: {
-              bufferId: currentBufferCell.cell.buffer.bufferId,
-              bufferName: currentBufferCell.cell.buffer.bufferName,
-              location: currentBufferCell.cell.buffer.location,
-            },
-          }
-          : undefined,
-        placedAt: currentBufferCell?.placedAt,
-        machineAssignments: pallet.machineAssignments.map((assignment) => ({
-          assignmentId: assignment.assignmentId,
-          machineId: assignment.machineId,
-          machineName: assignment.machine.machineName,
-          assignedAt: assignment.assignedAt,
-          completedAt: assignment.completedAt || undefined,
-        })),
-        stageProgress: pallet.palletStageProgress.map((progress) => ({
-          routeStageId: progress.routeStageId,
-          stageName: progress.routeStage.stage.stageName,
-          status: progress.status as string,
-          completedAt: progress.completedAt || undefined,
-        })),
-      };
-    });
+        // Проверяем, есть ли назначение для конкретной упаковки
+        const packageAssignment = packageId
+          ? pallet.packageAssignments.find((a) => a.packageId === packageId)
+          : null;
+
+        // Рассчитываем общее использованное количество
+        const totalUsed = pallet.packageAssignments.reduce(
+          (sum, assignment) => sum + assignment.usedQuantity.toNumber(),
+          0,
+        );
+
+        // Всегда показываем доступное количество (исходное минус использованное)
+        const availableQuantity = pallet.quantity.toNumber() - totalUsed;
+        const displayQuantity = availableQuantity;
+
+        return {
+          palletId: pallet.palletId,
+          palletName: pallet.palletName,
+          quantity: displayQuantity,
+          availableQuantity: availableQuantity,
+          status: packageAssignment 
+            ? 'AWAITING_PACKAGING' // Если назначен на эту упаковку
+            : 'PENDING', // Иначе доступен для назначения
+          assignedToPackage: packageAssignment
+            ? true
+            : pallet.packageAssignments.length > 0,
+          currentCell: currentBufferCell
+            ? {
+                cellId: currentBufferCell.cell.cellId,
+                cellCode: currentBufferCell.cell.cellCode,
+                status: currentBufferCell.cell.status as string,
+                capacity: currentBufferCell.cell.capacity.toNumber(),
+                currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
+                buffer: {
+                  bufferId: currentBufferCell.cell.buffer.bufferId,
+                  bufferName: currentBufferCell.cell.buffer.bufferName,
+                  location: currentBufferCell.cell.buffer.location,
+                },
+              }
+            : undefined,
+          placedAt: currentBufferCell?.placedAt,
+          machineAssignments: pallet.machineAssignments.map((assignment) => ({
+            assignmentId: assignment.assignmentId,
+            machineId: assignment.machineId,
+            machineName: assignment.machine.machineName,
+            assignedAt: assignment.assignedAt,
+            completedAt: assignment.completedAt || undefined,
+          })),
+          stageProgress: pallet.palletStageProgress.map((progress) => ({
+            routeStageId: progress.routeStageId,
+            stageName: progress.routeStage.stage.stageName,
+            status: progress.status as string,
+            completedAt: progress.completedAt || undefined,
+          })),
+        };
+      });
 
     const partInfoDto: PartInfoDto = {
       partId: partInfo.partId,
@@ -270,6 +300,8 @@ export class PartPalletsService {
         packageAssignments: {
           select: {
             assignmentId: true,
+            quantity: true,
+            usedQuantity: true,
           },
         },
         palletBufferCells: {
@@ -346,25 +378,33 @@ export class PartPalletsService {
 
     const currentBufferCell = palletRaw.palletBufferCells[0];
 
+    // Рассчитываем доступное количество с учетом usedQuantity
+    const totalUsed = palletRaw.packageAssignments.reduce(
+      (sum, assignment) => sum + assignment.usedQuantity.toNumber(),
+      0,
+    );
+    const availableQuantity = palletRaw.quantity.toNumber() - totalUsed;
+
     return {
       palletId: palletRaw.palletId,
       palletName: palletRaw.palletName,
-      quantity: palletRaw.quantity.toNumber(),
+      quantity: availableQuantity,
+      availableQuantity: availableQuantity,
       status: palletRaw.part.status as string,
       assignedToPackage: palletRaw.packageAssignments.length > 0,
       currentCell: currentBufferCell
         ? {
-          cellId: currentBufferCell.cell.cellId,
-          cellCode: currentBufferCell.cell.cellCode,
-          status: currentBufferCell.cell.status as string,
-          capacity: currentBufferCell.cell.capacity.toNumber(),
-          currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
-          buffer: {
-            bufferId: currentBufferCell.cell.buffer.bufferId,
-            bufferName: currentBufferCell.cell.buffer.bufferName,
-            location: currentBufferCell.cell.buffer.location,
-          },
-        }
+            cellId: currentBufferCell.cell.cellId,
+            cellCode: currentBufferCell.cell.cellCode,
+            status: currentBufferCell.cell.status as string,
+            capacity: currentBufferCell.cell.capacity.toNumber(),
+            currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
+            buffer: {
+              bufferId: currentBufferCell.cell.buffer.bufferId,
+              bufferName: currentBufferCell.cell.buffer.bufferName,
+              location: currentBufferCell.cell.buffer.location,
+            },
+          }
         : undefined,
       placedAt: currentBufferCell?.placedAt,
       machineAssignments: palletRaw.machineAssignments.map((assignment) => ({
@@ -449,10 +489,37 @@ export class PartPalletsService {
     const pallet = await this.prisma.pallet.findUnique({
       where: { palletId },
       include: {
-        part: { select: { status: true } },
+        part: {
+          select: {
+            status: true,
+            route: {
+              select: {
+                routeStages: {
+                  select: {
+                    routeStageId: true,
+                    sequenceNumber: true,
+                    stage: {
+                      select: {
+                        finalStage: true,
+                        stageName: true,
+                      },
+                    },
+                  },
+                  orderBy: { sequenceNumber: 'asc' },
+                },
+              },
+            },
+          },
+        },
         palletBufferCells: {
           where: { removedAt: null },
           include: { cell: true },
+        },
+        palletStageProgress: {
+          select: {
+            routeStageId: true,
+            status: true,
+          },
         },
       },
     });
@@ -470,17 +537,39 @@ export class PartPalletsService {
       throw new NotFoundException(`Упаковка с ID ${packageId} не найдена`);
     }
 
-    // Проверяем, что поддон находится в ячейке
+    // Получаем текущую ячейку (может быть null если уже назначен)
     const currentCell = pallet.palletBufferCells[0];
-    if (!currentCell) {
-      throw new BadRequestException('Поддон не находится в ячейке буфера');
-    }
 
     // Проверяем количество
     if (quantity > pallet.quantity.toNumber()) {
       throw new BadRequestException(
         'Количество превышает доступное на поддоне',
       );
+    }
+
+    // Проверяем, что все предыдущие этапы перед финальным завершены
+    const route = pallet.part.route;
+    const nonFinalStages = route.routeStages.filter(
+      (stage) => !stage.stage.finalStage,
+    );
+
+    if (nonFinalStages.length > 0) {
+      const completedStages = pallet.palletStageProgress
+        .filter((progress) => progress.status === 'COMPLETED')
+        .map((progress) => progress.routeStageId);
+
+      const incompleteStages = nonFinalStages.filter(
+        (stage) => !completedStages.includes(stage.routeStageId),
+      );
+
+      if (incompleteStages.length > 0) {
+        const stageNames = incompleteStages
+          .map((stage) => stage.stage.stageName)
+          .join(', ');
+        throw new BadRequestException(
+          `Поддон не может быть назначен на упаковку. Не завершены этапы: ${stageNames}`,
+        );
+      }
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -490,27 +579,30 @@ export class PartPalletsService {
         data: { status: 'AWAITING_PACKAGING' },
       });
 
-      // Удаляем поддон из ячейки буфера
-      await tx.palletBufferCell.update({
-        where: { palletCellId: currentCell.palletCellId },
-        data: { removedAt: new Date() },
-      });
+      // Удаляем поддон из ячейки буфера (только если он там находится)
+      if (currentCell) {
+        await tx.palletBufferCell.update({
+          where: { palletCellId: currentCell.palletCellId },
+          data: { removedAt: new Date() },
+        });
 
-      // Обновляем загрузку ячейки
-      await tx.bufferCell.update({
-        where: { cellId: currentCell.cellId },
-        data: {
-          currentLoad: { decrement: pallet.quantity },
-          status: 'AVAILABLE',
-        },
-      });
+        // Обновляем загрузку ячейки
+        await tx.bufferCell.update({
+          where: { cellId: currentCell.cellId },
+          data: {
+            currentLoad: { decrement: pallet.quantity },
+            status: 'AVAILABLE',
+          },
+        });
+      }
 
-      // Создаем назначение поддона на упаковку
+      // Создаем назначение поддона на упаковку с сохранением исходного количества
       const assignment = await tx.palletPackageAssignment.create({
         data: {
           palletId,
           packageId,
           quantity,
+          originalQuantity: pallet.quantity, // Сохраняем исходное количество на поддоне
         },
       });
 

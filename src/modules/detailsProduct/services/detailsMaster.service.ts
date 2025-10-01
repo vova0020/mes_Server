@@ -161,6 +161,23 @@ export class DetailsMasterService {
     const packages = await this.prisma.package.findMany({
       where: { orderId },
       include: {
+        composition: {
+          include: {
+            route: {
+              include: {
+                routeStages: {
+                  include: {
+                    stage: true,
+                    substage: true,
+                  },
+                  orderBy: {
+                    sequenceNumber: 'asc',
+                  },
+                },
+              },
+            },
+          },
+        },
         productionPackageParts: {
           where: {
             part: {
@@ -489,11 +506,17 @@ export class DetailsMasterService {
           distributed = Math.min(distributed, Number(part.totalQuantity));
           completed = Math.min(completed, Number(part.totalQuantity));
 
+          // Получаем материал из PackageComposition для данной детали
+          const compositionItem = packageItem.composition.find(
+            (comp) => comp.partCode === part.partCode
+          );
+          const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
+
           detailsMap.set(part.partId, {
             id: part.partId,
             articleNumber: part.partCode,
             name: part.partName,
-            material: part.material?.materialName || 'Не указан',
+            material: materialName,
             size: part.size,
             totalQuantity: Number(part.totalQuantity),
             readyForProcessing,

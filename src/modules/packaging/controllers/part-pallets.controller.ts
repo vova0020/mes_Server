@@ -20,16 +20,22 @@ export class PartPalletsController {
   @Get('by-part/:partId')
   async getPalletsByPartId(
     @Param('partId') partId: string,
-    @Query() query: PartPalletsQueryDto,
+    @Query('packageId') packageId?: string,
+    @Query() query: Omit<PartPalletsQueryDto, 'packageId'> = {},
   ) {
     const partIdNum = Number(partId);
+    const packageIdNum = packageId ? Number(packageId) : undefined;
 
     if (isNaN(partIdNum) || partIdNum <= 0) {
       throw new BadRequestException('Некорректный ID детали');
     }
 
+    if (packageId && (isNaN(packageIdNum!) || packageIdNum! <= 0)) {
+      throw new BadRequestException('Некорректный ID упаковки');
+    }
+
     try {
-      return await this.partPalletsService.getPalletsByPartId(partIdNum, query);
+      return await this.partPalletsService.getPalletsByPartId(partIdNum, packageIdNum, query);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -93,7 +99,7 @@ export class PartPalletsController {
     try {
       return await this.partPalletsService.assignPalletToPackage(dto);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       throw new BadRequestException('Ошибка при назначении поддона на упаковку');
