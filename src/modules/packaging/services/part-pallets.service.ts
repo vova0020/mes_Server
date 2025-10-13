@@ -586,11 +586,11 @@ export class PartPalletsService {
           data: { removedAt: new Date() },
         });
 
-        // Обновляем загрузку ячейки
+        // Обновляем загрузку ячейки (вычитаем 1 поддон, а не количество деталей)
         await tx.bufferCell.update({
           where: { cellId: currentCell.cellId },
           data: {
-            currentLoad: { decrement: pallet.quantity },
+            currentLoad: { decrement: 1 },
             status: 'AVAILABLE',
           },
         });

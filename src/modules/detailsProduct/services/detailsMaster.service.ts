@@ -359,9 +359,9 @@ export class DetailsMasterService {
           // Получаем общее количество деталей из упаковки для этой детали
           const totalPartQuantity = Number(packagePart.quantity);
 
-          // Если поддонов нет - все totalQuantity готово к обработке
+          // Если поддонов нет - ничего не готово к обработке
           if (part.pallets.length === 0) {
-            readyForProcessing = Number(part.totalQuantity);
+            readyForProcessing = 0;
             distributed = 0;
             completed = 0;
           } else if (isFirstSegment) {
@@ -396,7 +396,9 @@ export class DetailsMasterService {
               }
             }
 
-            readyForProcessing = Math.max(0, Number(part.totalQuantity) - palletDistributed - palletCompleted);
+            // Для первого этапа готово к обработке только то, что есть на поддонах и не распределено/завершено
+            const totalOnPallets = part.pallets.reduce((sum, pallet) => sum + Number(pallet.quantity), 0);
+            readyForProcessing = Math.max(0, totalOnPallets - palletDistributed - palletCompleted);
             distributed = palletDistributed;
             completed = palletCompleted;
           } else {
@@ -480,6 +482,9 @@ export class DetailsMasterService {
                 } else if (isPreviousStagesCompleted) {
                   // Если предыдущие этапы завершены и никогда не было назначений - готов к обработке
                   readyForProcessing += palletQuantity;
+                } else {
+                  // Если предыдущие этапы не завершены - деталь не готова к обработке
+                  // Не добавляем в readyForProcessing
                 }
               }
             } else {
@@ -496,6 +501,9 @@ export class DetailsMasterService {
               } else if (isPreviousStagesCompleted) {
                 // Предыдущие этапы завершены и никогда не было назначений - готов к обработке
                 readyForProcessing += palletQuantity;
+              } else {
+                // Если предыдущие этапы не завершены - деталь не готова к обработке
+                // Не добавляем в readyForProcessing
               }
             }
           }

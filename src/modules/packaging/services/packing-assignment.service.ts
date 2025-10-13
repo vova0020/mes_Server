@@ -92,7 +92,6 @@ export class PackingAssignmentService {
         },
         include: {
           machine: true,
-          package: true,
         },
       });
 
@@ -100,14 +99,14 @@ export class PackingAssignmentService {
       const completedByMachine = completedTasks.reduce((acc, task) => {
         const machineId = task.machine.machineId;
         if (!acc[machineId]) acc[machineId] = 0;
-        acc[machineId] += task.package.quantity.toNumber();
+        acc[machineId] += task.completedQuantity.toNumber();
         return acc;
       }, {});
 
       // Формируем ответ
       const result = machines.map((machine) => {
         const plannedQuantity = machine.packingTasks.reduce(
-          (total, task) => total + task.package.quantity.toNumber(),
+          (total, task) => total + task.assignedQuantity.toNumber(),
           0,
         );
 

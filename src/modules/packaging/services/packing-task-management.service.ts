@@ -24,7 +24,7 @@ export class PackingTaskManagementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
-  ) { }
+  ) {}
 
   // Отметить задание как взято в работу
   async markTaskAsInProgress(
@@ -47,7 +47,10 @@ export class PackingTaskManagementService {
     }
 
     // Проверяем наличие достаточного количества деталей на поддонах
-    await this.checkAvailablePartsForTask(existingTask.packageId, existingTask.assignedQuantity.toNumber());
+    await this.checkAvailablePartsForTask(
+      existingTask.packageId,
+      existingTask.assignedQuantity.toNumber(),
+    );
 
     const updatedTask = await this.prisma.packingTask.update({
       where: { taskId },
@@ -151,7 +154,8 @@ export class PackingTaskManagementService {
       throw new BadRequestException('Задание уже завершено');
     }
 
-    const completedQty = dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+    const completedQty =
+      dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
 
     if (completedQty > existingTask.assignedQuantity.toNumber()) {
       throw new BadRequestException(
@@ -164,8 +168,11 @@ export class PackingTaskManagementService {
 
     return await this.prisma.$transaction(async (tx) => {
       // Определяем статус задачи
-      const isFullyCompleted = completedQty >= existingTask.assignedQuantity.toNumber();
-      const newStatus = isFullyCompleted ? PackingTaskStatus.COMPLETED : PackingTaskStatus.PARTIALLY_COMPLETED;
+      const isFullyCompleted =
+        completedQty >= existingTask.assignedQuantity.toNumber();
+      const newStatus = isFullyCompleted
+        ? PackingTaskStatus.COMPLETED
+        : PackingTaskStatus.PARTIALLY_COMPLETED;
 
       // Обновляем статус задачи
       const updatedTask = await tx.packingTask.update({
@@ -192,7 +199,11 @@ export class PackingTaskManagementService {
       });
 
       // Вычитаем количество деталей и поддонов для выполненных упаковок
-      await this.deductInventoryForCompletedPackages(tx, existingTask.packageId, completedQty);
+      await this.deductInventoryForCompletedPackages(
+        tx,
+        existingTask.packageId,
+        completedQty,
+      );
 
       // Обновляем статус упаковки
       await this.updatePackageStatus(existingTask.packageId, tx);
@@ -234,6 +245,12 @@ export class PackingTaskManagementService {
           'room:machinesypack',
         ],
         'machine:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии
+      this.socketService.emitToMultipleRooms(
+        ['room:masterypack', 'room:machinesypack'],
+        'machine_task:event',
         { status: 'updated' },
       );
 
@@ -298,7 +315,6 @@ export class PackingTaskManagementService {
       { status: 'updated' },
     );
   }
-
 
   // Переместить задание на другой станок
   async moveTaskToMachine(
@@ -435,7 +451,10 @@ export class PackingTaskManagementService {
       dto.status === PackingTaskStatus.IN_PROGRESS &&
       existingTask.status !== PackingTaskStatus.IN_PROGRESS
     ) {
-      await this.checkAvailablePartsForTask(existingTask.packageId, existingTask.assignedQuantity.toNumber());
+      await this.checkAvailablePartsForTask(
+        existingTask.packageId,
+        existingTask.assignedQuantity.toNumber(),
+      );
     }
 
     // Если статус меняется на COMPLETED, устанавливаем время завершения и вычитаем запасы
@@ -448,10 +467,14 @@ export class PackingTaskManagementService {
       if (dto.completedQuantity === undefined) {
         updateData.completedQuantity = existingTask.assignedQuantity.toNumber();
       }
-      
+
       // Проверяем наличие достаточного количества деталей для выполнения
-      const completedQty = dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
-      await this.checkAvailablePartsForTask(existingTask.packageId, completedQty);
+      const completedQty =
+        dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+      await this.checkAvailablePartsForTask(
+        existingTask.packageId,
+        completedQty,
+      );
     }
 
     // Если статус меняется с COMPLETED на другой, сбрасываем время завершения
@@ -462,63 +485,69 @@ export class PackingTaskManagementService {
       updateData.completedAt = null;
     }
 
-    return await this.prisma.$transaction(async (tx) => {
-      const updatedTask = await tx.packingTask.update({
-        where: { taskId },
-        data: updateData,
-        include: {
-          package: {
-            include: {
-              order: true,
+    return await this.prisma
+      .$transaction(async (tx) => {
+        const updatedTask = await tx.packingTask.update({
+          where: { taskId },
+          data: updateData,
+          include: {
+            package: {
+              include: {
+                order: true,
+              },
+            },
+            machine: true,
+            assignedUser: {
+              include: {
+                userDetail: true,
+              },
             },
           },
-          machine: true,
-          assignedUser: {
-            include: {
-              userDetail: true,
-            },
-          },
-        },
+        });
+
+        // Если статус изменился на COMPLETED, вычитаем запасы
+        if (
+          dto.status === PackingTaskStatus.COMPLETED &&
+          existingTask.status !== PackingTaskStatus.COMPLETED
+        ) {
+          const completedQty =
+            dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+          await this.deductInventoryForCompletedPackages(
+            tx,
+            existingTask.packageId,
+            completedQty,
+          );
+        }
+
+        // Обновляем статус упаковки
+        await this.updatePackageStatus(existingTask.packageId, tx);
+
+        // Проверяем и обновляем статус заказа
+        await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
+
+        return updatedTask;
+      })
+      .then((updatedTask) => {
+        // Отправляем WebSocket уведомление о событии
+        this.socketService.emitToMultipleRooms(
+          [
+            'room:masterceh',
+            'room:machines',
+            'room:machinesnosmen',
+            'room:masterypack',
+            'room:machinesypack',
+          ],
+          'package:event',
+          { status: 'updated' },
+        );
+        this.socketService.emitToMultipleRooms(
+          ['room:technologist', 'room:director'],
+          'order:stats',
+          { status: 'updated' },
+        );
+
+        return this.mapToResponseDto(updatedTask);
       });
-
-      // Если статус изменился на COMPLETED, вычитаем запасы
-      if (
-        dto.status === PackingTaskStatus.COMPLETED &&
-        existingTask.status !== PackingTaskStatus.COMPLETED
-      ) {
-        const completedQty = dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
-        await this.deductInventoryForCompletedPackages(tx, existingTask.packageId, completedQty);
-      }
-
-      // Обновляем статус упаковки
-      await this.updatePackageStatus(existingTask.packageId, tx);
-
-      // Проверяем и обновляем статус заказа
-      await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
-
-      return updatedTask;
-    }).then(updatedTask => {
-
-      // Отправляем WebSocket уведомление о событии
-      this.socketService.emitToMultipleRooms(
-        [
-          'room:masterceh',
-          'room:machines',
-          'room:machinesnosmen',
-          'room:masterypack',
-          'room:machinesypack',
-        ],
-        'package:event',
-        { status: 'updated' },
-      );
-      this.socketService.emitToMultipleRooms(
-        ['room:technologist', 'room:director'],
-        'order:stats',
-        { status: 'updated' },
-      );
-
-      return this.mapToResponseDto(updatedTask);
-    });
   }
 
   // Назначить пользователя на задание
@@ -715,18 +744,21 @@ export class PackingTaskManagementService {
 
     // Проверяем каждую деталь из состава упаковки
     for (const composition of packageData.composition) {
-      const requiredQuantity = composition.quantityPerPackage.toNumber() * packagesCount;
+      const requiredQuantity =
+        composition.quantityPerPackage.toNumber() * packagesCount;
       const assignments = assignedPalletsByPart.get(composition.partCode) || [];
-      
+
       // Если для детали нет назначенных поддонов
       if (assignments.length === 0) {
         throw new BadRequestException(
           `Деталь "${composition.partName}" (код: ${composition.partCode}) не размещена на поддонах для упаковки. Требуется: ${requiredQuantity} шт.`,
         );
       }
-      
+
       const availableQuantity = assignments.reduce(
-        (sum, assignment) => sum + (assignment.quantity.toNumber() - assignment.usedQuantity.toNumber()),
+        (sum, assignment) =>
+          sum +
+          (assignment.quantity.toNumber() - assignment.usedQuantity.toNumber()),
         0,
       );
 
@@ -777,18 +809,25 @@ export class PackingTaskManagementService {
 
     // Отмечаем использованное количество для каждой детали
     for (const composition of packageData.composition) {
-      let remainingToMark = composition.quantityPerPackage.toNumber() * completedPackagesCount;
+      let remainingToMark =
+        composition.quantityPerPackage.toNumber() * completedPackagesCount;
       const assignments = assignmentsByPart.get(composition.partCode) || [];
-      
+
       for (const assignment of assignments) {
         if (remainingToMark <= 0) break;
 
-        const availableQuantity = assignment.quantity.toNumber() - assignment.usedQuantity.toNumber();
-        const markFromThisAssignment = Math.min(remainingToMark, availableQuantity);
-        
+        const availableQuantity =
+          assignment.quantity.toNumber() - assignment.usedQuantity.toNumber();
+        const markFromThisAssignment = Math.min(
+          remainingToMark,
+          availableQuantity,
+        );
+
         if (markFromThisAssignment > 0) {
-          const newUsedQuantity = assignment.usedQuantity.toNumber() + markFromThisAssignment;
-          const newQuantity = assignment.quantity.toNumber() - markFromThisAssignment;
+          const newUsedQuantity =
+            assignment.usedQuantity.toNumber() + markFromThisAssignment;
+          const newQuantity =
+            assignment.quantity.toNumber() - markFromThisAssignment;
 
           // Обновляем использованное количество и уменьшаем общее количество
           await tx.palletPackageAssignment.update({
@@ -816,7 +855,8 @@ export class PackingTaskManagementService {
               (sum, pa) => sum + pa.quantity.toNumber(),
               0,
             );
-            const availableOnPallet = updatedPallet.quantity.toNumber() - totalAssigned;
+            const availableOnPallet =
+              updatedPallet.quantity.toNumber() - totalAssigned;
 
             // Если на поддоне не осталось деталей, деактивируем его
             if (availableOnPallet <= 0) {
@@ -916,8 +956,14 @@ export class PackingTaskManagementService {
       newStatus = PackageStatus.NOT_PROCESSED;
     } else {
       // Подсчитываем общее количество и выполненное
-      const totalAssigned = tasks.reduce((sum, task) => sum + task.assignedQuantity.toNumber(), 0);
-      const totalCompleted = tasks.reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0);
+      const totalAssigned = tasks.reduce(
+        (sum, task) => sum + task.assignedQuantity.toNumber(),
+        0,
+      );
+      const totalCompleted = tasks.reduce(
+        (sum, task) => sum + task.completedQuantity.toNumber(),
+        0,
+      );
       const packageQuantity = packageData.quantity.toNumber();
 
       // Проверяем, выполнена ли вся упаковка
@@ -925,9 +971,13 @@ export class PackingTaskManagementService {
         newStatus = PackageStatus.COMPLETED;
       } else if (totalCompleted > 0) {
         newStatus = PackageStatus.IN_PROGRESS;
-      } else if (tasks.some((task) => task.status === PackingTaskStatus.IN_PROGRESS)) {
+      } else if (
+        tasks.some((task) => task.status === PackingTaskStatus.IN_PROGRESS)
+      ) {
         newStatus = PackageStatus.IN_PROGRESS;
-      } else if (tasks.some((task) => task.status === PackingTaskStatus.PENDING)) {
+      } else if (
+        tasks.some((task) => task.status === PackingTaskStatus.PENDING)
+      ) {
         newStatus = PackageStatus.PENDING;
       }
     }
@@ -1084,11 +1134,11 @@ export class PackingTaskManagementService {
       },
       assignedUser: task.assignedUser
         ? {
-          userId: task.assignedUser.userId,
-          login: task.assignedUser.login,
-          firstName: task.assignedUser.userDetail?.firstName,
-          lastName: task.assignedUser.userDetail?.lastName,
-        }
+            userId: task.assignedUser.userId,
+            login: task.assignedUser.login,
+            firstName: task.assignedUser.userDetail?.firstName,
+            lastName: task.assignedUser.userDetail?.lastName,
+          }
         : undefined,
       productionPackage: productionPackageInfo,
     };

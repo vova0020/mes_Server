@@ -75,103 +75,71 @@ export class OrdersYpackService {
         let available = 0;
         let completed = 0;
 
-        // Считаем общее количество упаковок в заказе
-        const totalPackages = order.packages.reduce((sum, pkg) => sum + pkg.quantity.toNumber(), 0);
-        let completedPackages = 0;
-        let availablePackages = 0;
-
-        // Для каждой упаковки проверяем статус по указанному этапу
-        order.packages.forEach((pkg) => {
-          const packageQuantity = pkg.quantity.toNumber();
-          
-          // Проверяем все детали в упаковке
-          const allPartsInPackage = pkg.productionPackageParts.map((ppp) => ({
+        // Собираем все детали из всех упаковок заказа
+        const allParts = order.packages.flatMap((pkg) =>
+          pkg.productionPackageParts.map((ppp) => ({
             part: ppp.part,
             quantity: ppp.quantity.toNumber(),
-          }));
+          })),
+        );
 
-          // Проверяем, есть ли детали этой упаковки на указанном этапе
-          const hasStage = allPartsInPackage.some(({ part }) =>
-            part.route.routeStages.some((rs) => rs.stage.stageId === stageId)
+        let totalQuantityForStage = 0;
+        let availableQuantity = 0;
+
+        // Группируем детали по partId чтобы избежать дублирования
+        const partMap = new Map();
+        allParts.forEach(({ part, quantity }) => {
+          if (!partMap.has(part.partId)) {
+            partMap.set(part.partId, { part, totalInOrder: 0 });
+          }
+          partMap.get(part.partId).totalInOrder += quantity;
+        });
+
+        // Для каждой уникальной детали анализируем прогресс по указанному этапу
+        partMap.forEach(({ part, totalInOrder }) => {
+          const routeStages = part.route.routeStages;
+          const stageIndex = routeStages.findIndex(
+            (rs) => rs.stage.stageId === stageId,
           );
 
-          if (!hasStage) return;
+          if (stageIndex !== -1) {
+            // Только детали, которые проходят через этот этап, учитываются в базе
+            totalQuantityForStage += totalInOrder;
 
-          // Рассчитываем выполненное количество для данной упаковки
-          let packageCompletedCount = 0;
-          
-          // Проверяем все детали в упаковке на выполнение на указанном этапе
-          allPartsInPackage.forEach(({ part }) => {
-            const routeStages = part.route.routeStages;
-            const stageIndex = routeStages.findIndex(
-              (rs) => rs.stage.stageId === stageId,
-            );
-
-            if (stageIndex !== -1) {
-              const currentStage = routeStages[stageIndex];
-              
-              // Проверяем выполнение через поддоны или прогресс детали
-              if (part.pallets && part.pallets.length > 0) {
-                const completedPallets = part.pallets.filter((pallet) => {
-                  const palletProgress = pallet.palletStageProgress.find(
-                    (p) => p.routeStageId === currentStage.routeStageId,
-                  );
-                  return palletProgress && palletProgress.status === 'COMPLETED';
-                });
-                
-                if (completedPallets.length > 0) {
-                  packageCompletedCount = packageQuantity;
-                }
+            // Если есть поддоны, считаем доступные по поддонам
+            if (part.pallets && part.pallets.length > 0) {
+              // Доступные - для первого этапа всегда все количество в заказе
+              if (stageIndex === 0) {
+                availableQuantity += totalInOrder;
               } else {
-                const partProgress = part.partRouteProgress.find(
-                  (p) => p.routeStageId === currentStage.routeStageId,
-                );
-                
-                if (partProgress && partProgress.status === 'COMPLETED') {
-                  packageCompletedCount = packageQuantity;
-                }
-              }
-            }
-          });
-          
-          // Для доступности проверяем детали
-          let anyPartAvailable = false;
-          allPartsInPackage.forEach(({ part }) => {
-            const routeStages = part.route.routeStages;
-            const stageIndex = routeStages.findIndex(
-              (rs) => rs.stage.stageId === stageId,
-            );
-
-            if (stageIndex !== -1) {
-              // Проверяем доступность
-              if (part.pallets && part.pallets.length > 0) {
-                const anyPalletAvailable = part.pallets.some((pallet) => {
-                  if (stageIndex === 0) return true;
+                // Не первый этап - доступно по выполненному на предыдущем этапе
+                let palletAvailableQuantity = 0;
+                part.pallets.forEach((pallet) => {
+                  const palletQuantity = pallet.quantity.toNumber();
                   const prevStage = routeStages[stageIndex - 1];
                   const prevPalletProgress = pallet.palletStageProgress.find(
                     (p) => p.routeStageId === prevStage.routeStageId,
                   );
-                  return prevPalletProgress && prevPalletProgress.status === 'COMPLETED';
-                });
-                if (anyPalletAvailable) anyPartAvailable = true;
-              } else {
-                if (stageIndex === 0) {
-                  anyPartAvailable = true;
-                } else {
-                  const prevStage = routeStages[stageIndex - 1];
-                  const prevProgress = part.partRouteProgress.find(
-                    (p) => p.routeStageId === prevStage.routeStageId,
-                  );
-                  if (prevProgress && prevProgress.status === 'COMPLETED') {
-                    anyPartAvailable = true;
+                  if (prevPalletProgress && prevPalletProgress.status === 'COMPLETED') {
+                    palletAvailableQuantity += palletQuantity;
                   }
+                });
+                availableQuantity += Math.min(palletAvailableQuantity, totalInOrder);
+              }
+            } else {
+              // Если поддонов нет, используем прогресс детали
+              if (stageIndex === 0) {
+                availableQuantity += totalInOrder;
+              } else {
+                const prevStage = routeStages[stageIndex - 1];
+                const prevProgress = part.partRouteProgress.find(
+                  (p) => p.routeStageId === prevStage.routeStageId,
+                );
+                if (prevProgress && prevProgress.status === 'COMPLETED') {
+                  availableQuantity += totalInOrder;
                 }
               }
             }
-          });
-
-          if (anyPartAvailable) {
-            availablePackages += packageQuantity;
           }
         });
 
@@ -183,8 +151,14 @@ export class OrdersYpackService {
         }, 0);
 
         // Рассчитываем проценты
-        available = totalPackages > 0 ? Math.round((availablePackages / totalPackages) * 100) : 0;
-        completed = totalPackages > 0 ? Math.round((completedPackagesCount / totalPackages) * 100) : 0;
+        available =
+          totalQuantityForStage > 0
+            ? Math.round((availableQuantity / totalQuantityForStage) * 100)
+            : 0;
+        completed =
+          totalQuantityForStage > 0
+            ? Math.round((completedPackagesCount / totalQuantityForStage) * 100)
+            : 0;
 
         return {
           id: order.orderId,
