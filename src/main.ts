@@ -8,18 +8,16 @@ async function bootstrap() {
 
   // Включаем CORS для веб-приложения
   app.enableCors({
-    // origin: 'http://localhost:3000', // Или IP/домен твоего фронтенда
-    origin: true, // Или IP/домен твоего фронтенда
-    // origin: 'http://91.222.236.176:3000', // Или IP/домен твоего фронтенда
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    credentials: true, // Разрешаем передачу куки и заголовков авторизации
+    credentials: true,
   });
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // удаляет свойства, отсутствующие в DTO
-      forbidNonWhitelisted: true, // выбрасывает исключение, если присутствуют лишние свойства
-      transform: true, // преобразует входящие данные в экземпляры классов DTO
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
@@ -28,13 +26,14 @@ async function bootstrap() {
     .setTitle('MES API')
     .setDescription('API для системы управления производством')
     .setVersion('1.0')
-    .addBearerAuth() // Если у вас есть авторизация через JWT
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  const PORT = 5000;
-  // Привязываем к 0.0.0.0, чтобы слушать и IPv4, и IPv6
+  // Берем порт из переменной окружения или используем 5000 по умолчанию
+  const PORT = process.env.PORT || 5000;
+
   await app.listen(PORT, '0.0.0.0');
   console.log(`🚀 Server listening on http://0.0.0.0:${PORT}`);
 }
