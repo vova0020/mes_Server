@@ -94,7 +94,7 @@ export class PackagingService {
             pkg.orderId,
           );
         
-        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
+        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed - packingStats.completed);
 
         return {
           id: pkg.packageId,
@@ -231,7 +231,7 @@ export class PackagingService {
             pkg.orderId,
           );
         
-        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed);
+        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed - packingStats.completed);
 
         return {
           id: pkg.packageId,

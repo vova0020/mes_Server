@@ -37,6 +37,7 @@ export class OrderStatisticsService {
                 },
               },
             },
+            packingTasks: true,
           },
         },
       },
@@ -54,21 +55,31 @@ export class OrderStatisticsService {
               stages: part.route.routeStages.map((rs) => {
                 let completionPercentage = 0;
 
-                // Для финального этапа считаем по упаковкам
+                // Для финального этапа считаем по фактически выполненному количеству упаковок
                 if (rs.stage.finalStage) {
                   const partPackages = order.packages.filter((pkg) =>
                     pkg.productionPackageParts.some(
                       (ppp) => ppp.partId === part.partId,
                     ),
                   );
-                  const totalPackages = partPackages.length;
-                  const completedPackages = partPackages.filter(
-                    (pkg) => pkg.packingStatus === 'COMPLETED',
-                  ).length;
+                  
+                  let totalQuantity = 0;
+                  let completedQuantity = 0;
+                  
+                  partPackages.forEach((pkg) => {
+                    totalQuantity += Number(pkg.quantity);
+                    
+                    // Суммируем выполненное количество из всех задач упаковки
+                    const packageCompletedQuantity = pkg.packingTasks.reduce(
+                      (sum, task) => sum + Number(task.completedQuantity || 0),
+                      0
+                    );
+                    completedQuantity += packageCompletedQuantity;
+                  });
 
                   completionPercentage =
-                    totalPackages > 0
-                      ? Math.round((completedPackages / totalPackages) * 100)
+                    totalQuantity > 0
+                      ? Math.round((completedQuantity / totalQuantity) * 100)
                       : 0;
                 } else {
                   // Для обычных этапов считаем по прогрессу детали + поддонам
@@ -175,6 +186,7 @@ export class OrderStatisticsService {
                 },
               },
             },
+            packingTasks: true,
           },
         },
       },
@@ -262,21 +274,31 @@ export class OrderStatisticsService {
           partData.stages = part.route.routeStages.map((rs) => {
             let completionPercentage = 0;
 
-            // Для финального этапа (упаковка) считаем по упаковкам
+            // Для финального этапа (упаковка) считаем по фактически выполненному количеству
             if (rs.stage.finalStage) {
               const partPackages = order.packages.filter((pkg) =>
                 pkg.productionPackageParts.some(
                   (ppp) => ppp.partId === part.partId,
                 ),
               );
-              const totalPackages = partPackages.length;
-              const completedPackages = partPackages.filter(
-                (pkg) => pkg.packingStatus === 'COMPLETED',
-              ).length;
+              
+              let totalQuantity = 0;
+              let completedQuantity = 0;
+              
+              partPackages.forEach((pkg) => {
+                totalQuantity += Number(pkg.quantity);
+                
+                // Суммируем выполненное количество из всех задач упаковки
+                const packageCompletedQuantity = pkg.packingTasks.reduce(
+                  (sum, task) => sum + Number(task.completedQuantity || 0),
+                  0
+                );
+                completedQuantity += packageCompletedQuantity;
+              });
 
               completionPercentage =
-                totalPackages > 0
-                  ? Math.round((completedPackages / totalPackages) * 100)
+                totalQuantity > 0
+                  ? Math.round((completedQuantity / totalQuantity) * 100)
                   : 0;
             } else {
               // Для обычных этапов считаем по поддонам
@@ -338,14 +360,24 @@ export class OrderStatisticsService {
   }
 
   private calculateOrderProgress(order: any, parts: any[]) {
-    // Процент упаковки
-    const totalPackages = order.packages.length;
-    const completedPackages = order.packages.filter(
-      (pkg) => pkg.packingStatus === 'COMPLETED',
-    ).length;
+    // Процент упаковки по фактически выполненному количеству
+    let totalPackingQuantity = 0;
+    let completedPackingQuantity = 0;
+    
+    order.packages.forEach((pkg) => {
+      totalPackingQuantity += Number(pkg.quantity);
+      
+      // Суммируем выполненное количество из всех задач упаковки
+      const packageCompletedQuantity = pkg.packingTasks.reduce(
+        (sum, task) => sum + Number(task.completedQuantity || 0),
+        0
+      );
+      completedPackingQuantity += packageCompletedQuantity;
+    });
+    
     const packingProgress =
-      totalPackages > 0
-        ? Math.round((completedPackages / totalPackages) * 100)
+      totalPackingQuantity > 0
+        ? Math.round((completedPackingQuantity / totalPackingQuantity) * 100)
         : 0;
 
     // Процент производства (все этапы кроме финального)

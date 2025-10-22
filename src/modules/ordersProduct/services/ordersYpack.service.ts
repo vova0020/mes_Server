@@ -143,12 +143,19 @@ export class OrdersYpackService {
           }
         });
 
-        // Считаем выполненное количество упаковок из packing_tasks
-        const completedPackagesCount = order.packages.reduce((sum, pkg) => {
-          return sum + (pkg.packingTasks || []).reduce((taskSum, task) => {
-            return taskSum + task.completedQuantity.toNumber();
-          }, 0);
-        }, 0);
+        // Считаем общее количество упаковок и выполненное количество
+        let totalPackingQuantity = 0;
+        let completedPackingQuantity = 0;
+        
+        order.packages.forEach((pkg) => {
+          totalPackingQuantity += pkg.quantity.toNumber();
+          
+          const packageCompletedQuantity = (pkg.packingTasks || []).reduce(
+            (sum, task) => sum + task.completedQuantity.toNumber(),
+            0
+          );
+          completedPackingQuantity += packageCompletedQuantity;
+        });
 
         // Рассчитываем проценты
         available =
@@ -156,8 +163,8 @@ export class OrdersYpackService {
             ? Math.round((availableQuantity / totalQuantityForStage) * 100)
             : 0;
         completed =
-          totalQuantityForStage > 0
-            ? Math.round((completedPackagesCount / totalQuantityForStage) * 100)
+          totalPackingQuantity > 0
+            ? Math.round((completedPackingQuantity / totalPackingQuantity) * 100)
             : 0;
 
         return {

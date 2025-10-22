@@ -438,12 +438,13 @@ export class PackingTaskManagementService {
 
     // Обрабатываем completedQuantity если передано
     if (dto.completedQuantity !== undefined) {
-      if (dto.completedQuantity > existingTask.assignedQuantity.toNumber()) {
+      const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+      if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
         throw new BadRequestException(
-          `Выполненное количество (${dto.completedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
+          `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
         );
       }
-      updateData.completedQuantity = dto.completedQuantity;
+      updateData.completedQuantity = newCompletedQuantity;
     }
 
     // Если статус меняется на IN_PROGRESS, проверяем наличие деталей
@@ -505,18 +506,27 @@ export class PackingTaskManagementService {
           },
         });
 
-        // Если статус изменился на COMPLETED, вычитаем запасы
-        if (
-          dto.status === PackingTaskStatus.COMPLETED &&
-          existingTask.status !== PackingTaskStatus.COMPLETED
-        ) {
-          const completedQty =
-            dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+        // Вычитаем запасы только для новых выполненных упаковок
+        if (dto.completedQuantity !== undefined && dto.completedQuantity > 0) {
           await this.deductInventoryForCompletedPackages(
             tx,
             existingTask.packageId,
-            completedQty,
+            dto.completedQuantity,
           );
+        } else if (
+          dto.status === PackingTaskStatus.COMPLETED &&
+          existingTask.status !== PackingTaskStatus.COMPLETED &&
+          dto.completedQuantity === undefined
+        ) {
+          // Если статус меняется на COMPLETED без указания количества, выполняем остаток
+          const remainingQty = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
+          if (remainingQty > 0) {
+            await this.deductInventoryForCompletedPackages(
+              tx,
+              existingTask.packageId,
+              remainingQty,
+            );
+          }
         }
 
         // Обновляем статус упаковки
