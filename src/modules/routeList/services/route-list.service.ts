@@ -29,6 +29,7 @@ export interface RouteStageData {
   completedAt: Date | null;
   quantity: number;
   status: string;
+  machineName: string | null;
 }
 
 @Injectable()
@@ -76,6 +77,15 @@ export class RouteListService {
               },
             },
           },
+          machineAssignments: {
+            include: {
+              machine: {
+                include: {
+                  machinesStages: true,
+                },
+              },
+            },
+          },
           palletBufferCells: {
             where: {
               removedAt: null,
@@ -119,11 +129,23 @@ export class RouteListService {
             (p) => p.routeStageId === routeStage.routeStageId,
           );
 
+          // Находим станок, на котором обрабатывался этот этап
+          const machineAssignment = pallet.machineAssignments.find(
+            (assignment) => {
+              // Проверяем, что назначение связано с этапом через станок
+              return assignment.completedAt && 
+                     assignment.machine.machinesStages?.some(
+                       (ms) => ms.stageId === routeStage.stageId
+                     );
+            }
+          );
+
           return {
             stageName: routeStage.stage.stageName,
             completedAt: progress?.completedAt || null,
             quantity: Number(pallet.quantity),
             status: progress?.status || 'NOT_PROCESSED',
+            machineName: machineAssignment?.machine.machineName || null,
           };
         },
       );

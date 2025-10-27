@@ -423,14 +423,14 @@ export class DetailsMasterService {
                 previousStageIds.includes(progress.routeStage.stageId),
             );
 
-            // Проверяем, завершены ли операции на предыдущих этапах
-            const isPreviousStagesCompleted =
-              isFirstSegment || // Если это первый этап, то предыдущие этапы не нужны
-              previousStageIds.length === 0 || // Если нет предыдущих этапов
-              (previousStageProgress.length > 0 &&
-                previousStageProgress.every(
-                  (progress) => progress.status === 'COMPLETED',
-                ));
+            // Проверяем, завершены ли ВСЕ предыдущие этапы
+            const isPreviousStagesCompleted = previousStageIds.length === 0 || 
+              (previousStageIds.every(stageId => 
+                previousStageProgress.some(progress => 
+                  progress.routeStage.stageId === stageId && 
+                  progress.status === 'COMPLETED'
+                )
+              ));
 
             // Проверяем назначения на станки текущего участка
             const currentMachineAssignments = pallet.machineAssignments.filter(
@@ -482,10 +482,8 @@ export class DetailsMasterService {
                 } else if (isPreviousStagesCompleted) {
                   // Если предыдущие этапы завершены и никогда не было назначений - готов к обработке
                   readyForProcessing += palletQuantity;
-                } else {
-                  // Если предыдущие этапы не завершены - деталь не готова к обработке
-                  // Не добавляем в readyForProcessing
                 }
+                // Если предыдущие этапы не завершены - деталь не готова к обработке
               }
             } else {
               // Нет прогресса на текущем у��астке
@@ -498,13 +496,11 @@ export class DetailsMasterService {
               } else if (hasAnyMachineAssignments) {
                 // Были назначения, но сейчас их нет и нет прогресса - не считаем как readyForProcessing
                 // Возможно, поддон в переходном состоянии
-              } else if (isPreviousStagesCompleted) {
-                // Предыдущие этапы завершены и никогда не было назначений - готов к обработке
+              } else if (isPreviousStagesCompleted && !hasAnyMachineAssignments) {
+                // Готов к обработке только если предыдущие этапы завершены и никогда не было назначений
                 readyForProcessing += palletQuantity;
-              } else {
-                // Если предыдущие этапы не завершены - деталь не готова к обработке
-                // Не добавляем в readyForProcessing
               }
+              // Если предыдущие этапы не завершены - деталь не готова к обработке
             }
           }
           }

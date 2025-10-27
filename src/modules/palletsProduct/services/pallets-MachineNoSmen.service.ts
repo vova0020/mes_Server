@@ -245,27 +245,28 @@ export class PalletMachineNoSmenService {
         );
       }
 
-      // Проверяем, что предыдущий этап пройден (если это не первый этап)
+      // Для станков без сменного задания - проверяем только что этап не завершен
+      // и что нет более ранних незавершенных этапов
       const allRouteStages = pallet.part.route.routeStages;
       const currentStageIndex = allRouteStages.findIndex(
         (rs) => rs.routeStageId === targetRouteStage.routeStageId,
       );
 
-      if (currentStageIndex > 0) {
-        // Это не первый этап, проверяем предыдущий
-        const previousRouteStage = allRouteStages[currentStageIndex - 1];
-        const previousStageProgress = pallet.palletStageProgress.find(
+      // Проверяем, что все предыдущие этапы завершены
+      for (let i = 0; i < currentStageIndex; i++) {
+        const earlierRouteStage = allRouteStages[i];
+        const earlierStageProgress = pallet.palletStageProgress.find(
           (progress) =>
-            progress.routeStage.routeStageId ===
-            previousRouteStage.routeStageId,
+            progress.routeStage.routeStageId === earlierRouteStage.routeStageId,
         );
 
+        // Если предыдущий этап не найден или не завершен - нельзя брать текущий
         if (
-          !previousStageProgress ||
-          previousStageProgress.status !== TaskStatus.COMPLETED
+          !earlierStageProgress ||
+          earlierStageProgress.status !== TaskStatus.COMPLETED
         ) {
           throw new Error(
-            `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
+            `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${earlierRouteStage.stage.stageName}" не завершен`,
           );
         }
       }
@@ -340,19 +341,8 @@ export class PalletMachineNoSmenService {
         );
       }
 
-      // 4. Проверяем, что поддон не занят другим станком
-      const existingAssignment = await prisma.machineAssignment.findFirst({
-        where: {
-          palletId,
-          completedAt: null,
-        },
-      });
-
-      if (existingAssignment) {
-        throw new Error(
-          `Поддон ${palletId} уже назначен на станок ${existingAssignment.machineId}`,
-        );
-      }
+      // 4. Для станков без сменного задания не проверяем существующие назначения
+      // Они могут быть созданы мастером заранее для других этапов
 
       // 5. Создаем назначение на станок (сменное задание)
       const machineAssignment = await prisma.machineAssignment.create({

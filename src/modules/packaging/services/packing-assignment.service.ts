@@ -75,33 +75,27 @@ export class PackingAssignmentService {
         },
       });
 
-      // Получаем завершенные задачи упаковки
-      const completedTasks = await this.prisma.packingTask.findMany({
-        where: {
-          status: 'COMPLETED',
-          machine: {
-            ...(stageId && {
-              machinesStages: {
-                some: {
-                  stageId,
-                  stage: { finalStage: true },
-                },
+      // Группируем выполненное количество по станкам с учетом времени сброса счетчика
+      const completedByMachine = {};
+      
+      for (const machine of machines) {
+        const tasks = await this.prisma.packingTask.findMany({
+          where: {
+            machineId: machine.machineId,
+            ...(machine.counterResetAt && {
+              completedAt: {
+                gte: machine.counterResetAt,
               },
             }),
+            status: 'COMPLETED',
           },
-        },
-        include: {
-          machine: true,
-        },
-      });
-
-      // Группируем завершенные задачи по станкам
-      const completedByMachine = completedTasks.reduce((acc, task) => {
-        const machineId = task.machine.machineId;
-        if (!acc[machineId]) acc[machineId] = 0;
-        acc[machineId] += task.completedQuantity.toNumber();
-        return acc;
-      }, {});
+        });
+        
+        completedByMachine[machine.machineId] = tasks.reduce(
+          (sum, task) => sum + task.completedQuantity.toNumber(),
+          0,
+        );
+      }
 
       // Формируем ответ
       const result = machines.map((machine) => {

@@ -205,6 +205,9 @@ export class PackingTaskManagementService {
         completedQty,
       );
 
+      // Обновляем счетчик станка
+      await this.updateMachineCounter(tx, updatedTask.machineId, completedQty);
+
       // Обновляем статус упаковки
       await this.updatePackageStatus(existingTask.packageId, tx);
 
@@ -452,9 +455,11 @@ export class PackingTaskManagementService {
       dto.status === PackingTaskStatus.IN_PROGRESS &&
       existingTask.status !== PackingTaskStatus.IN_PROGRESS
     ) {
+      // Проверяем только оставшееся количество для выполнения
+      const remainingQuantity = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
-        existingTask.assignedQuantity.toNumber(),
+        remainingQuantity,
       );
     }
 
@@ -506,6 +511,11 @@ export class PackingTaskManagementService {
           },
         });
 
+        // Обновляем счетчик станка при любом выполнении работы
+        if (dto.completedQuantity !== undefined && dto.completedQuantity > 0) {
+          await this.updateMachineCounter(tx, updatedTask.machineId, dto.completedQuantity);
+        }
+
         // Вычитаем запасы только для новых выполненных упаковок
         if (dto.completedQuantity !== undefined && dto.completedQuantity > 0) {
           await this.deductInventoryForCompletedPackages(
@@ -526,6 +536,8 @@ export class PackingTaskManagementService {
               existingTask.packageId,
               remainingQty,
             );
+            // Обновляем счетчик станка при полном выполнении остатка
+            await this.updateMachineCounter(tx, updatedTask.machineId, remainingQty);
           }
         }
 
@@ -768,7 +780,7 @@ export class PackingTaskManagementService {
       const availableQuantity = assignments.reduce(
         (sum, assignment) =>
           sum +
-          (assignment.quantity.toNumber() - assignment.usedQuantity.toNumber()),
+          (assignment.originalQuantity.toNumber() - assignment.usedQuantity.toNumber()),
         0,
       );
 
@@ -836,15 +848,12 @@ export class PackingTaskManagementService {
         if (markFromThisAssignment > 0) {
           const newUsedQuantity =
             assignment.usedQuantity.toNumber() + markFromThisAssignment;
-          const newQuantity =
-            assignment.quantity.toNumber() - markFromThisAssignment;
 
-          // Обновляем использованное количество и уменьшаем общее количество
+          // Обновляем только использованное количество
           await tx.palletPackageAssignment.update({
             where: { assignmentId: assignment.assignmentId },
             data: {
               usedQuantity: newUsedQuantity,
-              quantity: newQuantity,
             },
           });
 
@@ -854,19 +863,19 @@ export class PackingTaskManagementService {
             include: {
               packageAssignments: {
                 select: {
-                  quantity: true,
+                  usedQuantity: true,
                 },
               },
             },
           });
 
           if (updatedPallet) {
-            const totalAssigned = updatedPallet.packageAssignments.reduce(
-              (sum, pa) => sum + pa.quantity.toNumber(),
+            const totalUsed = updatedPallet.packageAssignments.reduce(
+              (sum, pa) => sum + pa.usedQuantity.toNumber(),
               0,
             );
             const availableOnPallet =
-              updatedPallet.quantity.toNumber() - totalAssigned;
+              updatedPallet.quantity.toNumber() - totalUsed;
 
             // Если на поддоне не осталось деталей, деактивируем его
             if (availableOnPallet <= 0) {
@@ -1098,6 +1107,31 @@ export class PackingTaskManagementService {
           }
         }
       }
+    }
+  }
+
+  // Обновление счетчика станка
+  private async updateMachineCounter(
+    tx: any,
+    machineId: number,
+    completedQuantity: number,
+  ): Promise<void> {
+    // Получаем текущие данные станка
+    const machine = await tx.machine.findUnique({
+      where: { machineId },
+    });
+
+    if (machine) {
+      // Обновляем счетчик выполненных операций
+      await tx.machine.update({
+        where: { machineId },
+        data: {
+          // Если у вас есть поле counter в таблице machines, используйте его
+          // counter: { increment: completedQuantity }
+          // Пока обновляем время последней операции
+          counterResetAt: new Date(),
+        },
+      });
     }
   }
 
