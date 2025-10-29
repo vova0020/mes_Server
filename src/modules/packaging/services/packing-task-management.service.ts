@@ -208,6 +208,11 @@ export class PackingTaskManagementService {
       // Обновляем счетчик станка
       await this.updateMachineCounter(tx, updatedTask.machineId, completedQty);
 
+      // Если задача частично выполнена, обновляем частичный прогресс на станке
+      if (newStatus === PackingTaskStatus.PARTIALLY_COMPLETED) {
+        await this.updateMachinePartialProgress(tx, updatedTask.machineId, completedQty);
+      }
+
       // Обновляем статус упаковки
       await this.updatePackageStatus(existingTask.packageId, tx);
 
@@ -425,7 +430,7 @@ export class PackingTaskManagementService {
         package: {
           include: {
             order: true,
-          },
+          }, 
         },
       },
     });
@@ -475,8 +480,8 @@ export class PackingTaskManagementService {
       }
 
       // Проверяем наличие достаточного количества деталей для выполнения
-      const completedQty =
-        dto.completedQuantity ?? existingTask.assignedQuantity.toNumber();
+      const completedQty = dto.completedQuantity ?? 
+        (existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber());
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
         completedQty,
@@ -514,6 +519,7 @@ export class PackingTaskManagementService {
         // Обновляем счетчик станка при любом выполнении работы
         if (dto.completedQuantity !== undefined && dto.completedQuantity > 0) {
           await this.updateMachineCounter(tx, updatedTask.machineId, dto.completedQuantity);
+          await this.updateMachinePartialProgress(tx, updatedTask.machineId, dto.completedQuantity);
         }
 
         // Вычитаем запасы только для новых выполненных упаковок
@@ -538,7 +544,19 @@ export class PackingTaskManagementService {
             );
             // Обновляем счетчик станка при полном выполнении остатка
             await this.updateMachineCounter(tx, updatedTask.machineId, remainingQty);
+            
+            // Обновляем частичный прогресс при полном завершении
+            if (remainingQty > 0) {
+              await this.updateMachinePartialProgress(tx, updatedTask.machineId, remainingQty);
+            }
           }
+        } else if (
+          dto.status === PackingTaskStatus.COMPLETED &&
+          existingTask.status !== PackingTaskStatus.COMPLETED &&
+          dto.completedQuantity !== undefined
+        ) {
+          // Если статус меняется на COMPLETED с указанием количества, также обновляем partiallyCompleted
+          await this.updateMachinePartialProgress(tx, updatedTask.machineId, dto.completedQuantity);
         }
 
         // Обновляем статус упаковки
@@ -849,11 +867,24 @@ export class PackingTaskManagementService {
           const newUsedQuantity =
             assignment.usedQuantity.toNumber() + markFromThisAssignment;
 
-          // Обновляем только использованное количество
+          // Обновляем использованное количество в текущем назначении
           await tx.palletPackageAssignment.update({
             where: { assignmentId: assignment.assignmentId },
             data: {
               usedQuantity: newUsedQuantity,
+            },
+          });
+
+          // Обновляем использованное количество во ВСЕХ назначениях этого поддона
+          await tx.palletPackageAssignment.updateMany({
+            where: {
+              palletId: assignment.palletId,
+              assignmentId: { not: assignment.assignmentId },
+            },
+            data: {
+              usedQuantity: {
+                increment: markFromThisAssignment,
+              },
             },
           });
 
@@ -1133,6 +1164,41 @@ export class PackingTaskManagementService {
         },
       });
     }
+  }
+
+  /**
+   * Обновить частично выполненное количество на станке
+   * @param tx Транзакция Prisma
+   * @param machineId ID станка
+   * @param additionalQuantity Дополнительное количество для добавления
+   */
+  private async updateMachinePartialProgress(
+    tx: any,
+    machineId: number,
+    additionalQuantity: number,
+  ): Promise<void> {
+    await tx.machine.update({
+      where: { machineId },
+      data: {
+        partiallyCompleted: {
+          increment: additionalQuantity,
+        },
+      },
+    });
+  }
+
+  /**
+   * Сбросить счетчик частично выполненного количества на станке
+   * @param machineId ID станка
+   */
+  async resetMachinePartialProgress(machineId: number): Promise<void> {
+    await this.prisma.machine.update({
+      where: { machineId },
+      data: {
+        partiallyCompleted: 0,
+        counterResetAt: new Date(),
+      },
+    });
   }
 
   // Вспомогательный метод для преобразования данных в DTO ответа

@@ -814,6 +814,7 @@ export class MachinMasterService {
         where: { machineId },
         data: {
           counterResetAt: new Date(),
+          partiallyCompleted: 0,
         },
       });
 

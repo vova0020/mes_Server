@@ -406,10 +406,9 @@ export class PackagingService {
     let minAssembledPackages = Infinity;
 
     for (const comp of composition) {
-      const totalRequired = comp.quantity.toNumber();
-      const requiredPerPackage = totalRequired / totalPackages;
+      const requiredPerPackage = comp.quantityPerPackage.toNumber();
 
-      // Получаем назначенные поддоны для этой детали в данной упаковке
+      // Получаем все поддоны этой детали, назначенные на данную упаковку
       const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
         where: {
           packageId,
@@ -419,15 +418,39 @@ export class PackagingService {
             }
           }
         },
-        select: {
-          quantity: true
+        include: {
+          pallet: {
+            include: {
+              part: {
+                select: {
+                  partCode: true
+                }
+              },
+              packageAssignments: {
+                select: {
+                  packageId: true,
+                  quantity: true,
+                  usedQuantity: true
+                }
+              }
+            }
+          }
         }
       });
 
-      const totalAssignedQuantity = assignedPallets.reduce(
-        (sum, assignment) => sum + assignment.quantity.toNumber(),
-        0,
-      );
+      // Считаем актуальное количество с учетом пропорционального распределения
+      const totalAssignedQuantity = assignedPallets.reduce((sum, assignment) => {
+        // Общее использованное количество с этого поддона во всех упаковках
+        const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
+          (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
+          0
+        );
+        // Доступное количество с поддона
+        const availableFromPallet = assignment.pallet.quantity.toNumber() - totalUsedFromPallet;
+        
+        // Каждая упаковка может использовать все доступное количество
+        return sum + availableFromPallet;
+      }, 0);
 
       const assembledForThisPart = Math.floor(
         totalAssignedQuantity / requiredPerPackage,

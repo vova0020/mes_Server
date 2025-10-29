@@ -658,36 +658,49 @@ export class PalletsMasterService {
       });
       const machineStageIds = machineStages.map(ms => ms.stageId);
 
-      // Ищем прогресс этапа, который соответствует этому станку
-      const stageProgress = machineAssignment.pallet.palletStageProgress.find(progress => 
-        machineStageIds.includes(progress.routeStage?.stageId)
+      // Находим этап маршрута для данного станка
+      const allRouteStages = pallet.part.route?.routeStages || [];
+      const machineRouteStage = allRouteStages.find(rs => machineStageIds.includes(rs.stageId));
+      
+      if (!machineRouteStage) {
+        throw new NotFoundException(
+          `Станок ${machineAssignment.machine.machineName} не может выполнять этапы из маршрута детали`,
+        );
+      }
+
+      // Ищем или создаем прогресс этапа
+      let stageProgress = pallet.palletStageProgress.find(progress => 
+        progress.routeStage.routeStageId === machineRouteStage.routeStageId
       );
       
       if (!stageProgress) {
-        // Проверяем, какой этап должен выполняться на этом станке
-        const allRouteStages = pallet.part.route?.routeStages || [];
-        const machineRouteStage = allRouteStages.find(rs => machineStageIds.includes(rs.stageId));
-        
-        if (machineRouteStage) {
-          const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === machineRouteStage.routeStageId);
-          
-          if (currentStageIndex > 0) {
-            const previousRouteStage = allRouteStages[currentStageIndex - 1];
-            const previousStageProgress = pallet.palletStageProgress.find(
-              progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
-            );
-            
-            if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
-              throw new Error(
-                `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
-              );
-            }
-          }
-        }
-        
-        throw new NotFoundException(
-          `Активный прогресс этапа для операции ${operationId} на станке ${machineAssignment.machine.machineName} не найден`,
+        // Создаем новый прогресс этапа
+        stageProgress = await this.prisma.palletStageProgress.create({
+          data: {
+            palletId: pallet.palletId,
+            routeStageId: machineRouteStage.routeStageId,
+            status: TaskStatus.PENDING,
+          },
+          include: {
+            routeStage: { include: { stage: true } },
+          },
+        });
+      }
+
+      // Проверяем последовательность этапов
+      const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === machineRouteStage.routeStageId);
+      
+      if (currentStageIndex > 0) {
+        const previousRouteStage = allRouteStages[currentStageIndex - 1];
+        const previousStageProgress = pallet.palletStageProgress.find(
+          progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
         );
+        
+        if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
+          throw new Error(
+            `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
+          );
+        }
       }
 
       // Проверяем, что операция активна
@@ -705,23 +718,6 @@ export class PalletsMasterService {
         updateData.status = TaskStatus.COMPLETED;
         updateData.completedAt = new Date();
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
-        // Проверяем последовательность этапов при переводе в IN_PROGRESS
-        const allRouteStages = pallet.part.route?.routeStages || [];
-        const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === stageProgress.routeStageId);
-        
-        if (currentStageIndex > 0) {
-          const previousRouteStage = allRouteStages[currentStageIndex - 1];
-          const previousStageProgress = pallet.palletStageProgress.find(
-            progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
-          );
-          
-          if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
-            throw new Error(
-              `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${stageProgress.routeStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
-            );
-          }
-        }
-
         updateData.status = TaskStatus.IN_PROGRESS;
         updateData.completedAt = null;
 

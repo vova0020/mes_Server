@@ -63,10 +63,17 @@ export class PackingAssignmentService {
             },
           }),
         },
-        include: {
+        select: {
+          machineId: true,
+          machineName: true,
+          status: true,
+          loadUnit: true,
+          recommendedLoad: true,
+          counterResetAt: true,
+          partiallyCompleted: true,
           packingTasks: {
             where: {
-              status: { in: ['PENDING', 'IN_PROGRESS'] },
+              status: { in: ['PENDING', 'IN_PROGRESS', 'PARTIALLY_COMPLETED'] },
             },
             include: {
               package: true,
@@ -79,7 +86,8 @@ export class PackingAssignmentService {
       const completedByMachine = {};
       
       for (const machine of machines) {
-        const tasks = await this.prisma.packingTask.findMany({
+        // Получаем завершенные задачи после сброса счетчика
+        const completedTasks = await this.prisma.packingTask.findMany({
           where: {
             machineId: machine.machineId,
             ...(machine.counterResetAt && {
@@ -91,10 +99,34 @@ export class PackingAssignmentService {
           },
         });
         
-        completedByMachine[machine.machineId] = tasks.reduce(
+        // Получаем частично выполненные задачи после сброса счетчика
+        const partialTasks = await this.prisma.packingTask.findMany({
+          where: {
+            machineId: machine.machineId,
+            ...(machine.counterResetAt && {
+              assignedAt: {
+                gte: machine.counterResetAt,
+              },
+            }),
+            status: { in: ['IN_PROGRESS', 'PARTIALLY_COMPLETED'] },
+            completedQuantity: { gt: 0 },
+          },
+        });
+        
+        const completedAmount = completedTasks.reduce(
           (sum, task) => sum + task.completedQuantity.toNumber(),
           0,
         );
+        
+        const partialAmount = partialTasks.reduce(
+          (sum, task) => sum + task.completedQuantity.toNumber(),
+          0,
+        );
+        
+        // Также учитываем сохраненное частично выполненное количество
+        const savedPartialAmount = machine.partiallyCompleted?.toNumber() || 0;
+        
+        completedByMachine[machine.machineId] = completedAmount + partialAmount + savedPartialAmount;
       }
 
       // Формируем ответ
@@ -114,9 +146,14 @@ export class PackingAssignmentService {
           recommendedLoad: machine.recommendedLoad.toNumber(),
           plannedQuantity,
           completedQuantity,
+          // Добавляем информацию о прогрессе
+          inProgressQuantity: machine.packingTasks
+            .filter(task => task.status === 'IN_PROGRESS' || task.status === 'PARTIALLY_COMPLETED')
+            .reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0),
+          // Показываем сохраненное частично выполненное количество
+          partiallyCompletedStored: machine.partiallyCompleted?.toNumber() || 0,
         };
       });
-
       this.logger.log(`Успешно получено ${result.length} станков упаковки`);
       return result;
     } catch (error) {
@@ -649,6 +686,36 @@ export class PackingAssignmentService {
     });
 
     return packingTasks.length > 0 ? packageData?.quantity.toNumber() || 0 : 0;
+  }
+
+  /**
+   * Обновить частично выполненное количество на станке
+   * @param machineId ID станка
+   * @param additionalQuantity Дополнительное количество для добавления
+   */
+  async updateMachinePartialProgress(machineId: number, additionalQuantity: number): Promise<void> {
+    await this.prisma.machine.update({
+      where: { machineId },
+      data: {
+        partiallyCompleted: {
+          increment: additionalQuantity,
+        },
+      },
+    });
+  }
+
+  /**
+   * Сбросить счетчик частично выполненного количества на станке
+   * @param machineId ID станка
+   */
+  async resetMachinePartialProgress(machineId: number): Promise<void> {
+    await this.prisma.machine.update({
+      where: { machineId },
+      data: {
+        partiallyCompleted: 0,
+        counterResetAt: new Date(),
+      },
+    });
   }
 
   // Вспомогательный метод для преобразования данных в DTO ответа

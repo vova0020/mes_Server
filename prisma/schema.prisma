@@ -706,6 +706,8 @@ model Machine {
   noSmenTask      Boolean       @default(false) @map("no_smen_task")
   /// Время последнего сброса счетчика выполненных операций
   counterResetAt  DateTime?     @map("counter_reset_at")
+  /// Частично выполненное количество с момента последнего сброса
+  partiallyCompleted Decimal    @default(0) @map("partially_completed")
 
   // связи: задачи и этапы, связанные с этим станком
   machinesStages        MachineStage[] // какие этапы 1-го уровня выполняет станок
