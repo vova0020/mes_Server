@@ -744,6 +744,11 @@ export class PackingTaskManagementService {
             pallet: {
               include: {
                 part: true,
+                packageAssignments: {
+                  select: {
+                    usedQuantity: true
+                  }
+                }
               },
             },
           },
@@ -795,16 +800,23 @@ export class PackingTaskManagementService {
         );
       }
 
-      const availableQuantity = assignments.reduce(
-        (sum, assignment) =>
-          sum +
-          (assignment.originalQuantity.toNumber() - assignment.usedQuantity.toNumber()),
-        0,
-      );
+      // Считаем доступное количество с учетом общего использования поддона
+      const availableQuantity = assignments.reduce((sum, assignment) => {
+        const palletTotalQuantity = assignment.pallet.quantity.toNumber();
+        const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
+          (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
+          0
+        );
+        const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
+        const assignedToThisPackage = assignment.quantity.toNumber();
+        
+        // Берем минимум из назначенного на упаковку и доступного с поддона
+        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+      }, 0);
 
       if (availableQuantity < requiredQuantity) {
         throw new BadRequestException(
-          `Недостаточно деталей "${composition.partName}" на назначенных поддонах. Требуется: ${requiredQuantity}, размещено: ${availableQuantity}`,
+          `Недостаточно деталей "${composition.partName}" на назначенных поддонах. Требуется: ${requiredQuantity}, доступно: ${availableQuantity}`,
         );
       }
     }
