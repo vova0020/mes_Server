@@ -867,24 +867,11 @@ export class PackingTaskManagementService {
           const newUsedQuantity =
             assignment.usedQuantity.toNumber() + markFromThisAssignment;
 
-          // Обновляем использованное количество в текущем назначении
+          // Обновляем использованное количество только в текущем назначении
           await tx.palletPackageAssignment.update({
             where: { assignmentId: assignment.assignmentId },
             data: {
               usedQuantity: newUsedQuantity,
-            },
-          });
-
-          // Обновляем использованное количество во ВСЕХ назначениях этого поддона
-          await tx.palletPackageAssignment.updateMany({
-            where: {
-              palletId: assignment.palletId,
-              assignmentId: { not: assignment.assignmentId },
-            },
-            data: {
-              usedQuantity: {
-                increment: markFromThisAssignment,
-              },
             },
           });
 

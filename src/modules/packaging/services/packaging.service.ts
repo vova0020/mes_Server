@@ -408,8 +408,8 @@ export class PackagingService {
     for (const comp of composition) {
       const requiredPerPackage = comp.quantityPerPackage.toNumber();
 
-      // Получаем все поддоны этой детали, назначенные на данную упаковку
-      const assignedPallets = await this.prisma.palletPackageAssignment.findMany({
+      // Получаем назначения поддонов на данную упаковку для этой детали
+      const assignments = await this.prisma.palletPackageAssignment.findMany({
         where: {
           packageId,
           pallet: {
@@ -420,16 +420,10 @@ export class PackagingService {
         },
         include: {
           pallet: {
-            include: {
-              part: {
-                select: {
-                  partCode: true
-                }
-              },
+            select: {
+              quantity: true,
               packageAssignments: {
                 select: {
-                  packageId: true,
-                  quantity: true,
                   usedQuantity: true
                 }
               }
@@ -438,31 +432,25 @@ export class PackagingService {
         }
       });
 
-      // Считаем актуальное количество с учетом пропорционального распределения
-      const totalAssignedQuantity = assignedPallets.reduce((sum, assignment) => {
-        // Общее использованное количество с этого поддона во всех упаковках
+      // Считаем доступное количество с учетом общего использования поддона
+      const availableQuantity = assignments.reduce((sum, assignment) => {
+        const palletTotalQuantity = assignment.pallet.quantity.toNumber();
         const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
           (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
           0
         );
-        // Доступное количество с поддона
-        const availableFromPallet = assignment.pallet.quantity.toNumber() - totalUsedFromPallet;
+        const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
+        const assignedToThisPackage = assignment.quantity.toNumber();
         
-        // Каждая упаковка может использовать все доступное количество
-        return sum + availableFromPallet;
+        // Берем минимум из назначенного на упаковку и доступного с поддона
+        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
       }, 0);
 
-      const assembledForThisPart = Math.floor(
-        totalAssignedQuantity / requiredPerPackage,
-      );
-      minAssembledPackages = Math.min(
-        minAssembledPackages,
-        assembledForThisPart,
-      );
+      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
+      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
     }
 
-    const assembled =
-      minAssembledPackages === Infinity ? 0 : minAssembledPackages;
+    const assembled = minAssembledPackages === Infinity ? 0 : minAssembledPackages;
 
     return {
       baseReadyForPackaging,
