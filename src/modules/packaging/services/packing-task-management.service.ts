@@ -1054,88 +1054,21 @@ export class PackingTaskManagementService {
     // Получаем все назначения поддонов для данной упаковки
     const assignments = await tx.palletPackageAssignment.findMany({
       where: { packageId },
-      include: {
-        pallet: {
-          include: {
-            part: true,
-          },
-        },
-      },
     });
 
     for (const assignment of assignments) {
-      // Если есть неиспользованное количество (quantity > 0)
-      if (assignment.quantity.toNumber() > 0) {
-        // Возвращаем неиспользованное количество обратно на поддон
-        await tx.pallet.update({
-          where: { palletId: assignment.palletId },
-          data: {
-            quantity: {
-              increment: assignment.quantity,
-            },
-          },
-        });
-
-        // Обновляем назначение - обнуляем неиспользованное количество
+      // Вычисляем неиспользованное количество (назначенное минус использованное)
+      const unusedQuantity = assignment.quantity.toNumber() - assignment.usedQuantity.toNumber();
+      
+      // Если есть неиспользованное количество, обновляем назначение
+      if (unusedQuantity > 0) {
+        // Обновляем назначение - устанавливаем quantity равным usedQuantity
         await tx.palletPackageAssignment.update({
           where: { assignmentId: assignment.assignmentId },
           data: {
-            quantity: 0,
+            quantity: assignment.usedQuantity,
           },
         });
-
-        // Если поддон не находится в ячейке, возвращаем его в буфер
-        const currentCell = await tx.palletBufferCell.findFirst({
-          where: {
-            palletId: assignment.palletId,
-            removedAt: null,
-          },
-        });
-
-        if (!currentCell) {
-          // Находим подходящий буфер для возврата поддона
-          const availableCell = await tx.bufferCell.findFirst({
-            where: {
-              status: 'AVAILABLE',
-              currentLoad: {
-                lt: tx.bufferCell.fields.capacity,
-              },
-            },
-            orderBy: {
-              currentLoad: 'asc',
-            },
-          });
-
-          if (availableCell) {
-            // Размещаем поддон в ячейке
-            await tx.palletBufferCell.create({
-              data: {
-                palletId: assignment.palletId,
-                cellId: availableCell.cellId,
-                placedAt: new Date(),
-              },
-            });
-
-            // Обновляем загрузку ячейки
-            await tx.bufferCell.update({
-              where: { cellId: availableCell.cellId },
-              data: {
-                currentLoad: {
-                  increment: assignment.pallet.quantity,
-                },
-                status: 'OCCUPIED',
-              },
-            });
-
-            // Обновляем статус детали обратно на COMPLETED
-            await tx.part.update({
-              where: { partId: assignment.pallet.partId },
-              data: {
-                status: 'COMPLETED',
-              },
-            });
-          }
-        }
       }
     }
   }
