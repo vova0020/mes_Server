@@ -74,3 +74,19 @@ export interface PackingAssignmentListResponseDto {
     totalPages: number;
   };
 }
+
+// Расширенный DTO для задания с данными о частичной обработке
+export interface PackingAssignmentWithProgressDto extends PackingAssignmentResponseDto {
+  remainingQuantity: number;
+}
+
+// DTO для ответа с заданиями по станку и сводкой
+export interface MachineAssignmentsResponseDto {
+  assignments: PackingAssignmentWithProgressDto[];
+  summary: {
+    totalAssigned: number;
+    totalCompleted: number;
+    totalRemaining: number;
+    tasksCount: number;
+  };
+}

@@ -474,7 +474,7 @@ export class PackingAssignmentService {
     return this.mapToResponseDto(task);
   }
 
-  // Получение заданий по станку
+  // Получение заданий по станку с данными о частичной обработке
   async getAssignmentsByMachine(machineId: number): Promise<PackingAssignmentResponseDto[]> {
     const machine = await this.prisma.machine.findUnique({
       where: { machineId },
@@ -505,7 +505,11 @@ export class PackingAssignmentService {
       orderBy: [{ priority: 'desc' }, { assignedAt: 'asc' }],
     });
 
-    return tasks.map((task) => this.mapToResponseDto(task));
+    return tasks.map((task) => ({
+      ...this.mapToResponseDto(task),
+      // Добавляем данные о частичной обработке для каждого задания
+      remainingQuantity: task.assignedQuantity.toNumber() - task.completedQuantity.toNumber(),
+    }));
   }
 
   // Метод для обновления статуса упаковки на основе статусов задач
