@@ -22,6 +22,7 @@ import { ProductionOrdersModule } from './modules/production-orders/production-o
 import { RouteManagementModule } from './modules/route-management/route-management.module';
 import { OrderManagementModule } from './modules/order-management/order-management.module';
 import { RouteListModule } from './modules/routeList/route-list.module';
+import { WorkMonitorModule } from './modules/work-monitor/work-monitor.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { RouteListModule } from './modules/routeList/route-list.module';
     RouteManagementModule,
     OrderManagementModule,
     RouteListModule,
+    WorkMonitorModule,
     
     // MachinNoSmenModule,
     // MachinModule,
