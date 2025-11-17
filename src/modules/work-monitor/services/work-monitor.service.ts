@@ -1,46 +1,46 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { StreamDto, StageProgressDto, MachineWorkplaceDto } from '../dto/work-monitor.dto';
+import { MachineStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkMonitorService {
   constructor(private prisma: PrismaService) {}
 
   async getAllStreams(): Promise<StreamDto[]> {
-    const routes = await this.prisma.route.findMany({
+    const lines = await this.prisma.productionLine.findMany({
       select: {
-        routeId: true,
-        routeName: true,
+        lineId: true,
+        lineName: true,
       },
     });
 
-    return routes.map(route => ({
-      streamId: route.routeId,
-      streamName: route.routeName,
+    return lines.map(line => ({
+      streamId: line.lineId,
+      streamName: line.lineName,
     }));
   }
 
   async getStreamStages(streamId: number): Promise<StageProgressDto[]> {
-    const routeStages = await this.prisma.routeStage.findMany({
-      where: { routeId: streamId },
+    const stages = await this.prisma.productionStageLevel1.findMany({
+      where: {
+        linesStages: {
+          some: { lineId: streamId },
+        },
+      },
       include: {
-        stage: {
+        machinesStages: {
           include: {
-            machinesStages: {
-              include: {
-                machine: true,
-              },
-            },
+            machine: true,
           },
         },
       },
-      orderBy: { sequenceNumber: 'asc' },
     });
 
     const stageProgress: StageProgressDto[] = [];
 
-    for (const routeStage of routeStages) {
-      const machines = routeStage.stage.machinesStages.map(ms => ms.machine);
+    for (const stage of stages) {
+      const machines = stage.machinesStages.map(ms => ms.machine);
       
       // Норма смены - сумма норм всех станков этапа
       const shiftNorm = machines.reduce((sum, machine) => 
@@ -72,12 +72,52 @@ export class WorkMonitorService {
         completed += machineCompleted;
       }
 
+      // Готово к обработке - поддоны готовые к этому этапу
+      const readyPallets = await this.prisma.pallet.findMany({
+        where: {
+          part: {
+            route: {
+              routeStages: {
+                some: { stageId: stage.stageId },
+              },
+            },
+            pallets: {
+              some: {
+                palletStageProgress: {
+                  some: {
+                    routeStage: {
+                      stage: { stageId: stage.stageId },
+                      sequenceNumber: {
+                        gt: 0,
+                      },
+                    },
+                    completedAt: null,
+                  },
+                },
+              },
+            },
+          },
+        },
+        include: {
+          part: true,
+        },
+      });
+
+      // Считаем квадратные метры готовых к обработке поддонов
+      const readyForProcessing = readyPallets.reduce((sum, pallet) => {
+        return sum + this.calculateSquareMeters(pallet.part, Number(pallet.quantity));
+      }, 0);
+
+      const activeMachines = machines.filter(m => m.status === MachineStatus.ACTIVE).length;
+
       stageProgress.push({
-        stageId: routeStage.stage.stageId,
-        stageName: routeStage.stage.stageName,
+        stageId: stage.stageId,
+        stageName: stage.stageName,
         shiftNorm: Math.round(shiftNorm),
         completed: Math.round(completed),
-        workplaceCount: machines.length,
+        readyForProcessing: Math.round(readyForProcessing),
+        totalWorkplaces: machines.length,
+        activeWorkplaces: activeMachines,
       });
     }
 
@@ -89,11 +129,6 @@ export class WorkMonitorService {
       where: {
         machinesStages: {
           some: { stageId },
-        },
-      },
-      include: {
-        machinesStages: {
-          where: { stageId },
         },
       },
     });
@@ -124,6 +159,7 @@ export class WorkMonitorService {
       workplaces.push({
         machineId: machine.machineId,
         machineName: machine.machineName,
+        status: machine.status,
         norm: Number(machine.recommendedLoad),
         completed: Math.round(completed),
         planned: Number(machine.recommendedLoad),

@@ -8,12 +8,15 @@ export interface StageProgressDto {
   stageName: string;
   shiftNorm: number;
   completed: number;
-  workplaceCount: number;
+  readyForProcessing: number;
+  totalWorkplaces: number;
+  activeWorkplaces: number;
 }
 
 export interface MachineWorkplaceDto {
   machineId: number;
   machineName: string;
+  status: string;
   norm: number;
   completed: number;
   planned: number;
