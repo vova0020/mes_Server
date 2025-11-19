@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
+import { AuditService } from '../../audit/services/audit.service';
 import { PalletsResponseDto } from '../dto/pallet-machin.dto';
 
 
@@ -7,7 +8,7 @@ import { PalletsResponseDto } from '../dto/pallet-machin.dto';
 export class PalletsMachineTaskService {
   constructor(
     private prisma: PrismaService,
-
+    private auditService: AuditService,
   ) { }
 
   /**

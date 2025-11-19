@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { SocketService } from '../../websocket/services/socket.service';
+import { AuditService } from '../../audit/services/audit.service';
 import {
   OperationCompletionStatus,
   PalletDto,
@@ -16,6 +17,7 @@ export class PalletsMasterService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) { }
 
   /**
@@ -312,6 +314,17 @@ export class PalletsMasterService {
         `Создано задание ${machineAssignment.assignmentId} → статус этапа: ${stageProgress.status}`,
       );
 
+      // Логируем назначение поддона на станок
+      await this.auditService.logEvent(
+        'PALLET_ASSIGNED_TO_MACHINE',
+        'pallet',
+        palletId,
+        operatorId,
+        undefined,
+        { machineId, stageId: segmentId },
+        { assignmentId: machineAssignment.assignmentId }
+      );
+
       // 9. Возвращаем DTO
       return {
         message: 'Поддон успешно назначен на станок',
@@ -532,6 +545,15 @@ export class PalletsMasterService {
           `Поддон ${palletId} перемещен в ячейку буфера ${bufferCell.cellCode}. ` +
           `Новая загрузка: ${newLoad}/${bufferCell.capacity} поддонов, статус: ${newStatus}`,
         );
+
+        // Логируем перемещение поддона в буфер
+        await this.auditService.logPalletMovement({
+          palletId,
+          fromCellId: previousPlacement?.cellId,
+          toCellId: bufferCellId,
+          movementType: 'TO_BUFFER',
+          quantity: Number(pallet.quantity),
+        });
 
         // Отправляем WebSocket уведомление о событии поддона
         this.socketService.emitToMultipleRooms(
@@ -835,6 +857,17 @@ export class PalletsMasterService {
 
       this.logger.log(`Операция ${operationId} обновлена: ${message}`);
 
+      // Логируем обновление статуса операции
+      await this.auditService.logEvent(
+        'OPERATION_STATUS_CHANGED',
+        'pallet_stage_progress',
+        updatedStageProgress.pspId,
+        masterId,
+        { status: stageProgress.status },
+        { status: updatedStageProgress.status },
+        { operationId, machineId: machineAssignment.machineId }
+      );
+
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machinesnosmen'],
@@ -1125,6 +1158,17 @@ export class PalletsMasterService {
         `Поддон ${newPallet.palletId} успешно создан для детали ${partId}`,
       );
 
+      // Логируем создание поддона
+      await this.auditService.logEvent(
+        'PALLET_CREATED',
+        'pallet',
+        newPallet.palletId,
+        undefined,
+        undefined,
+        { partId, quantity, palletName: finalPalletName },
+        { availableQuantity: availableQuantity - quantity }
+      );
+
       // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machinesnosmen'],
@@ -1297,6 +1341,24 @@ export class PalletsMasterService {
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'machine_task:event',
         { status: 'updated' },
+      );
+
+      // Логируем отбраковку деталей
+      await this.auditService.logDefect(
+        machineId || 0,
+        reclamation.partId,
+        'MANUAL_DEFECT',
+        quantity,
+        routeStageId
+      );
+
+      await this.auditService.logReclamationAction(
+        reclamation.reclamationId,
+        'CREATED',
+        reportedById,
+        undefined,
+        'REPORTED',
+        description
       );
 
       return {

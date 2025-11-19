@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
 import { SocketService } from '../../websocket/services/socket.service';
+import { AuditService } from '../../audit/services/audit.service';
 import { RedistributePalletPartsResponseDto } from '../dto/pallet-master.dto';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class PalletMachineService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) { }
 
   /**
@@ -430,6 +432,17 @@ export class PalletMachineService {
 
     this.logger.log(`WebSocket события отправлены для поддона ${palletId}`);
 
+    // Логируем начало обработки поддона
+    await this.auditService.logEvent(
+      'PALLET_PROCESSING_STARTED',
+      'pallet',
+      palletId,
+      operatorId,
+      undefined,
+      { machineId, status: 'IN_PROGRESS' },
+      { assignmentId: result.assignmentId }
+    );
+
     return result;
   }
 
@@ -736,6 +749,24 @@ export class PalletMachineService {
         'order:stats',
         { status: 'updated' },
       );
+
+      // Получаем количество из исходного поддона
+      const palletQuantity = await prisma.pallet.findUnique({
+        where: { palletId },
+        select: { quantity: true }
+      });
+
+      // Логируем завершение обработки поддона
+      await this.auditService.logMachineOperation({
+        machineId,
+        palletId,
+        partId: assignment.pallet.partId,
+        routeStageId: currentProgress.routeStageId,
+        quantityProcessed: Number(palletQuantity?.quantity || 0),
+        startedAt: assignment.assignedAt,
+        completedAt,
+        operatorId,
+      });
 
       // Возвращаем оптимизированный ответ с минимальными данными
       return {
@@ -1530,6 +1561,24 @@ export class PalletMachineService {
 
       this.logger.log(
         `Отбраковано ${quantity} деталей с поддона ${palletId}, создана рекламация ${reclamation.reclamationId}`,
+      );
+
+      // Логируем отбраковку
+      await this.auditService.logDefect(
+        machineId || 0,
+        pallet.partId,
+        'MACHINE_DEFECT',
+        quantity,
+        routeStageId
+      );
+
+      await this.auditService.logReclamationAction(
+        reclamation.reclamationId,
+        'CREATED',
+        reportedById,
+        undefined,
+        'NEW',
+        description
       );
 
       // Отправляем WebSocket уведомление о событии поддона

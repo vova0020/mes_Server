@@ -3,12 +3,14 @@ import { PrismaService } from '../../../shared/prisma.service';
 import { MachineResponseDto, MachineStatus } from '../dto/machineNoSmen.dto';
 import { SocketService } from '../../websocket/services/socket.service';
 import { MachineStatus as PrismaMachineStatus } from '@prisma/client';
+import { AuditService } from '../../audit/services/audit.service';
 
 @Injectable()
 export class MachinsService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -139,6 +141,8 @@ export class MachinsService {
       throw new NotFoundException(`Станок с ID ${machineId} не найден`);
     }
 
+    const oldStatus = existingMachine.status;
+
     // Обновляем статус станка - явно приводим к типу Prisma
     const updatedMachine = await this.prisma.machine.update({
       where: { machineId: machineId },
@@ -151,6 +155,14 @@ export class MachinsService {
         },
       },
     });
+
+    // Логируем изменение статуса
+    await this.auditService.logMachineStatusChange(
+      machineId,
+      oldStatus,
+      status as PrismaMachineStatus,
+      undefined,
+    );
 
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = updatedMachine.machinesStages[0]?.stage || null;

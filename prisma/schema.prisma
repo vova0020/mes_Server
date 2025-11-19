@@ -47,6 +47,16 @@ model User {
   reportedReclamations  Reclamation[] @relation("ReclamationReportedBy")
   /// Рекламации, подтвержденные пользователем
   confirmedReclamations Reclamation[] @relation("ReclamationConfirmedBy")
+  
+  // История и аналитика
+  eventLogs              EventLog[]
+  machineStatusHistory   MachineStatusHistory[]
+  machineOperations      MachineOperationHistory[]
+  orderStatusHistory     OrderStatusHistory[]
+  palletMovements        PalletMovementHistory[]
+  packageStatusHistory   PackageStatusHistory[]
+  reclamationHistory     ReclamationHistory[]
+  operatorPerformance    OperatorPerformanceStats[]
 
   @@map("users")
 }
@@ -202,6 +212,9 @@ model Order {
   packages          Package[]
   /// Флаг, указывающий что детали были объединены при запуске
   partsConsolidated Boolean   @default(false) @map("parts_consolidated")
+  
+  // История
+  statusHistory OrderStatusHistory[]
 
   @@map("orders")
 }
@@ -241,7 +254,9 @@ model Package {
   composition       PackageComposition[]
   /// Назначения поддонов на упаковки
   palletAssignments PalletPackageAssignment[]
-
+  
+  // История
+  statusHistory PackageStatusHistory[]
 
   @@map("packages")
 }
@@ -396,6 +411,11 @@ model Part {
   reclamations          Reclamation[]
   /// Движения запасов по данной детали
   inventoryMovements    InventoryMovement[]
+  
+  // История и аналитика
+  statusHistory     PartStatusHistory[]
+  operationHistory  MachineOperationHistory[]
+  defectStats       DefectStatsByMachine[]
 
   @@map("parts")
 }
@@ -448,6 +468,10 @@ model Pallet {
   inventoryMovements  InventoryMovement[]
   /// Назначения поддонов на упаковки
   packageAssignments  PalletPackageAssignment[]
+  
+  // История и аналитика
+  movementHistory   PalletMovementHistory[]
+  operationHistory  MachineOperationHistory[]
 
   @@map("pallets")
 }
@@ -547,6 +571,10 @@ model BufferCell {
   pickerTasksFrom   PickerTask[]       @relation("FromCell")
   /// Задачи комплектования, куда идет поддон
   pickerTasksTo     PickerTask[]       @relation("ToCell")
+  
+  // История
+  palletMovementsFrom PalletMovementHistory[] @relation("FromCell")
+  palletMovementsTo   PalletMovementHistory[] @relation("ToCell")
 
   @@map("buffer_cells")
 }
@@ -718,7 +746,14 @@ model Machine {
   partMachineAssignment PartMachineAssignment[]
   /// Рекламации на данном станке
   reclamations          Reclamation[]
-
+  
+  // История и аналитика
+  statusHistory            MachineStatusHistory[]
+  operationHistory         MachineOperationHistory[]
+  palletMovements          PalletMovementHistory[]
+  partStatusHistory        PartStatusHistory[]
+  defectStats              DefectStatsByMachine[]
+  operatorPerformance      OperatorPerformanceStats[]
 
   @@map("machines")
 }
@@ -801,6 +836,11 @@ model RouteStage {
   returnStageParts    Part[]                 @relation("ReturnStage") // детали, возвращенные на этот этап
   /// Рекламации на данном этапе
   reclamations        Reclamation[]
+  
+  // История и аналитика
+  partStatusHistory     PartStatusHistory[]
+  operationHistory      MachineOperationHistory[]
+  defectStats           DefectStatsByMachine[]
 
   @@map("route_stages")
 }
@@ -1262,6 +1302,9 @@ model Reclamation {
   attachments ReclamationAttachment[]
   audits      ReclamationAudit[]
   movements   InventoryMovement[]
+  
+  // История
+  history ReclamationHistory[]
 
   @@index([partId])
   @@index([routeStageId])
@@ -1361,4 +1404,251 @@ model InventoryMovement {
   @@index([palletId])
   @@index([sourceReclamationId])
   @@map("inventory_movements")
+}
+
+
+// ========================================
+// 13. Модуль аудита и аналитики
+// ========================================
+
+/// Типы событий в системе
+enum EventType {
+  // Заказы
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  ORDER_PRIORITY_CHANGED
+  ORDER_COMPLETED
+  ORDER_POSTPONED
+  
+  // Станки
+  MACHINE_STATUS_CHANGED
+  MACHINE_TASK_ASSIGNED
+  MACHINE_TASK_STARTED
+  MACHINE_TASK_COMPLETED
+  MACHINE_TASK_MOVED
+  MACHINE_TASK_DELETED
+  MACHINE_COUNTER_RESET
+  
+  // Поддоны
+  PALLET_CREATED
+  PALLET_MOVED_TO_BUFFER
+  PALLET_MOVED_TO_MACHINE
+  PALLET_ASSIGNED_TO_PACKAGE
+  PALLET_ASSIGNED_TO_MACHINE
+  PALLET_PROCESSING_STARTED
+  PALLET_TAKEN_TO_WORK
+  PALLET_QUANTITY_CHANGED
+  
+  // Детали
+  PART_CREATED
+  PART_STATUS_CHANGED
+  PART_STAGE_STARTED
+  PART_STAGE_COMPLETED
+  
+  // Упаковки
+  PACKAGE_STATUS_CHANGED
+  PACKAGE_ASSIGNED
+  PACKAGE_STARTED
+  PACKAGE_COMPLETED
+  
+  // Операции
+  OPERATION_STATUS_CHANGED
+  
+  // Рекламации и брак
+  RECLAMATION_CREATED
+  RECLAMATION_CONFIRMED
+  RECLAMATION_RESOLVED
+  DEFECT_DETECTED
+}
+
+/// Единая таблица событий для всей системы
+model EventLog {
+  eventId       Int       @id @default(autoincrement()) @map("event_id")
+  eventType     EventType @map("event_type")
+  entityType    String    @map("entity_type") // "order", "machine", "pallet", "part", "package"
+  entityId      Int       @map("entity_id")
+  userId        Int?      @map("user_id")
+  oldValue      Json?     @map("old_value") // Старое значение (JSON)
+  newValue      Json?     @map("new_value") // Новое значение (JSON)
+  metadata      Json?     @map("metadata")  // Дополнительные данные
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  user User? @relation(fields: [userId], references: [userId])
+  
+  @@index([entityType, entityId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("event_logs")
+}
+
+/// История статусов станков
+model MachineStatusHistory {
+  historyId     Int           @id @default(autoincrement()) @map("history_id")
+  machineId     Int           @map("machine_id")
+  oldStatus     MachineStatus @map("old_status")
+  newStatus     MachineStatus @map("new_status")
+  changedBy     Int?          @map("changed_by")
+  reason        String?       @map("reason")
+  duration      Int?          @map("duration") // Длительность в предыдущем статусе (секунды)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  
+  machine Machine @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  user    User?   @relation(fields: [changedBy], references: [userId])
+  
+  @@index([machineId, createdAt])
+  @@map("machine_status_history")
+}
+
+/// История операций на станках
+model MachineOperationHistory {
+  operationId       Int      @id @default(autoincrement()) @map("operation_id")
+  machineId         Int      @map("machine_id")
+  assignmentId      Int?     @map("assignment_id")
+  palletId          Int      @map("pallet_id")
+  partId            Int      @map("part_id")
+  routeStageId      Int      @map("route_stage_id")
+  quantityProcessed Decimal  @map("quantity_processed")
+  startedAt         DateTime @map("started_at")
+  completedAt       DateTime @map("completed_at")
+  operatorId        Int?     @map("operator_id")
+  duration          Int      @map("duration") // секунды
+  
+  machine    Machine    @relation(fields: [machineId], references: [machineId])
+  pallet     Pallet     @relation(fields: [palletId], references: [palletId])
+  part       Part       @relation(fields: [partId], references: [partId])
+  routeStage RouteStage @relation(fields: [routeStageId], references: [routeStageId])
+  operator   User?      @relation(fields: [operatorId], references: [userId])
+  
+  @@index([machineId, completedAt])
+  @@index([partId])
+  @@index([operatorId])
+  @@map("machine_operation_history")
+}
+
+/// История статусов заказов
+model OrderStatusHistory {
+  historyId   Int         @id @default(autoincrement()) @map("history_id")
+  orderId     Int         @map("order_id")
+  oldStatus   OrderStatus @map("old_status")
+  newStatus   OrderStatus @map("new_status")
+  changedBy   Int?        @map("changed_by")
+  reason      String?     @map("reason")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  
+  order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  user  User? @relation(fields: [changedBy], references: [userId])
+  
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/// История статусов деталей
+model PartStatusHistory {
+  historyId     Int        @id @default(autoincrement()) @map("history_id")
+  partId        Int        @map("part_id")
+  oldStatus     PartStatus @map("old_status")
+  newStatus     PartStatus @map("new_status")
+  routeStageId  Int?       @map("route_stage_id")
+  machineId     Int?       @map("machine_id")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  
+  part       Part        @relation(fields: [partId], references: [partId], onDelete: Cascade)
+  routeStage RouteStage? @relation(fields: [routeStageId], references: [routeStageId])
+  machine    Machine?    @relation(fields: [machineId], references: [machineId])
+  
+  @@index([partId, createdAt])
+  @@map("part_status_history")
+}
+
+/// История перемещений поддонов
+model PalletMovementHistory {
+  movementId    Int       @id @default(autoincrement()) @map("movement_id")
+  palletId      Int       @map("pallet_id")
+  fromCellId    Int?      @map("from_cell_id")
+  toCellId      Int?      @map("to_cell_id")
+  machineId     Int?      @map("machine_id")
+  movementType  String    @map("movement_type") // "TO_BUFFER", "TO_MACHINE", "TO_PACKAGE"
+  quantity      Decimal   @map("quantity")
+  movedBy       Int?      @map("moved_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  pallet   Pallet      @relation(fields: [palletId], references: [palletId], onDelete: Cascade)
+  fromCell BufferCell? @relation("FromCell", fields: [fromCellId], references: [cellId])
+  toCell   BufferCell? @relation("ToCell", fields: [toCellId], references: [cellId])
+  machine  Machine?    @relation(fields: [machineId], references: [machineId])
+  user     User?       @relation(fields: [movedBy], references: [userId])
+  
+  @@index([palletId, createdAt])
+  @@map("pallet_movement_history")
+}
+
+/// История статусов упаковок
+model PackageStatusHistory {
+  historyId   Int           @id @default(autoincrement()) @map("history_id")
+  packageId   Int           @map("package_id")
+  oldStatus   PackageStatus @map("old_status")
+  newStatus   PackageStatus @map("new_status")
+  changedBy   Int?          @map("changed_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  
+  package Package @relation(fields: [packageId], references: [packageId], onDelete: Cascade)
+  user    User?   @relation(fields: [changedBy], references: [userId])
+  
+  @@index([packageId, createdAt])
+  @@map("package_status_history")
+}
+
+/// История рекламаций и брака
+model ReclamationHistory {
+  historyId       Int       @id @default(autoincrement()) @map("history_id")
+  reclamationId   Int       @map("reclamation_id")
+  action          String    @map("action") // "CREATED", "CONFIRMED", "RESOLVED"
+  oldStatus       String?   @map("old_status")
+  newStatus       String?   @map("new_status")
+  performedBy     Int?      @map("performed_by")
+  comment         String?   @map("comment")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  reclamation Reclamation @relation(fields: [reclamationId], references: [reclamationId], onDelete: Cascade)
+  user        User?       @relation(fields: [performedBy], references: [userId])
+  
+  @@index([reclamationId, createdAt])
+  @@map("reclamation_history")
+}
+
+/// Статистика брака по станкам
+model DefectStatsByMachine {
+  statId        Int      @id @default(autoincrement()) @map("stat_id")
+  machineId     Int      @map("machine_id")
+  partId        Int      @map("part_id")
+  defectType    String   @map("defect_type")
+  quantity      Decimal  @map("quantity")
+  detectedAt    DateTime @map("detected_at")
+  routeStageId  Int?     @map("route_stage_id")
+  
+  machine    Machine     @relation(fields: [machineId], references: [machineId])
+  part       Part        @relation(fields: [partId], references: [partId])
+  routeStage RouteStage? @relation(fields: [routeStageId], references: [routeStageId])
+  
+  @@index([machineId, detectedAt])
+  @@index([partId])
+  @@map("defect_stats_by_machine")
+}
+
+/// Статистика производительности операторов
+model OperatorPerformanceStats {
+  statId            Int      @id @default(autoincrement()) @map("stat_id")
+  operatorId        Int      @map("operator_id")
+  machineId         Int      @map("machine_id")
+  date              DateTime @map("date") @db.Date
+  quantityProcessed Decimal  @map("quantity_processed")
+  defectQuantity    Decimal  @default(0) @map("defect_quantity")
+  workDuration      Int      @map("work_duration") // минуты
+  
+  operator User    @relation(fields: [operatorId], references: [userId])
+  machine  Machine @relation(fields: [machineId], references: [machineId])
+  
+  @@unique([operatorId, machineId, date])
+  @@index([operatorId, date])
+  @@map("operator_performance_stats")
 }

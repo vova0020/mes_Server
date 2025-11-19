@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
 import { SocketService } from '../../websocket/services/socket.service';
+import { AuditService } from '../../audit/services/audit.service';
 import {
   PalletDto,
   PalletsResponseDto,
@@ -15,6 +16,7 @@ export class PalletMachineNoSmenService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) { }
 
   /**
@@ -500,6 +502,17 @@ export class PalletMachineNoSmenService {
         },
       };
 
+      // Логируем взятие поддона в работу
+      await this.auditService.logEvent(
+        'PALLET_TAKEN_TO_WORK',
+        'pallet',
+        palletId,
+        operatorId,
+        undefined,
+        { machineId, stageId, status: 'IN_PROGRESS' },
+        { assignmentId: machineAssignment.assignmentId }
+      );
+
       return {
         message: 'Поддон успешно взят в работу',
         assignment: eventData,
@@ -721,6 +734,19 @@ export class PalletMachineNoSmenService {
         'order:stats',
         { status: 'updated' },
       );
+
+      // Логируем завершение обработки
+      await this.auditService.logMachineOperation({
+        machineId,
+        palletId,
+        partId: assignment.pallet.partId,
+        routeStageId: currentProgress.routeStageId,
+        quantityProcessed: Number(assignment.pallet.quantity),
+        startedAt: assignment.assignedAt,
+        completedAt,
+        operatorId,
+      });
+
       return {
         message: 'Обработка поддона завершена',
         assignment: {
@@ -972,6 +998,17 @@ export class PalletMachineNoSmenService {
 
       this.logger.log(
         `Поддон ${newPallet.palletId} успешно создан для детали ${partId}`,
+      );
+
+      // Логируем создание поддона
+      await this.auditService.logEvent(
+        'PALLET_CREATED',
+        'pallet',
+        newPallet.palletId,
+        undefined,
+        undefined,
+        { partId, quantity, palletName: finalPalletName },
+        { availableQuantity: availableQuantity - quantity }
       );
 
       // Отправляем WebSocket уведомление о событии поддона
@@ -1375,6 +1412,24 @@ export class PalletMachineNoSmenService {
 
       this.logger.log(
         `Отбраковано ${quantity} деталей с поддона ${palletId}, создана рекламация ${reclamation.reclamationId}`,
+      );
+
+      // Логируем отбраковку
+      await this.auditService.logDefect(
+        machineId || 0,
+        pallet.partId,
+        'MACHINE_DEFECT',
+        quantity,
+        routeStageId
+      );
+
+      await this.auditService.logReclamationAction(
+        reclamation.reclamationId,
+        'CREATED',
+        reportedById,
+        undefined,
+        'NEW',
+        description
       );
 
       // Отправляем WebSocket уведомление о событии поддона

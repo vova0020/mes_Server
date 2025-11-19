@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
-import { TaskStatus, MachineStatus } from '@prisma/client';
+import { TaskStatus, MachineStatus, EventType } from '@prisma/client';
+import { AuditService } from '../../audit/services/audit.service';
 import { MachineSegmentResponseDto } from 'src/modules/machins/dto/machine-segment.dto';
 import {
   MachineTaskResponseDto,
@@ -20,6 +21,7 @@ export class MachinMasterService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) { }
 
   // Получение списка станков с включением связанных данных
@@ -503,6 +505,10 @@ export class MachinMasterService {
         throw new NotFoundException(`Задание с ID ${operationId} не найдено`);
       }
 
+      const machineId = assignment.machineId;
+      const palletId = assignment.palletId;
+      const partId = assignment.pallet.part.partId;
+
       // Удаляем всё в одной транзакции
       await this.prisma.$transaction(async (tx) => {
         // 1) Удаляем само назначение из machine_assignments
@@ -538,6 +544,16 @@ export class MachinMasterService {
           },
         });
       });
+
+      // Логируем удаление задания
+      await this.auditService.logEvent(
+        EventType.MACHINE_TASK_DELETED,
+        'machine_assignment',
+        operationId,
+        undefined,
+        { machineId, palletId, partId },
+        undefined,
+      );
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
@@ -727,6 +743,8 @@ export class MachinMasterService {
         throw new NotFoundException(`Станок с ID ${targetMachineId} не найден`);
       }
 
+      const oldMachineId = assignment.machineId;
+
       // 3) Проводим перемещение и обновление привязки детали к станку в одной транзакции
       await this.prisma.$transaction(async (tx) => {
         // а) обновляем сам machineAssignment
@@ -762,6 +780,17 @@ export class MachinMasterService {
           },
         });
       });
+
+      // Логируем перемещение задания
+      await this.auditService.logEvent(
+        EventType.MACHINE_TASK_MOVED,
+        'machine_assignment',
+        operationId,
+        undefined,
+        { machineId: oldMachineId },
+        { machineId: targetMachineId },
+        { palletId: assignment.palletId, partId: assignment.pallet.part.partId },
+      );
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
@@ -817,6 +846,16 @@ export class MachinMasterService {
           partiallyCompleted: 0,
         },
       });
+
+      // Логируем событие
+      await this.auditService.logEvent(
+        EventType.MACHINE_COUNTER_RESET,
+        'machine',
+        machineId,
+        undefined,
+        { counterResetAt: machine.counterResetAt },
+        { counterResetAt: new Date() },
+      );
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
