@@ -24,6 +24,7 @@ import { OrderManagementModule } from './modules/order-management/order-manageme
 import { RouteListModule } from './modules/routeList/route-list.module';
 import { WorkMonitorModule } from './modules/work-monitor/work-monitor.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { AuditModule } from './modules/audit/audit.module';
     RouteListModule,
     WorkMonitorModule,
     AuditModule,
+    StatisticsModule,
     
     // MachinNoSmenModule,
     // MachinModule,
