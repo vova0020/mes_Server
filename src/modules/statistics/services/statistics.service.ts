@@ -24,7 +24,7 @@ export interface MachineStats {
   machineId: number;
   machineName: string;
   totalValue: number;
-  unit: UnitOfMeasurement;
+  unit: string; // Единица измерения станка
   dataPoints: DataPoint[]; // Данные по датам для диаграммы
 }
 
@@ -109,15 +109,12 @@ export class StatisticsService {
       where: { stageId: dto.stageId },
     });
 
-    const unit = dto.unit || UnitOfMeasurement.PIECES;
-
     if (stage?.finalStage) {
       // Для финального этапа используем PackingTask
       return this.calculatePackingMachineStats(
         dto.lineId,
         startDate,
         endDate,
-        unit,
       );
     }
 
@@ -148,12 +145,12 @@ export class StatisticsService {
     const stats: MachineStats[] = [];
 
     for (const machineStage of machineStages) {
+      const machineUnit = machineStage.machine.loadUnit;
       const dataPoints = await this.calculateMachineStatsWithDates(
         machineStage.machineId,
         routeStageIds,
         startDate,
         endDate,
-        unit,
       );
 
       const totalValue = dataPoints.reduce((sum, dp) => sum + dp.value, 0);
@@ -162,7 +159,7 @@ export class StatisticsService {
         machineId: machineStage.machineId,
         machineName: machineStage.machine.machineName,
         totalValue,
-        unit,
+        unit: machineUnit,
         dataPoints,
       });
     }
@@ -266,7 +263,6 @@ export class StatisticsService {
     routeStageIds: number[],
     startDate: Date,
     endDate: Date,
-    unit: UnitOfMeasurement,
   ): Promise<DataPoint[]> {
     // Вариант 1: Пробуем получить из MachineOperationHistory
     const operations = await this.prisma.machineOperationHistory.findMany({
@@ -278,9 +274,6 @@ export class StatisticsService {
         },
         routeStageId: { in: routeStageIds },
       },
-      include: {
-        part: true,
-      },
     });
 
     if (operations.length > 0) {
@@ -289,19 +282,7 @@ export class StatisticsService {
       for (const op of operations) {
         const dateKey = op.completedAt!.toISOString().split('T')[0];
         const quantity = Number(op.quantityProcessed);
-        const part = op.part;
-
-        let value = 0;
-        if (unit === UnitOfMeasurement.PIECES) {
-          value = quantity;
-        } else {
-          const length = Number(part.finishedLength || 0);
-          const width = Number(part.finishedWidth || 0);
-          const area = (length * width) / 1000000;
-          value = area * quantity;
-        }
-
-        dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
+        dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + quantity);
       }
 
       return Array.from(dataByDate.entries())
@@ -349,19 +330,7 @@ export class StatisticsService {
     for (const assignment of filteredAssignments) {
       const dateKey = assignment.completedAt!.toISOString().split('T')[0];
       const quantity = Number(assignment.pallet.quantity);
-      const part = assignment.pallet.part;
-
-      let value = 0;
-      if (unit === UnitOfMeasurement.PIECES) {
-        value = quantity;
-      } else {
-        const length = Number(part.finishedLength || 0);
-        const width = Number(part.finishedWidth || 0);
-        const area = (length * width) / 1000000;
-        value = area * quantity;
-      }
-
-      dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
+      dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + quantity);
     }
 
     return Array.from(dataByDate.entries())
@@ -373,16 +342,7 @@ export class StatisticsService {
     lineId: number,
     startDate: Date,
     endDate: Date,
-    unit: UnitOfMeasurement,
   ): Promise<MachineStats[]> {
-    // Получаем маршруты для этого потока
-    const routes = await this.prisma.route.findMany({
-      where: { lineId },
-      select: { routeId: true },
-    });
-
-    const routeIds = routes.map((r) => r.routeId);
-
     // Получаем завершенные задачи упаковки
     const packingTasks = await this.prisma.packingTask.findMany({
       where: {
@@ -394,15 +354,6 @@ export class StatisticsService {
       },
       include: {
         machine: true,
-        package: {
-          include: {
-            composition: {
-              where: {
-                routeId: { in: routeIds },
-              },
-            },
-          },
-        },
       },
       orderBy: {
         completedAt: 'asc',
@@ -410,28 +361,20 @@ export class StatisticsService {
     });
 
     // Группируем по станкам
-    const machineDataMap = new Map<number, { name: string; dateMap: Map<string, number> }>();
+    const machineDataMap = new Map<number, { name: string; unit: string; dateMap: Map<string, number> }>();
 
     for (const task of packingTasks) {
       if (!machineDataMap.has(task.machineId)) {
         machineDataMap.set(task.machineId, {
           name: task.machine.machineName,
+          unit: task.machine.loadUnit,
           dateMap: new Map(),
         });
       }
 
       const machineData = machineDataMap.get(task.machineId)!;
       const dateKey = task.completedAt!.toISOString().split('T')[0];
-      let value = 0;
-
-      for (const comp of task.package.composition) {
-        if (unit === UnitOfMeasurement.PIECES) {
-          value += Number(comp.quantityPerPackage) * Number(task.package.quantity);
-        } else {
-          const area = Number(comp.finishedLength || 0) * Number(comp.finishedWidth || 0);
-          value += (area / 1000000) * Number(comp.quantityPerPackage) * Number(task.package.quantity);
-        }
-      }
+      const value = Number(task.completedQuantity);
 
       machineData.dateMap.set(dateKey, (machineData.dateMap.get(dateKey) || 0) + value);
     }
@@ -450,7 +393,7 @@ export class StatisticsService {
         machineId,
         machineName: machineData.name,
         totalValue,
-        unit,
+        unit: machineData.unit,
         dataPoints,
       });
     }

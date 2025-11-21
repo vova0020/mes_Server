@@ -26,8 +26,4 @@ export class GetStageStatsDto {
   @IsDateString()
   @IsOptional()
   date?: string;
-
-  @IsEnum(UnitOfMeasurement)
-  @IsOptional()
-  unit?: UnitOfMeasurement = UnitOfMeasurement.PIECES;
 }
