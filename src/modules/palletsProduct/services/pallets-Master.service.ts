@@ -950,12 +950,13 @@ export class PalletsMasterService {
   }
 
   /**
-   * Получить сменное задание для станка по его ID
+   * Получить сменное задание для станка по его ID и этапу
    */
   async getMachineTasksById(
     machineId: number,
+    stageId?: number,
   ): Promise<MachineTaskMasterResponseDto[]> {
-    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}`);
+    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}, этап: ${stageId}`);
 
     try {
       // Проверяем существование станка
@@ -965,6 +966,21 @@ export class PalletsMasterService {
 
       if (!machine) {
         throw new NotFoundException(`Станок с ID ${machineId} не найден`);
+      }
+
+      // Получаем этапы станка
+      const machineStages = await this.prisma.machineStage.findMany({
+        where: { machineId },
+        select: { stageId: true }
+      });
+      const machineStageIds = machineStages.map(ms => ms.stageId);
+
+      // Если указан stageId, проверяем что станок может выполнять этот этап
+      if (stageId && !machineStageIds.includes(stageId)) {
+        this.logger.warn(
+          `Станок ${machineId} не может выполнять этап ${stageId}`,
+        );
+        return [];
       }
 
       // Получаем активные назначения для данного станка
@@ -1022,22 +1038,27 @@ export class PalletsMasterService {
         return [];
       }
 
-      // Получаем этапы станка
-      const machineStages = await this.prisma.machineStage.findMany({
-        where: { machineId },
-        select: { stageId: true }
-      });
-      const machineStageIds = machineStages.map(ms => ms.stageId);
-
       // Формируем ответ с данными из связанных таблиц
-      const tasks = machineAssignments.map((assignment) => {
-        const pallet = assignment.pallet;
-        const part = pallet.part;
-        
-        // Находим прогресс этапа для данного станка
-        const stageProgress = pallet.palletStageProgress.find(progress => 
-          machineStageIds.includes(progress.routeStage?.stageId)
-        );
+      const tasks = machineAssignments
+        .map((assignment) => {
+          const pallet = assignment.pallet;
+          const part = pallet.part;
+          
+          // Находим прогресс этапа для данного станка
+          let stageProgress = pallet.palletStageProgress.find(progress => 
+            machineStageIds.includes(progress.routeStage?.stageId)
+          );
+
+          // Если указан конкретный stageId, фильтруем только по нему
+          if (stageId) {
+            stageProgress = pallet.palletStageProgress.find(progress => 
+              progress.routeStage?.stageId === stageId
+            );
+            // Если прогресс не найден для указанного этапа, пропускаем это задание
+            if (!stageProgress) {
+              return null;
+            }
+          }
 
         // Получаем информацию о заказе через связь с пакетом
         const packagePart = part.productionPackageParts[0];
@@ -1045,21 +1066,22 @@ export class PalletsMasterService {
         const pma = part.partMachineAssignment?.[0];
         const priority = pma ? pma.priority : 0;
 
-        return {
-          operationId: assignment.assignmentId,
-          orderId: order?.orderId || 0,
-          orderName: order?.orderName || 'Неизвестный заказ',
-          detailArticle: part.partCode,
-          detailName: part.partName,
-          detailMaterial: part.material?.materialName || 'Не указан',
-          detailSize: part.size,
-          palletName: pallet.palletName,
-          quantity: Number(pallet.quantity),
-          status: stageProgress?.status || TaskStatus.PENDING,
-          priority,
-          partId: part.partId,
-        };
-      });
+          return {
+            operationId: assignment.assignmentId,
+            orderId: order?.orderId || 0,
+            orderName: order?.orderName || 'Неизвестный заказ',
+            detailArticle: part.partCode,
+            detailName: part.partName,
+            detailMaterial: part.material?.materialName || 'Не указан',
+            detailSize: part.size,
+            palletName: pallet.palletName,
+            quantity: Number(pallet.quantity),
+            status: stageProgress?.status || TaskStatus.PENDING,
+            priority,
+            partId: part.partId,
+          };
+        })
+        .filter(task => task !== null); // Убираем null значения
 
       this.logger.log(
         `Успешно получено ${tasks.length} заданий для станка с ID ${machineId}`,

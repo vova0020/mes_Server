@@ -13,6 +13,16 @@ export class MachineTaskQueryDto {
   @Transform(({ value }) => parseInt(value, 10))
   @IsNumber()
   machineId: number;
+
+  @ApiProperty({
+    description: 'ID этапа для фильтрации заданий',
+    example: 6,
+    required: false,
+  })
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  @IsInt()
+  stageId?: number;
 }
 
 export class OrderInfoDto {

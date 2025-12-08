@@ -298,9 +298,9 @@ export class PalletsMasterController {
     @Query() query: MachineTaskQueryDto,
   ): Promise<MachineTaskMasterResponseDto[]> {
     this.logger.log(
-      `Запрос на получение заданий для станка с ID: ${query.machineId}`,
+      `Запрос на получение заданий для станка с ID: ${query.machineId}, этап: ${query.stageId}`,
     );
-    return this.palletOperationsService.getMachineTasksById(query.machineId);
+    return this.palletOperationsService.getMachineTasksById(query.machineId, query.stageId);
   }
 
   @Post('defect-parts')
