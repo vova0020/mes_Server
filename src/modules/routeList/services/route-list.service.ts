@@ -54,6 +54,9 @@ export class RouteListService {
                     include: {
                       stage: true,
                     },
+                    orderBy: {
+                      sequenceNumber: 'asc',
+                    },
                   },
                 },
               },
@@ -120,7 +123,8 @@ export class RouteListService {
       });
 
       // Получаем текущее местоположение поддона в буферной ячейке
-      const currentBufferCell = pallet.palletBufferCells[0]?.cell?.cellCode || null;
+      const currentBufferCell =
+        pallet.palletBufferCells[0]?.cell?.cellCode || null;
 
       // Формируем данные маршрутных этапов
       const routeStages: RouteStageData[] = pallet.part.route.routeStages.map(
@@ -134,9 +138,9 @@ export class RouteListService {
             (assignment) => {
               // Проверяем, что назначение связано с этапом через станок
               return assignment.machine.machinesStages?.some(
-                (ms) => ms.stageId === routeStage.stageId
+                (ms) => ms.stageId === routeStage.stageId,
               );
-            }
+            },
           );
 
           return {

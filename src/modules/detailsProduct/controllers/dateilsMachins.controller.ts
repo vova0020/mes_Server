@@ -25,6 +25,12 @@ export class DetailsMachinsController {
   @Get(':machineId/task')
   @ApiOperation({ summary: 'Получить сменное задание для станка' })
   @ApiParam({ name: 'machineId', description: 'ID станка', example: 1 })
+  @ApiQuery({ 
+    name: 'stageId', 
+    description: 'ID этапа производства (опционально, для фильтрации)', 
+    example: 5,
+    required: false 
+  })
   @ApiResponse({
     status: 200,
     description: 'Сменное задание успешно получено',
@@ -33,8 +39,9 @@ export class DetailsMachinsController {
   @ApiResponse({ status: 404, description: 'Станок не найден' })
   async getMachineTask(
     @Param('machineId', ParseIntPipe) machineId: number,
+    @Query('stageId', ParseIntPipe) stageId?: number,
   ): Promise<MachineTaskResponseDto> {
-    return this.taskService.getMachineTask(machineId);
+    return this.taskService.getMachineTask(machineId, stageId);
   }
 
   // =================   Эндпоинты для станка без сменного задания  =================================

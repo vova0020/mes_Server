@@ -58,6 +58,7 @@ export class PalletMachinController {
         dto.palletId,
         dto.machineId,
         dto.operatorId,
+        dto.stageId,
       );
     } catch (error) {
       throw new HttpException(

@@ -20,11 +20,13 @@ export class PalletMachineService {
    * @param palletId - ID поддона
    * @param machineId - ID станка
    * @param operatorId - ID оператора (опционально)
+   * @param stageId - ID этапа для обработки (обязательно, если станок привязан к нескольким этапам)
    */
   async startPalletProcessing(
     palletId: number,
     machineId: number,
     operatorId?: number,
+    stageId?: number,
   ) {
     // Проверяем существование поддона
     const pallet = await this.prisma.pallet.findUnique({
@@ -104,14 +106,32 @@ export class PalletMachineService {
 
     // Ищем этап в маршруте, который может выполнять этот станок
     const allRouteStages = pallet.part.route?.routeStages || [];
-    const machineRouteStage = allRouteStages.find((rs) =>
-      machineStageIds.includes(rs.stageId),
-    );
-
-    if (!machineRouteStage) {
-      const errorMsg = `Станок ${machineId} не может выполнять ни один из этапов маршрута поддона ${palletId}`;
-      this.logger.error(errorMsg);
-      throw new Error(errorMsg);
+    
+    let machineRouteStage: any;
+    
+    if (stageId) {
+      // Если stageId передан явно, ищем конкретный этап
+      machineRouteStage = allRouteStages.find((rs) => rs.stageId === stageId);
+      
+      if (!machineRouteStage) {
+        throw new Error(`Этап ${stageId} не найден в маршруте поддона ${palletId}`);
+      }
+      
+      // Проверяем, что станок может выполнять этот этап
+      if (!machineStageIds.includes(stageId)) {
+        throw new Error(`Станок ${machineId} не может выполнять этап ${stageId}`);
+      }
+    } else {
+      // Если stageId не передан, ищем первый подходящий этап (старая логика)
+      machineRouteStage = allRouteStages.find((rs) =>
+        machineStageIds.includes(rs.stageId),
+      );
+      
+      if (!machineRouteStage) {
+        const errorMsg = `Станок ${machineId} не может выполнять ни один из этапов маршрута поддона ${palletId}`;
+        this.logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
     }
 
     // Проверяем, есть ли уже прогресс для этого этапа

@@ -13,8 +13,10 @@ export class TaskDetailService {
   /**
    * Получить сменное задание для станка
    * Адаптировано под новую схему БД
+   * @param machineId - ID станка
+   * @param stageId - ID этапа для фильтрации (опционально)
    */
-  async getMachineTask(machineId: number): Promise<MachineTaskResponseDto> {
+  async getMachineTask(machineId: number, stageId?: number): Promise<MachineTaskResponseDto> {
     // Проверка существования станка (обновлено под новую схему)
     const machine = await this.prisma.machine.findUnique({
       where: { machineId },
@@ -71,6 +73,8 @@ export class TaskDetailService {
     // Также получаем поддоны с прогрессом для данного станка через связи
     const relevantRouteStages = await this.prisma.routeStage.findMany({
       where: {
+        // Фильтруем по stageId, если передан
+        ...(stageId ? { stageId } : {}),
         OR: [
           {
             stage: {
@@ -378,10 +382,16 @@ export class TaskDetailService {
       }
     }
 
+    // Фильтруем задания по stageId, если он передан
+    let tasks = Array.from(detailMap.values());
+    if (stageId) {
+      tasks = tasks.filter(task => task.processStepId === stageId);
+    }
+
     return {
       machineId: machine.machineId,
       machineName: machine.machineName,
-      tasks: Array.from(detailMap.values()),
+      tasks,
     };
   }
 }
