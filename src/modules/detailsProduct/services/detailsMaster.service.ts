@@ -387,12 +387,21 @@ export class DetailsMasterService {
               const currentMachineAssignments =
                 pallet.machineAssignments.filter(
                   (assignment) =>
-                    machineIds.includes(assignment.machine.machineId) &&
-                    (assignment.routeStageId
-                      ? currentSegmentRouteStageIds.includes(
-                          assignment.routeStageId,
-                        )
-                      : false),
+                    assignment.routeStageId &&
+                    currentSegmentRouteStageIds.includes(
+                      assignment.routeStageId,
+                    ) &&
+                    !assignment.completedAt,
+                );
+
+              const completedMachineAssignments =
+                pallet.machineAssignments.filter(
+                  (assignment) =>
+                    assignment.routeStageId &&
+                    currentSegmentRouteStageIds.includes(
+                      assignment.routeStageId,
+                    ) &&
+                    assignment.completedAt,
                 );
 
               if (currentSegmentProgress.length > 0) {
@@ -404,6 +413,8 @@ export class DetailsMasterService {
                 }
               } else if (currentMachineAssignments.length > 0) {
                 palletDistributed += palletQuantity;
+              } else if (completedMachineAssignments.length > 0) {
+                palletCompleted += palletQuantity;
               }
             }
 
@@ -450,35 +461,29 @@ export class DetailsMasterService {
               const currentMachineAssignments =
                 pallet.machineAssignments.filter(
                   (assignment) =>
-                    machineIds.includes(assignment.machine.machineId) &&
-                    !assignment.completedAt &&
-                    (assignment.routeStageId
-                      ? currentSegmentRouteStageIds.includes(
-                          assignment.routeStageId,
-                        )
-                      : false),
+                    assignment.routeStageId &&
+                    currentSegmentRouteStageIds.includes(
+                      assignment.routeStageId,
+                    ) &&
+                    !assignment.completedAt,
                 );
 
               const completedMachineAssignments =
                 pallet.machineAssignments.filter(
                   (assignment) =>
-                    machineIds.includes(assignment.machine.machineId) &&
-                    assignment.completedAt &&
-                    (assignment.routeStageId
-                      ? currentSegmentRouteStageIds.includes(
-                          assignment.routeStageId,
-                        )
-                      : false),
+                    assignment.routeStageId &&
+                    currentSegmentRouteStageIds.includes(
+                      assignment.routeStageId,
+                    ) &&
+                    assignment.completedAt,
                 );
 
               const hasAnyMachineAssignments = pallet.machineAssignments.some(
                 (assignment) =>
-                  machineIds.includes(assignment.machine.machineId) &&
-                  (assignment.routeStageId
-                    ? currentSegmentRouteStageIds.includes(
-                        assignment.routeStageId,
-                      )
-                    : false),
+                  assignment.routeStageId &&
+                  currentSegmentRouteStageIds.includes(
+                    assignment.routeStageId,
+                  ),
               );
 
               if (currentSegmentProgress.length > 0) {

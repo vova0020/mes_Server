@@ -218,11 +218,12 @@ export class PalletsMasterService {
       // Мастер может планировать работу заранее, назначая поддоны на разные этапы
       // Назначения завершаются только при фактическом выполнении работы
 
-      // 5. Создаём новое назначение паллета на станок
+      // 5. Создаём новое назначение паллета на станок с указанием routeStageId
       const machineAssignment = await prisma.machineAssignment.create({
         data: {
           palletId,
           machineId,
+          routeStageId: routeStage.routeStageId,
           assignedAt: new Date(),
         },
         include: {
