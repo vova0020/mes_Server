@@ -1238,6 +1238,8 @@ model MachineAssignment {
   machineId    Int       @map("machine_id")
   /// Ссылка на паллету
   palletId     Int       @map("pallet_id")
+  /// Ссылка на этап маршрута (опционально)
+  routeStageId Int?      @map("route_stage_id")
   /// Время назначения задания
   assignedAt   DateTime  @map("assigned_at")
   /// Время завершения задания (если завершено)
