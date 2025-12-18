@@ -231,11 +231,6 @@ export class DetailsMasterService {
                     palletName: true,
                     quantity: true,
                     palletStageProgress: {
-                      where: {
-                        routeStageId: {
-                          in: currentSegmentRouteStageIds,
-                        },
-                      },
                       include: {
                         routeStage: {
                           include: {
@@ -446,20 +441,13 @@ export class DetailsMasterService {
             distributed = palletDistributed;
             completed = palletCompleted;
           } else {
+            // Для не первого этапа - считаем готово к обработке от завершенных предыдущих этапов
+            let readyFromPreviousStages = 0;
+            
             for (const pallet of part.pallets) {
               const palletQuantity = Number(pallet.quantity);
 
-              const currentSegmentProgress = pallet.palletStageProgress.filter(
-                (progress) =>
-                  currentSegmentStageIds.includes(
-                    progress.routeStage.stageId,
-                  ) ||
-                  (progress.routeStage.substageId &&
-                    currentSegmentSubstageIds.includes(
-                      progress.routeStage.substageId,
-                    )),
-              );
-
+              // Проверяем завершение всех предыдущих этапов для этого поддона
               const previousStageProgress = pallet.palletStageProgress.filter(
                 (progress) =>
                   previousStageIds.includes(progress.routeStage.stageId),
@@ -474,6 +462,22 @@ export class DetailsMasterService {
                       progress.status === 'COMPLETED',
                   ),
                 );
+
+              if (isPreviousStagesCompleted) {
+                readyFromPreviousStages += palletQuantity;
+              }
+
+              // Считаем distributed и completed как раньше
+              const currentSegmentProgress = pallet.palletStageProgress.filter(
+                (progress) =>
+                  currentSegmentStageIds.includes(
+                    progress.routeStage.stageId,
+                  ) ||
+                  (progress.routeStage.substageId &&
+                    currentSegmentSubstageIds.includes(
+                      progress.routeStage.substageId,
+                    )),
+              );
 
               const currentMachineAssignments =
                 pallet.machineAssignments.filter(
@@ -495,14 +499,6 @@ export class DetailsMasterService {
                     assignment.completedAt,
                 );
 
-              const hasAnyMachineAssignments = pallet.machineAssignments.some(
-                (assignment) =>
-                  assignment.routeStageId &&
-                  currentSegmentRouteStageIds.includes(
-                    assignment.routeStageId,
-                  ),
-              );
-
               if (currentSegmentProgress.length > 0) {
                 const latestProgress = currentSegmentProgress.sort(
                   (a, b) =>
@@ -520,10 +516,6 @@ export class DetailsMasterService {
                 ) {
                   if (currentMachineAssignments.length > 0) {
                     distributed += palletQuantity;
-                  } else if (hasAnyMachineAssignments) {
-                    // Не добавляем
-                  } else if (isPreviousStagesCompleted) {
-                    readyForProcessing += palletQuantity;
                   }
                 }
               } else {
@@ -531,24 +523,24 @@ export class DetailsMasterService {
                   distributed += palletQuantity;
                 } else if (completedMachineAssignments.length > 0) {
                   completed += palletQuantity;
-                } else if (hasAnyMachineAssignments) {
-                  // Не добавляем
-                } else if (
-                  isPreviousStagesCompleted &&
-                  !hasAnyMachineAssignments
-                ) {
-                  readyForProcessing += palletQuantity;
                 }
               }
             }
+            
+            // Готово к обработке = прошло предыдущие этапы минус уже распределено и готово
+            readyForProcessing = Math.max(0, readyFromPreviousStages - distributed - completed);
           }
 
+          console.log(`FINAL ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}, total=${Number(part.totalQuantity)}`);
+          
           readyForProcessing = Math.min(
             readyForProcessing,
             Number(part.totalQuantity),
           );
           distributed = Math.min(distributed, Number(part.totalQuantity));
           completed = Math.min(completed, Number(part.totalQuantity));
+          
+          console.log(`AFTER LIMITS ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}`);
 
           const compositionItem = packageItem.composition.find(
             (comp) => comp.partCode === part.partCode,
