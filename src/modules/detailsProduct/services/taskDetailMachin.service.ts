@@ -27,11 +27,53 @@ export class TaskDetailService {
       throw new NotFoundException(`Станок с ID ${machineId} не найден`);
     }
 
-    // Получаем назначения поддонов на станок
-    const machineAssignments = await this.prisma.machineAssignment.findMany({
+    // Получаем routeStageIds для фильтрации, если указан stageId
+    let routeStageIds: number[] | undefined;
+    if (stageId) {
+      const routeStages = await this.prisma.routeStage.findMany({
+        where: { stageId },
+        select: { routeStageId: true },
+      });
+      routeStageIds = routeStages.map(rs => rs.routeStageId);
+      console.log(`DEBUG: stageId=${stageId}, routeStageIds=${JSON.stringify(routeStageIds)}`);
+    }
+
+    // Получаем ВСЕ назначения поддонов на станок (без фильтра по этапу)
+    const allMachineAssignments = await this.prisma.machineAssignment.findMany({
       where: {
         machineId,
         completedAt: null, // Только активные назначения
+      },
+      select: {
+        assignmentId: true,
+        routeStageId: true,
+        palletId: true,
+      },
+    });
+    
+    console.log(`DEBUG: Found ${allMachineAssignments.length} total assignments for machine ${machineId}`);
+    console.log('DEBUG: All assignments:', allMachineAssignments.map(a => ({ assignmentId: a.assignmentId, routeStageId: a.routeStageId })));
+    
+    // Проверяем, к каким stageId относятся все routeStageId
+    const allRouteStageIds = [...new Set(allMachineAssignments.map(a => a.routeStageId).filter((id): id is number => id !== null))];
+    const routeStageInfo = await this.prisma.routeStage.findMany({
+      where: { routeStageId: { in: allRouteStageIds } },
+      select: { routeStageId: true, stageId: true },
+    });
+    console.log('DEBUG: RouteStage to Stage mapping:', routeStageInfo);
+    
+    // Фильтруем назначения по этапу, если указан
+    const filteredAssignmentIds = routeStageIds && routeStageIds.length > 0 
+      ? allMachineAssignments.filter(a => a.routeStageId && routeStageIds!.includes(a.routeStageId)).map(a => a.assignmentId)
+      : allMachineAssignments.map(a => a.assignmentId);
+      
+    console.log(`DEBUG: Filtered to ${filteredAssignmentIds.length} assignments for requested stage`);
+    console.log('DEBUG: Filtered assignment IDs:', filteredAssignmentIds);
+    
+    // Получаем полные данные о назначениях
+    const machineAssignments = await this.prisma.machineAssignment.findMany({
+      where: {
+        assignmentId: { in: filteredAssignmentIds },
       },
       include: {
         pallet: {
@@ -69,39 +111,47 @@ export class TaskDetailService {
         },
       },
     });
+    
+    console.log(`DEBUG: Loaded ${machineAssignments.length} full assignment records`);
+    console.log('DEBUG: Assignment details:', machineAssignments.map(a => ({
+      assignmentId: a.assignmentId,
+      routeStageId: a.routeStageId,
+      palletId: a.palletId,
+      partId: a.pallet?.part?.partId,
+      partCode: a.pallet?.part?.partCode
+    })));
 
-    // Также получаем поддоны с прогрессом для данного станка через связи
-    const relevantRouteStages = await this.prisma.routeStage.findMany({
-      where: {
-        // Фильтруем по stageId, если передан
-        ...(stageId ? { stageId } : {}),
-        OR: [
-          {
-            stage: {
-              machinesStages: {
-                some: {
-                  machineId,
+    // Используем уже вычисленные routeStageIds или получаем все для станка
+    if (!routeStageIds) {
+      const relevantRouteStages = await this.prisma.routeStage.findMany({
+        where: {
+          OR: [
+            {
+              stage: {
+                machinesStages: {
+                  some: {
+                    machineId,
+                  },
                 },
               },
             },
-          },
-          {
-            substage: {
-              machineSubstages: {
-                some: {
-                  machineId,
+            {
+              substage: {
+                machineSubstages: {
+                  some: {
+                    machineId,
+                  },
                 },
               },
             },
-          },
-        ],
-      },
-      select: {
-        routeStageId: true,
-      },
-    });
-
-    const routeStageIds = relevantRouteStages.map((rs) => rs.routeStageId);
+          ],
+        },
+        select: {
+          routeStageId: true,
+        },
+      });
+      routeStageIds = relevantRouteStages.map((rs) => rs.routeStageId);
+    }
 
     // Получаем ID поддонов, которые назначены на данный cтанок
     const assignedPalletIds = machineAssignments.map(
@@ -155,19 +205,27 @@ export class TaskDetailService {
           })
         : [];
 
-    // Группируем задания по деталям
-    const detailMap = new Map<number, TaskItemDto>();
+    // Группируем задания по деталям И этапам маршрута
+    const detailMap = new Map<string, TaskItemDto>();
     const detailIds = new Set<number>();
 
+    console.log(`DEBUG: Starting to process ${machineAssignments.length} assignments`);
+    
     // Обрабатываем назначения станков
     for (const assignment of machineAssignments) {
       const part = assignment.pallet.part;
       const partId = part.partId;
+      const routeStageId = assignment.routeStageId;
+      const mapKey = `${partId}-${routeStageId}`; // Ключ по детали И этапу
       detailIds.add(partId);
 
       // Получаем заказ из первого пакета
       const order = part.productionPackageParts[0]?.package.order;
-      if (!order) continue;
+      console.log(`DEBUG: Processing assignment ${assignment.assignmentId}, part ${partId}, order:`, order ? order.orderId : 'NO ORDER');
+      if (!order) {
+        console.log(`DEBUG: Skipping assignment ${assignment.assignmentId} - no order found`);
+        continue;
+      }
 
       // Получаем материал из PackageComposition
       const packageComposition = part.productionPackageParts[0]?.package.composition;
@@ -179,12 +237,17 @@ export class TaskDetailService {
       // Находим актуальный прогресс для этого поддона
       const latestProgress = assignment.pallet.palletStageProgress[0];
 
-      if (!detailMap.has(partId)) {
-        detailMap.set(partId, {
+      // Получаем информацию об этапе из назначения
+      const assignmentRouteStage = await this.prisma.routeStage.findUnique({
+        where: { routeStageId: assignment.routeStageId! },
+        include: { stage: true }
+      });
+
+      if (!detailMap.has(mapKey)) {
+        detailMap.set(mapKey, {
           operationId: assignment.assignmentId,
-          processStepId: latestProgress?.routeStage.stageId || 0,
-          processStepName:
-            latestProgress?.routeStage.stage.stageName || 'Не определен',
+          processStepId: assignmentRouteStage?.stageId || 0,
+          processStepName: assignmentRouteStage?.stage.stageName || 'Не определен',
           quantity: 1, // Количество поддонов, может быть изменено позже
           status: latestProgress?.status || 'PENDING',
           priority: 0, // Будет обновлено позже из PartMachineAssignment
@@ -206,13 +269,19 @@ export class TaskDetailService {
             progress: Number(order.completionPercentage),
           },
         });
+        console.log(`DEBUG: Added task for part ${partId}, routeStage ${routeStageId}`);
       }
     }
+    
+    console.log(`DEBUG: Created ${detailMap.size} tasks in detailMap`);
+    console.log('DEBUG: Task keys:', Array.from(detailMap.keys()));
 
     // Обрабатываем прогресс поддонов
     for (const progress of palletProgress) {
       const part = progress.pallet.part;
       const partId = part.partId;
+      const routeStageId = progress.routeStageId;
+      const mapKey = `${partId}-${routeStageId}`;
       detailIds.add(partId);
 
       const order = part.productionPackageParts[0]?.package.order;
@@ -225,8 +294,8 @@ export class TaskDetailService {
       );
       const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
 
-      if (!detailMap.has(partId)) {
-        detailMap.set(partId, {
+      if (!detailMap.has(mapKey)) {
+        detailMap.set(mapKey, {
           operationId: progress.pspId,
           processStepId: progress.routeStage.stageId,
           processStepName: progress.routeStage.stage.stageName,
@@ -253,13 +322,13 @@ export class TaskDetailService {
         });
       } else {
         // Обновляем, если новый статус более актуален
-        const existingItem = detailMap.get(partId);
+        const existingItem = detailMap.get(mapKey);
         if (
           existingItem &&
           progress.status === 'IN_PROGRESS' &&
           existingItem.status !== 'IN_PROGRESS'
         ) {
-          detailMap.set(partId, {
+          detailMap.set(mapKey, {
             ...existingItem,
             operationId: progress.pspId,
             status: progress.status,
@@ -368,26 +437,33 @@ export class TaskDetailService {
         // Если поддон не назначен на этот станок - не учитываем его в статистике
       }
 
-      // Обновляем статистику в карте
-      const detailItem = detailMap.get(partId);
-      if (detailItem) {
-        detailMap.set(partId, {
-          ...detailItem,
-          quantity: part.pallets.length, // Общее количество поддонов
-          priority: priorityMap.get(partId) || 0,
-          readyForProcessing,
-          distributed: 0, // Не используется для станков
-          completed,
-        });
+      // Обновляем статистику в карте для каждого этапа
+      for (const [mapKey, detailItem] of detailMap.entries()) {
+        if (mapKey.startsWith(`${partId}-`)) {
+          detailMap.set(mapKey, {
+            ...detailItem,
+            quantity: part.pallets.length, // Общее количество поддонов
+            priority: priorityMap.get(partId) || 0,
+            readyForProcessing,
+            distributed: 0, // Не используется для станков
+            completed,
+          });
+        }
       }
     }
 
     // Фильтруем задания по stageId, если он передан
     let tasks = Array.from(detailMap.values());
+    console.log(`DEBUG: Before final filtering - ${tasks.length} tasks`);
+    console.log('DEBUG: Task processStepIds:', tasks.map(t => ({ operationId: t.operationId, processStepId: t.processStepId, processStepName: t.processStepName })));
+    
     if (stageId) {
+      console.log(`DEBUG: Filtering tasks by stageId=${stageId}`);
       tasks = tasks.filter(task => task.processStepId === stageId);
+      console.log(`DEBUG: After filtering by stageId - ${tasks.length} tasks remain`);
     }
 
+    console.log(`DEBUG: Final result - returning ${tasks.length} tasks`);
     return {
       machineId: machine.machineId,
       machineName: machine.machineName,

@@ -169,6 +169,8 @@ export class DetailsMasterService {
       (rs) => rs.routeStageId,
     );
 
+
+
     // Находим все пакеты, связанные с заказом
     const packages = await this.prisma.package.findMany({
       where: { orderId },
@@ -229,6 +231,11 @@ export class DetailsMasterService {
                     palletName: true,
                     quantity: true,
                     palletStageProgress: {
+                      where: {
+                        routeStageId: {
+                          in: currentSegmentRouteStageIds,
+                        },
+                      },
                       include: {
                         routeStage: {
                           include: {
@@ -239,6 +246,11 @@ export class DetailsMasterService {
                       },
                     },
                     machineAssignments: {
+                      where: {
+                        routeStageId: {
+                          in: currentSegmentRouteStageIds,
+                        },
+                      },
                       select: {
                         assignmentId: true,
                         routeStageId: true,
@@ -373,6 +385,9 @@ export class DetailsMasterService {
 
             for (const pallet of part.pallets) {
               const palletQuantity = Number(pallet.quantity);
+              
+
+              
               const currentSegmentProgress = pallet.palletStageProgress.filter(
                 (progress) =>
                   currentSegmentStageIds.includes(
@@ -393,6 +408,8 @@ export class DetailsMasterService {
                     ) &&
                     !assignment.completedAt,
                 );
+                
+
 
               const completedMachineAssignments =
                 pallet.machineAssignments.filter(

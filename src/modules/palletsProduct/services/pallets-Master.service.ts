@@ -70,7 +70,10 @@ export class PalletsMasterService {
           take: 1,
         },
         machineAssignments: {
-          where: { completedAt: null },
+          where: { 
+            completedAt: null,
+            routeStageId: currentRouteStage.routeStageId,
+          },
           include: { machine: true },
           orderBy: { assignedAt: 'desc' },
           take: 1,
@@ -142,6 +145,9 @@ export class PalletsMasterService {
             status: currentMachine.machine.status,
           }
           : null,
+
+        // Показываем, назначен ли поддон на станок для текущего этапа
+        isAssignedForCurrentStage: !!currentMachine,
 
         currentOperation,
       };

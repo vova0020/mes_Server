@@ -62,15 +62,29 @@ export class PalletsMachineTaskService {
       );
     }
 
+    // Получаем routeStageIds для указанного этапа
+    const relevantRouteStages = await this.prisma.routeStage.findMany({
+      where: {
+        stageId: stageId,
+      },
+      select: {
+        routeStageId: true,
+      },
+    });
+    const routeStageIds = relevantRouteStages.map(rs => rs.routeStageId);
+
     // Получаем все поддоны для указанной детали
     const pallets = await this.prisma.pallet.findMany({
       where: {
         partId,
-        // вот фильтр по активным заданиям на этот станок:
+        // Фильтр по активным заданиям на этот станок для конкретного этапа:
         machineAssignments: {
           some: {
             machineId,
             completedAt: null,
+            routeStageId: {
+              in: routeStageIds,
+            },
           },
         },
       },
@@ -101,10 +115,13 @@ export class PalletsMachineTaskService {
             placedAt: 'desc',
           },
         },
-        // Текущие назначения на станки
+        // Текущие назначения на станки для конкретного этапа
         machineAssignments: {
           where: {
             completedAt: null, // Активные назначения
+            routeStageId: {
+              in: routeStageIds,
+            },
           },
           include: {
             machine: true,

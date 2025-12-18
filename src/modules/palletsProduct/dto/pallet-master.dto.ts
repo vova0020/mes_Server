@@ -42,6 +42,9 @@ export class PalletDto {
   // Информация о станке (если есть)
   machine?: MachineDto | null;
 
+  // Показывает, назначен ли поддон на станок для текущего этапа
+  isAssignedForCurrentStage?: boolean;
+
   // Информация о текущей операции (если есть)
   currentOperation?: OperationStatusDto | null;
 }

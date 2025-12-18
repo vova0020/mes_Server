@@ -133,14 +133,9 @@ export class RouteListService {
             (p) => p.routeStageId === routeStage.routeStageId,
           );
 
-          // Находим станок, на котором обрабатывается или обрабатывался этот этап
+          // Находим станок, назначенный именно на этот этап маршрута
           const machineAssignment = pallet.machineAssignments.find(
-            (assignment) => {
-              // Проверяем, что назначение связано с этапом через станок
-              return assignment.machine.machinesStages?.some(
-                (ms) => ms.stageId === routeStage.stageId,
-              );
-            },
+            (assignment) => assignment.routeStageId === routeStage.routeStageId,
           );
 
           return {
