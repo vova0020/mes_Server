@@ -25,11 +25,11 @@ export class DetailsMachinsController {
   @Get(':machineId/task')
   @ApiOperation({ summary: 'Получить сменное задание для станка' })
   @ApiParam({ name: 'machineId', description: 'ID станка', example: 1 })
-  @ApiQuery({ 
-    name: 'stageId', 
-    description: 'ID этапа производства (опционально, для фильтрации)', 
+  @ApiQuery({
+    name: 'stageId',
+    description: 'ID этапа производства (опционально, для фильтрации)',
     example: 5,
-    required: false 
+    required: false,
   })
   @ApiResponse({
     status: 200,
