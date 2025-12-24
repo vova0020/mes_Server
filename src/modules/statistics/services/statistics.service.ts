@@ -212,42 +212,54 @@ export class StatisticsService {
     endDate: Date,
     unit: UnitOfMeasurement,
   ): Promise<DataPoint[]> {
-    // Для упаковки считаем завершенные упаковки
-    const completedPackages = await this.prisma.package.findMany({
+    const packingTasks = await this.prisma.packingTask.findMany({
       where: {
-        packingStatus: 'COMPLETED',
-        packingCompletedAt: {
+        completedQuantity: { gt: 0 },
+        assignedAt: {
           gte: startDate,
           lte: endDate,
         },
+        package: {
+          composition: {
+            some: {
+              routeId: { in: routeIds },
+            },
+          },
+        },
       },
       include: {
-        composition: {
-          where: {
-            routeId: { in: routeIds },
+        package: {
+          include: {
+            composition: {
+              where: {
+                routeId: { in: routeIds },
+              },
+            },
           },
         },
       },
       orderBy: {
-        packingCompletedAt: 'asc',
+        assignedAt: 'asc',
       },
     });
 
     const dataByDate = new Map<string, number>();
 
-    for (const pkg of completedPackages) {
-      const dateKey = pkg.packingCompletedAt!.toISOString().split('T')[0];
+    for (const task of packingTasks) {
+      const dateKey = task.assignedAt.toISOString().split('T')[0];
+      const completedQty = Number(task.completedQuantity);
       let value = 0;
 
-      for (const comp of pkg.composition) {
-        if (unit === UnitOfMeasurement.PIECES) {
-          value += Number(comp.quantityPerPackage) * Number(pkg.quantity);
-        } else {
-          const area =
-            Number(comp.finishedLength || 0) * Number(comp.finishedWidth || 0);
-          value +=
-            (area / 1000000) * Number(comp.quantityPerPackage) * Number(pkg.quantity);
+      if (unit === UnitOfMeasurement.PIECES) {
+        value = completedQty;
+      } else {
+        let areaPerPackage = 0;
+        for (const comp of task.package.composition) {
+          const partArea = Number(comp.finishedLength || 0) * Number(comp.finishedWidth || 0);
+          const partAreaM2 = partArea / 1000000;
+          areaPerPackage += partAreaM2 * Number(comp.quantityPerPackage);
         }
+        value = areaPerPackage * completedQty;
       }
 
       dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
@@ -343,20 +355,34 @@ export class StatisticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<MachineStats[]> {
-    // Получаем завершенные задачи упаковки
+    // Получаем маршруты для этой линии
+    const routes = await this.prisma.route.findMany({
+      where: { lineId },
+      select: { routeId: true },
+    });
+    const routeIds = routes.map(r => r.routeId);
+
+    // Получаем задачи упаковки с completedQuantity > 0
     const packingTasks = await this.prisma.packingTask.findMany({
       where: {
-        status: 'COMPLETED',
-        completedAt: {
+        completedQuantity: { gt: 0 },
+        assignedAt: {
           gte: startDate,
           lte: endDate,
+        },
+        package: {
+          composition: {
+            some: {
+              routeId: { in: routeIds },
+            },
+          },
         },
       },
       include: {
         machine: true,
       },
       orderBy: {
-        completedAt: 'asc',
+        assignedAt: 'asc',
       },
     });
 
@@ -373,7 +399,7 @@ export class StatisticsService {
       }
 
       const machineData = machineDataMap.get(task.machineId)!;
-      const dateKey = task.completedAt!.toISOString().split('T')[0];
+      const dateKey = task.assignedAt.toISOString().split('T')[0];
       const value = Number(task.completedQuantity);
 
       machineData.dateMap.set(dateKey, (machineData.dateMap.get(dateKey) || 0) + value);

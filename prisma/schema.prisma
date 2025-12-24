@@ -1654,3 +1654,19 @@ model OperatorPerformanceStats {
   @@index([operatorId, date])
   @@map("operator_performance_stats")
 }
+
+// ========================================
+// 14. Модуль изображений настроек
+// ========================================
+
+/// Таблица изображений для страницы настроек
+model SettingsImage {
+  imageId     Int      @id @default(autoincrement()) @map("image_id")
+  imagePath   String   @map("image_path")
+  imageUrl    String   @map("image_url")
+  description String?  @map("description")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings_images")
+}

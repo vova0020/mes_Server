@@ -24,6 +24,8 @@ import { BufferStagesService } from './services/buffers/buffer-stages.service';
 import { UsersService } from './services/users/users.service';
 import { UsersController } from './controllers/users/users.controller';
 import { PickersService } from './services/users/pickers.service';
+import { SettingsImagesController } from './controllers/images/settings-images.controller';
+import { SettingsImagesService } from './services/images/settings-images.service';
 
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { PickersService } from './services/users/pickers.service';
     MachinesController,
     BuffersController,
     UsersController,
+    SettingsImagesController,
   ],
   providers: [
     MaterialGroupsService,
@@ -56,6 +59,7 @@ import { PickersService } from './services/users/pickers.service';
     BufferStagesService,
     UsersService,
     PickersService,
+    SettingsImagesService,
   ],
   exports: [
     MaterialGroupsService,
