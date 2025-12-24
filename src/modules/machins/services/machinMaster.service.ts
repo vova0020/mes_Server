@@ -279,7 +279,7 @@ export class MachinMasterService {
             },
             0,
           );
-        } else if (machine.loadUnit === 'м обработки торца') {
+        } else if (machine.loadUnit === 'метры кромки') {
           // Расчет периметра обработки торца
           plannedQuantity = machine.machineAssignments.reduce(
             (total, assignment) => {
