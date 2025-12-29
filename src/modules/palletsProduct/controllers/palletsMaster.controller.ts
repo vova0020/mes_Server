@@ -163,6 +163,7 @@ export class PalletsMasterController {
       return await this.palletOperationsService.updateOperationStatus(
         updateDto.operationId,
         updateDto.status,
+        updateDto.stageId,
         updateDto.masterId,
       );
     } catch (error) {

@@ -119,6 +119,11 @@ export class UpdateOperationStatusDto {
   @IsEnum(OperationCompletionStatus)
   status: OperationCompletionStatus;
 
+  @ApiProperty({ description: 'ID этапа производства', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  stageId: number;
+
   @ApiPropertyOptional({
     description: 'ID мастера, подтверждающего обновление (опционально)',
     example: 1,

@@ -616,9 +616,10 @@ export class PalletsMasterService {
   async updateOperationStatus(
     operationId: number,
     status: OperationCompletionStatus,
+    stageId: number,
     masterId?: number,
   ) {
-    this.logger.log(`Обновление статуса операции ${operationId} на ${status}`);
+    this.logger.log(`Обновление статуса операции ${operationId} на ${status} для этапа ${stageId}`);
 
     try {
       // Ищем назначение станка по operationId (это assignmentId из MachineAssignment)
@@ -628,18 +629,6 @@ export class PalletsMasterService {
           pallet: {
             include: {
               part: true,
-              palletStageProgress: {
-                where: { completedAt: null },
-                include: {
-                  routeStage: {
-                    include: {
-                      stage: true,
-                      substage: true,
-                    },
-                  },
-                },
-                take: 1,
-              },
             },
           },
           machine: true,
@@ -652,9 +641,38 @@ export class PalletsMasterService {
         );
       }
 
+      // Получаем routeStage отдельным запросом
+      if (!machineAssignment.routeStageId) {
+        throw new NotFoundException(
+          `Назначение ${operationId} не имеет связанного этапа маршрута`,
+        );
+      }
+
+      const machineRouteStage = await this.prisma.routeStage.findUnique({
+        where: { routeStageId: machineAssignment.routeStageId },
+        include: {
+          stage: true,
+          substage: true,
+        },
+      });
+
+      if (!machineRouteStage) {
+        throw new NotFoundException(
+          `Этап маршрута с ID ${machineAssignment.routeStageId} не найден`,
+        );
+      }
+
+      // Проверяем, что назначение относится к указанному этапу
+      if (machineRouteStage.stageId !== stageId) {
+        throw new Error(
+          `Назначение ${operationId} не относится к этапу ${stageId}. ` +
+          `Текущий этап назначения: ${machineRouteStage.stage.stageName} (ID: ${machineRouteStage.stageId})`,
+        );
+      }
+
       // Получаем полную информацию о поддоне и маршруте для проверки последовательности этапов
       const pallet = await this.prisma.pallet.findUnique({
-        where: { palletId: machineAssignment.pallet.palletId },
+        where: { palletId: machineAssignment.palletId },
         include: {
           part: {
             include: {
@@ -677,25 +695,12 @@ export class PalletsMasterService {
       });
 
       if (!pallet) {
-        throw new Error(`Поддон с ID ${machineAssignment.pallet.palletId} не найден`);
+        throw new Error(`Поддон с ID ${machineAssignment.palletId} не найден`);
       }
 
-      // Находим этапы, которые может выполнять данный станок
-      const machineStages = await this.prisma.machineStage.findMany({
-        where: { machineId: machineAssignment.machineId },
-        select: { stageId: true }
-      });
-      const machineStageIds = machineStages.map(ms => ms.stageId);
-
-      // Находим этап маршрута для данного станка
       const allRouteStages = pallet.part.route?.routeStages || [];
-      const machineRouteStage = allRouteStages.find(rs => machineStageIds.includes(rs.stageId));
-      
-      if (!machineRouteStage) {
-        throw new NotFoundException(
-          `Станок ${machineAssignment.machine.machineName} не может выполнять этапы из маршрута детали`,
-        );
-      }
+
+
 
       // Ищем или создаем прогресс этапа
       let stageProgress = pallet.palletStageProgress.find(progress => 
@@ -727,7 +732,7 @@ export class PalletsMasterService {
         
         if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
           throw new Error(
-            `Нельзя взять поддон ${machineAssignment.pallet.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
+            `Нельзя взять поддон ${machineAssignment.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
           );
         }
       }
@@ -752,7 +757,7 @@ export class PalletsMasterService {
 
         // При переводе в статус IN_PROGRESS убираем поддон из буфера
         const bufferPlacement = await this.prisma.palletBufferCell.findFirst({
-          where: { palletId: machineAssignment.pallet.palletId, removedAt: null },
+          where: { palletId: machineAssignment.palletId, removedAt: null },
           include: {
             cell: {
               include: {
@@ -770,7 +775,7 @@ export class PalletsMasterService {
           });
 
           const remaining = bufferPlacement.cell.palletBufferCells.filter(
-            (p) => p.palletId !== machineAssignment.pallet.palletId,
+            (p) => p.palletId !== machineAssignment.palletId,
           );
           const newLoad = remaining.length;
           const newStatus =
@@ -786,7 +791,7 @@ export class PalletsMasterService {
           });
 
           this.logger.log(
-            `Поддон ${machineAssignment.pallet.palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
+            `Поддон ${machineAssignment.palletId} убран из ячейки ${bufferPlacement.cell.cellCode} (статус IN_PROGRESS)`,
           );
         }
       } else if (status === OperationCompletionStatus.PARTIALLY_COMPLETED) {
