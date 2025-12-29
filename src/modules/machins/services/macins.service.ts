@@ -32,74 +32,119 @@ export class MachinsService {
       throw new NotFoundException(`Станок с ID ${id} не найден`);
     }
 
-    // Получаем завершенные назначения для расчета выполненного количества
-    const completedAssignments = await this.prisma.machineAssignment.findMany({
-      where: {
-        machineId: id,
-        completedAt: {
-          not: null,
-        },
-        // Фильтруем по времени сброса счетчика если оно есть
-        ...(machine.counterResetAt && {
-          completedAt: {
-            gte: machine.counterResetAt,
-          },
-        }),
-      },
-      include: {
-        pallet: {
-          select: {
-            quantity: true,
-            part: true,
-          },
-        },
-      },
-    });
+    // Проверяем, привязан ли станок к финальному этапу (упаковка)
+    const isFinalStage = machine.machinesStages.some(ms => ms.stage.finalStage);
 
-    // Фильтруем завершенные операции после сброса счетчика
-    const filteredAssignments = completedAssignments.filter((assignment) => {
-      const isAfterReset = machine.counterResetAt && assignment.completedAt
-        ? assignment.completedAt > machine.counterResetAt 
-        : true;
-      return isAfterReset;
-    });
-
-    // Рассчитываем выполненное количество в зависимости от единицы измерения
     let completedQuantity: number;
 
-    if (machine.loadUnit === 'м²') {
-      completedQuantity = filteredAssignments.reduce((total, assignment) => {
-        const part = assignment.pallet.part;
-        const quantity = Number(assignment.pallet.quantity);
-        return total + this.calculateSquareMeters(part, quantity);
-      }, 0);
-    } else if (machine.loadUnit === 'м³') {
-      completedQuantity = filteredAssignments.reduce((total, assignment) => {
-        const part = assignment.pallet.part;
-        const quantity = Number(assignment.pallet.quantity);
-        return total + this.calculateCubicMeters(part, quantity);
-      }, 0);
-    } else if (machine.loadUnit === 'м') {
-      completedQuantity = filteredAssignments.reduce((total, assignment) => {
-        const part = assignment.pallet.part;
-        const quantity = Number(assignment.pallet.quantity);
-        if (part.finishedLength != null) {
-          return total + (part.finishedLength * quantity) / 1000;
-        }
-        return total;
-      }, 0);
-    } else if (machine.loadUnit === 'м обработки торца') {
-      completedQuantity = filteredAssignments.reduce((total, assignment) => {
-        const part = assignment.pallet.part;
-        const quantity = Number(assignment.pallet.quantity);
-        return total + this.calculateEdgeProcessingMeters(part, quantity);
-      }, 0);
-    } else {
-      // Расчет в штуках
-      completedQuantity = filteredAssignments.reduce(
-        (total, assignment) => total + Number(assignment.pallet.quantity),
+    if (isFinalStage) {
+      // Для финального этапа считаем из PackingTask (как в getPackingMachinesByStageId)
+      // Получаем завершенные задачи после сброса счетчика
+      const completedTasks = await this.prisma.packingTask.findMany({
+        where: {
+          machineId: id,
+          ...(machine.counterResetAt && {
+            completedAt: {
+              gte: machine.counterResetAt,
+            },
+          }),
+          status: 'COMPLETED',
+        },
+      });
+      
+      // Получаем частично выполненные задачи после сброса счетчика
+      const partialTasks = await this.prisma.packingTask.findMany({
+        where: {
+          machineId: id,
+          ...(machine.counterResetAt && {
+            assignedAt: {
+              gte: machine.counterResetAt,
+            },
+          }),
+          status: { in: ['IN_PROGRESS', 'PARTIALLY_COMPLETED'] },
+          completedQuantity: { gt: 0 },
+        },
+      });
+      
+      const completedAmount = completedTasks.reduce(
+        (sum, task) => sum + Number(task.completedQuantity),
         0,
       );
+      
+      const partialAmount = partialTasks.reduce(
+        (sum, task) => sum + Number(task.completedQuantity),
+        0,
+      );
+      
+      const savedPartialAmount = Number(machine.partiallyCompleted) || 0;
+      
+      completedQuantity = completedAmount + partialAmount + savedPartialAmount;
+    } else {
+      // Для обычных этапов считаем из MachineAssignment
+      const completedAssignments = await this.prisma.machineAssignment.findMany({
+        where: {
+          machineId: id,
+          completedAt: {
+            not: null,
+          },
+          ...(machine.counterResetAt && {
+            completedAt: {
+              gte: machine.counterResetAt,
+            },
+          }),
+        },
+        include: {
+          pallet: {
+            select: {
+              quantity: true,
+              part: true,
+            },
+          },
+        },
+      });
+
+      const filteredAssignments = completedAssignments.filter((assignment) => {
+        const isAfterReset = machine.counterResetAt && assignment.completedAt
+          ? assignment.completedAt > machine.counterResetAt 
+          : true;
+        return isAfterReset;
+      });
+
+      // Рассчитываем выполненное количество в зависимости от единицы измерения
+      if (machine.loadUnit === 'м²') {
+        completedQuantity = filteredAssignments.reduce((total, assignment) => {
+          const part = assignment.pallet.part;
+          const quantity = Number(assignment.pallet.quantity);
+          return total + this.calculateSquareMeters(part, quantity);
+        }, 0);
+      } else if (machine.loadUnit === 'м³') {
+        completedQuantity = filteredAssignments.reduce((total, assignment) => {
+          const part = assignment.pallet.part;
+          const quantity = Number(assignment.pallet.quantity);
+          return total + this.calculateCubicMeters(part, quantity);
+        }, 0);
+      } else if (machine.loadUnit === 'м') {
+        completedQuantity = filteredAssignments.reduce((total, assignment) => {
+          const part = assignment.pallet.part;
+          const quantity = Number(assignment.pallet.quantity);
+          if (part.finishedLength != null) {
+            return total + (part.finishedLength * quantity) / 1000;
+          }
+          return total;
+        }, 0);
+      } else if (machine.loadUnit === 'м обработки торца') {
+        completedQuantity = filteredAssignments.reduce((total, assignment) => {
+          const part = assignment.pallet.part;
+          const quantity = Number(assignment.pallet.quantity);
+          return total + this.calculateEdgeProcessingMeters(part, quantity);
+        }, 0);
+      } else {
+        // Расчет в штуках
+        completedQuantity = filteredAssignments.reduce(
+          (total, assignment) => total + Number(assignment.pallet.quantity),
+          0,
+        );
+      }
     }
 
     // Рассчитываем процент выполнения

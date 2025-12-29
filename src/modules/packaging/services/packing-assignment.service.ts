@@ -131,12 +131,19 @@ export class PackingAssignmentService {
 
       // Формируем ответ
       const result = machines.map((machine) => {
-        const plannedQuantity = machine.packingTasks.reduce(
+        const assignedQuantity = machine.packingTasks.reduce(
           (total, task) => total + task.assignedQuantity.toNumber(),
           0,
         );
 
         const completedQuantity = completedByMachine[machine.machineId] || 0;
+        
+        // Вычитаем выполненное из назначенного
+        const inProgressCompletedQty = machine.packingTasks
+          .filter(task => task.status === 'IN_PROGRESS' || task.status === 'PARTIALLY_COMPLETED')
+          .reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0);
+        
+        const plannedQuantity = Math.max(0, assignedQuantity - inProgressCompletedQty);
 
         return {
           id: machine.machineId,
@@ -147,9 +154,7 @@ export class PackingAssignmentService {
           plannedQuantity,
           completedQuantity,
           // Добавляем информацию о прогрессе
-          inProgressQuantity: machine.packingTasks
-            .filter(task => task.status === 'IN_PROGRESS' || task.status === 'PARTIALLY_COMPLETED')
-            .reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0),
+          inProgressQuantity: inProgressCompletedQty,
           // Показываем сохраненное частично выполненное количество
           partiallyCompletedStored: machine.partiallyCompleted?.toNumber() || 0,
         };
