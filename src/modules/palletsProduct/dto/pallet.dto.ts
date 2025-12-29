@@ -18,7 +18,7 @@ export class StartPalletProcessingDto {
   machineId: number;
 
   @ApiProperty({
-    description: 'ID этапа производства (опционально)',
+    description: 'ID этапа производства (обязательно для станков без сменного задания)',
     example: 1,
     required: false,
   })
@@ -52,7 +52,7 @@ export class CompletePalletProcessingDto {
   machineId: number;
 
   @ApiProperty({
-    description: 'ID этапа производства (опционально)',
+    description: 'ID этапа производства (обязательно для станков без сменного задания)',
     example: 1,
     required: false,
   })

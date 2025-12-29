@@ -158,6 +158,7 @@ export class PalletMachineNoSmenService {
    * Здесь создается запись в сменном задании и обновляется статус
    * @param palletId ID поддона
    * @param machineId ID станка
+   * @param stageId ID этапа для обработки (обязательно)
    * @param operatorId ID оператора (опционально)
    */
   async takePalletToWork(
@@ -351,6 +352,7 @@ export class PalletMachineNoSmenService {
         data: {
           palletId,
           machineId,
+          routeStageId: targetRouteStage.routeStageId,
           assignedAt: new Date(),
         },
         include: {
@@ -531,7 +533,10 @@ export class PalletMachineNoSmenService {
 
   /**
    * Завершить обработку поддона на станке без сменного задания
-   * Логика аналогична обычному станку
+   * @param palletId ID поддона
+   * @param machineId ID станка
+   * @param stageId ID этапа, который завершается (обязательно)
+   * @param operatorId ID оператора (опционально)
    */
   async completePalletProcessing(
     palletId: number,
