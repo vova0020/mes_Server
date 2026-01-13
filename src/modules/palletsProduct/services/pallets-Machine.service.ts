@@ -577,11 +577,24 @@ export class PalletMachineService {
       );
     }
 
-    const currentProgress = assignment.pallet.palletStageProgress[0];
-    if (!currentProgress) {
-      throw new Error(
-        `Не найден активный прогресс этапа для поддона ${palletId}`,
+    // Если передан stageId, ищем прогресс для конкретного этапа
+    let currentProgress;
+    if (stageId) {
+      currentProgress = assignment.pallet.palletStageProgress.find(
+        (progress) => progress.routeStage.stageId === stageId,
       );
+      if (!currentProgress) {
+        throw new Error(
+          `Не найден активный прогресс для этапа ${stageId} поддона ${palletId}`,
+        );
+      }
+    } else {
+      currentProgress = assignment.pallet.palletStageProgress[0];
+      if (!currentProgress) {
+        throw new Error(
+          `Не найден активный прогресс этапа для поддона ${palletId}`,
+        );
+      }
     }
 
     // Определяем следующий этап
@@ -591,12 +604,7 @@ export class PalletMachineService {
     );
 
     return this.prisma.$transaction(async (prisma) => {
-      // Завершаем назначение станка
       const completedAt = new Date();
-      await prisma.machineAssignment.update({
-        where: { assignmentId: assignment.assignmentId },
-        data: { completedAt },
-      });
 
       // Завершаем текущий прогресс этапа
       await prisma.palletStageProgress.update({
@@ -605,6 +613,17 @@ export class PalletMachineService {
           status: 'COMPLETED',
           completedAt,
         },
+      });
+
+      // Завершаем назначение станка для конкретного этапа
+      await prisma.machineAssignment.updateMany({
+        where: {
+          palletId: palletId,
+          machineId: machineId,
+          routeStageId: currentProgress.routeStageId,
+          completedAt: null,
+        },
+        data: { completedAt },
       });
 
       // === МОДИФИЦИРОВАННАЯ ЛОГИКА ===
