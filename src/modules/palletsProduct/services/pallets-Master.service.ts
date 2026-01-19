@@ -1990,10 +1990,11 @@ export class PalletsMasterService {
     partId: number,
     palletId: number,
     quantity: number,
+    returnToStageId: number,
     userId: number,
   ) {
     this.logger.log(
-      `Возврат ${quantity} деталей для детали ${partId} на поддон ${palletId}`,
+      `Возврат ${quantity} деталей для детали ${partId} на поддон ${palletId}, этап ${returnToStageId}`,
     );
 
     return await this.prisma.$transaction(async (prisma) => {
@@ -2019,7 +2020,20 @@ export class PalletsMasterService {
         throw new Error(`Поддон ${palletId} не принадлежит детали ${partId}`);
       }
 
-      // 3. Подсчитываем общее количество отбракованных деталей
+      // 3. Проверяем этап
+      const routeStage = await prisma.routeStage.findFirst({
+        where: { 
+          routeId: part.routeId,
+          stageId: returnToStageId 
+        },
+        include: { stage: true },
+      });
+
+      if (!routeStage) {
+        throw new NotFoundException(`Этап с ID ${returnToStageId} не найден в маршруте детали`);
+      }
+
+      // 4. Подсчитываем общее количество отбракованных деталей
       const totalDefective = await prisma.reclamation.aggregate({
         where: { partId },
         _sum: { quantity: true },
@@ -2027,7 +2041,7 @@ export class PalletsMasterService {
 
       const totalDefectiveQuantity = Number(totalDefective._sum.quantity || 0);
 
-      // 4. Подсчитываем уже возвращенное количество
+      // 5. Подсчитываем уже возвращенное количество
       const alreadyReturned = await prisma.inventoryMovement.aggregate({
         where: {
           partId,
@@ -2047,36 +2061,48 @@ export class PalletsMasterService {
         );
       }
 
-      // 5. Увеличиваем количество на поддоне
+      // 6. Увеличиваем количество на поддоне
       await prisma.pallet.update({
         where: { palletId },
         data: { quantity: { increment: quantity } },
       });
 
-      // 6. Создаем запись о возврате
+      // 7. Создаем запись о возврате
       const inventoryMovement = await prisma.inventoryMovement.create({
         data: {
           partId,
           palletId,
           deltaQuantity: quantity,
           reason: 'RETURN_FROM_RECLAMATION',
+          returnToStageId: routeStage.routeStageId,
           userId,
         },
       });
 
       this.logger.log(
-        `Создана запись о возврате ${quantity} деталей на поддон ${palletId}`,
+        `Создана запись о возврате ${quantity} деталей на поддон ${palletId}, этап ${routeStage.stage.stageName}`,
       );
 
-      // Отправляем WebSocket уведомления
+      // Отправляем WebSocket уведомление о событии поддона
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines'],
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'detail:event',
         { status: 'updated' },
       );
       this.socketService.emitToMultipleRooms(
-        ['room:masterceh', 'room:machines'],
-        'pallet:event',
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+       this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
         { status: 'updated' },
       );
 
@@ -2089,6 +2115,10 @@ export class PalletsMasterService {
             id: palletId,
             name: pallet.palletName,
             newQuantity: Number(pallet.quantity) + quantity,
+          },
+          returnToStage: {
+            id: routeStage.stageId,
+            name: routeStage.stage.stageName,
           },
           defectStats: {
             totalDefective: totalDefectiveQuantity,

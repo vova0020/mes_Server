@@ -485,6 +485,11 @@ export class ReturnPartsToProductionDto {
   @IsPositive()
   quantity: number;
 
+  @ApiProperty({ description: 'ID этапа, на который возвращаются детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  returnToStageId: number;
+
   @ApiProperty({ description: 'ID пользователя, выполняющего возврат', example: 1 })
   @IsNumber()
   @IsPositive()

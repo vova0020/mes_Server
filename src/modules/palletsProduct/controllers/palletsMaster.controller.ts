@@ -245,7 +245,7 @@ export class PalletsMasterController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Поддон усп��шно создан',
+    description: 'Поддон успешно создан',
     type: CreatePalletResponseDto,
   })
   @ApiResponse({
@@ -377,7 +377,7 @@ export class PalletsMasterController {
   })
   async returnPartsToProduction(@Body() returnDto: ReturnPartsToProductionDto) {
     this.logger.log(
-      `Возврат ${returnDto.quantity} деталей для детали ${returnDto.partId} на поддон ${returnDto.palletId}`,
+      `Возврат ${returnDto.quantity} деталей для детали ${returnDto.partId} на поддон ${returnDto.palletId}, этап ${returnDto.returnToStageId}`,
     );
 
     try {
@@ -385,6 +385,7 @@ export class PalletsMasterController {
         returnDto.partId,
         returnDto.palletId,
         returnDto.quantity,
+        returnDto.returnToStageId,
         returnDto.userId,
       );
     } catch (error) {
