@@ -468,6 +468,29 @@ export class DefectPalletPartsDto {
   stageId: number;
 }
 
+// DTO для возврата деталей на производство
+export class ReturnPartsToProductionDto {
+  @ApiProperty({ description: 'ID детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  partId: number;
+
+  @ApiProperty({ description: 'ID поддона, на который возвращаются детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  palletId: number;
+
+  @ApiProperty({ description: 'Количество возвращаемых деталей', example: 5 })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiProperty({ description: 'ID пользователя, выполняющего возврат', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  userId: number;
+}
+
 // DTO для перераспределения деталей между поддонами
 export class RedistributePalletPartsDto {
   @ApiProperty({ description: 'ID исходного поддона', example: 1 })

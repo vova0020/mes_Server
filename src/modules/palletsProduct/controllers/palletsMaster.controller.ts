@@ -32,6 +32,7 @@ import {
   PalletsResponseDto,
   RedistributePalletPartsDto,
   RedistributePalletPartsResponseDto,
+  ReturnPartsToProductionDto,
   UpdateOperationStatusDto,
 } from '../dto/pallet-master.dto';
 import {
@@ -364,6 +365,37 @@ export class PalletsMasterController {
       }
       this.logger.error(`Ошибка при перераспределении: ${error.message}`);
       throw new InternalServerErrorException('Ошибка при перераспределении деталей');
+    }
+  }
+
+  @Post('return-parts')
+  @ApiOperation({ summary: 'Вернуть детали на производство после рекламации' })
+  @ApiBody({ type: ReturnPartsToProductionDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно возвращены на производство',
+  })
+  async returnPartsToProduction(@Body() returnDto: ReturnPartsToProductionDto) {
+    this.logger.log(
+      `Возврат ${returnDto.quantity} деталей для детали ${returnDto.partId} на поддон ${returnDto.palletId}`,
+    );
+
+    try {
+      return await this.palletOperationsService.returnPartsToProduction(
+        returnDto.partId,
+        returnDto.palletId,
+        returnDto.quantity,
+        returnDto.userId,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при возврате деталей: ${error.message}`);
+      throw new InternalServerErrorException('Ошибка при возврате деталей на производство');
     }
   }
 }

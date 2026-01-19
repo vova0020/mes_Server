@@ -1348,6 +1348,10 @@ export class PalletsMasterService {
         include: { part: true },
       });
 
+      this.logger.log(
+        `Создана рекламация с ID ${reclamation.reclamationId} для детали ${pallet.partId}, количество: ${quantity}`,
+      );
+
       // Уменьшаем количество на поддоне
       const updatedPallet = await prisma.pallet.update({
         where: { palletId },
@@ -1977,5 +1981,122 @@ export class PalletsMasterService {
         `Ошибка при проверке и создании задачи упаковки для детали ${partId}: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Вернуть детали на производство после рекламации
+   */
+  async returnPartsToProduction(
+    partId: number,
+    palletId: number,
+    quantity: number,
+    userId: number,
+  ) {
+    this.logger.log(
+      `Возврат ${quantity} деталей для детали ${partId} на поддон ${palletId}`,
+    );
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // 1. Проверяем деталь
+      const part = await prisma.part.findUnique({
+        where: { partId },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Проверяем поддон
+      const pallet = await prisma.pallet.findUnique({
+        where: { palletId },
+      });
+
+      if (!pallet) {
+        throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
+      }
+
+      if (pallet.partId !== partId) {
+        throw new Error(`Поддон ${palletId} не принадлежит детали ${partId}`);
+      }
+
+      // 3. Подсчитываем общее количество отбракованных деталей
+      const totalDefective = await prisma.reclamation.aggregate({
+        where: { partId },
+        _sum: { quantity: true },
+      });
+
+      const totalDefectiveQuantity = Number(totalDefective._sum.quantity || 0);
+
+      // 4. Подсчитываем уже возвращенное количество
+      const alreadyReturned = await prisma.inventoryMovement.aggregate({
+        where: {
+          partId,
+          reason: 'RETURN_FROM_RECLAMATION',
+          deltaQuantity: { gt: 0 },
+        },
+        _sum: { deltaQuantity: true },
+      });
+
+      const totalReturned = Number(alreadyReturned._sum.deltaQuantity || 0);
+      const availableToReturn = totalDefectiveQuantity - totalReturned;
+
+      if (quantity > availableToReturn) {
+        throw new Error(
+          `Нельзя вернуть ${quantity} деталей. Доступно для возврата: ${availableToReturn} ` +
+          `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
+        );
+      }
+
+      // 5. Увеличиваем количество на поддоне
+      await prisma.pallet.update({
+        where: { palletId },
+        data: { quantity: { increment: quantity } },
+      });
+
+      // 6. Создаем запись о возврате
+      const inventoryMovement = await prisma.inventoryMovement.create({
+        data: {
+          partId,
+          palletId,
+          deltaQuantity: quantity,
+          reason: 'RETURN_FROM_RECLAMATION',
+          userId,
+        },
+      });
+
+      this.logger.log(
+        `Создана запись о возврате ${quantity} деталей на поддон ${palletId}`,
+      );
+
+      // Отправляем WebSocket уведомления
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Детали успешно возвращены на производство',
+        movement: {
+          id: inventoryMovement.movementId,
+          quantity,
+          pallet: {
+            id: palletId,
+            name: pallet.palletName,
+            newQuantity: Number(pallet.quantity) + quantity,
+          },
+          defectStats: {
+            totalDefective: totalDefectiveQuantity,
+            alreadyReturned: totalReturned + quantity,
+            remainingToReturn: availableToReturn - quantity,
+          },
+        },
+      };
+    });
   }
 }

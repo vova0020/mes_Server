@@ -746,6 +746,8 @@ model Machine {
   partMachineAssignment PartMachineAssignment[]
   /// Рекламации на данном станке
   reclamations          Reclamation[]
+  /// Возвраты деталей на этот станок
+  inventoryReturns      InventoryMovement[] @relation("ReturnToMachine")
   
   // История и аналитика
   statusHistory            MachineStatusHistory[]
@@ -836,6 +838,8 @@ model RouteStage {
   returnStageParts    Part[]                 @relation("ReturnStage") // детали, возвращенные на этот этап
   /// Рекламации на данном этапе
   reclamations        Reclamation[]
+  /// Возвраты деталей на этот этап
+  inventoryReturns    InventoryMovement[] @relation("ReturnToStage")
   
   // История и аналитика
   partStatusHistory     PartStatusHistory[]
@@ -1389,6 +1393,10 @@ model InventoryMovement {
   reason              String   @map("reason")
   /// Источник рекламации (опционально)
   sourceReclamationId Int?     @map("source_reclamation_id")
+  /// Этап возврата детали на производство (опционально)
+  returnToStageId     Int?     @map("return_to_stage_id")
+  /// Станок возврата детали на производство (опционально)
+  returnToMachineId   Int?     @map("return_to_machine_id")
   /// Пользователь, создавший запись (опционально)
   userId              Int?     @map("user_id")
   /// Время движения
@@ -1396,15 +1404,20 @@ model InventoryMovement {
 
   // связи:
   /// Ссылка на деталь
-  part         Part?        @relation(fields: [partId], references: [partId])
+  part            Part?        @relation(fields: [partId], references: [partId])
   /// Ссылка на поддон (опционально)
-  pallet       Pallet?      @relation(fields: [palletId], references: [palletId])
+  pallet          Pallet?      @relation(fields: [palletId], references: [palletId])
   /// Ссылка на рекламацию (опционально)
-  sourceReclam Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
+  sourceReclam    Reclamation? @relation(fields: [sourceReclamationId], references: [reclamationId])
+  /// Ссылка на этап возврата (опционально)
+  returnToStage   RouteStage?  @relation("ReturnToStage", fields: [returnToStageId], references: [routeStageId])
+  /// Ссылка на станок возврата (опционально)
+  returnToMachine Machine?     @relation("ReturnToMachine", fields: [returnToMachineId], references: [machineId])
 
   @@index([partId])
   @@index([palletId])
   @@index([sourceReclamationId])
+  @@index([returnToStageId])
   @@map("inventory_movements")
 }
 
