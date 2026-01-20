@@ -41,7 +41,7 @@ export class PalletsMachinsNoSmenController {
 
   constructor(
     private readonly palletMachineNoSmenService: PalletMachineNoSmenService,
-  ) { }
+  ) {}
 
   @Get('/available-pallets/:detailId/:stageid')
   @ApiOperation({
@@ -236,7 +236,9 @@ export class PalletsMachinsNoSmenController {
     status: 400,
     description: 'Недостаточно деталей для создания поддона',
   })
-  async createPallet(@Body() createDto: CreatePalletDto): Promise<CreatePalletResponseDto> {
+  async createPallet(
+    @Body() createDto: CreatePalletDto,
+  ): Promise<CreatePalletResponseDto> {
     this.logger.log(
       `Получен запрос на создание поддона для детали ${createDto.partId} с количеством ${createDto.quantity}`,
     );
@@ -256,9 +258,7 @@ export class PalletsMachinsNoSmenController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(
-        `Ошибка при создании поддона: ${error.message}`,
-      );
+      this.logger.error(`Ошибка при создании поддона: ${error.message}`);
       throw new InternalServerErrorException(
         'Произошла ошибка при создании поддона',
       );
@@ -267,16 +267,24 @@ export class PalletsMachinsNoSmenController {
 
   @Post('create-pallet-by-part')
   @ApiOperation({ summary: 'Создать новый поддон по ID детали' })
-  @ApiBody({ 
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
         partId: { type: 'number', description: 'ID детали', example: 1 },
-        quantity: { type: 'number', description: 'Количество де��алей на поддоне', example: 100 },
-        palletName: { type: 'string', description: 'Название поддона (опционально)', example: 'Поддон-001' }
+        quantity: {
+          type: 'number',
+          description: 'Количество де��алей на поддоне',
+          example: 100,
+        },
+        palletName: {
+          type: 'string',
+          description: 'Название поддона (опционально)',
+          example: 'Поддон-001',
+        },
       },
-      required: ['partId', 'quantity']
-    }
+      required: ['partId', 'quantity'],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -291,7 +299,9 @@ export class PalletsMachinsNoSmenController {
     status: 400,
     description: 'Недостаточно деталей для создания поддона',
   })
-  async createPalletByPartId(@Body() body: { partId: number; quantity: number; palletName?: string }): Promise<CreatePalletResponseDto> {
+  async createPalletByPartId(
+    @Body() body: { partId: number; quantity: number; palletName?: string },
+  ): Promise<CreatePalletResponseDto> {
     this.logger.log(
       `Получен запрос на создание поддона для детали ${body.partId} с количеством ${body.quantity}`,
     );
@@ -311,9 +321,7 @@ export class PalletsMachinsNoSmenController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(
-        `Ошибка при создании поддона: ${error.message}`,
-      );
+      this.logger.error(`Ошибка при создании поддона: ${error.message}`);
       throw new InternalServerErrorException(
         'Произошла ошибка при создании поддона',
       );
@@ -361,7 +369,9 @@ export class PalletsMachinsNoSmenController {
     description: 'Детали успешно перераспределены',
     type: RedistributePalletPartsResponseDto,
   })
-  async redistributePalletParts(@Body() redistributeDto: RedistributePalletPartsDto): Promise<RedistributePalletPartsResponseDto> {
+  async redistributePalletParts(
+    @Body() redistributeDto: RedistributePalletPartsDto,
+  ): Promise<RedistributePalletPartsResponseDto> {
     this.logger.log(
       `Перераспределение деталей с поддона ${redistributeDto.sourcePalletId}`,
     );
@@ -379,7 +389,72 @@ export class PalletsMachinsNoSmenController {
         throw new BadRequestException(error.message);
       }
       this.logger.error(`Ошибка при перераспределении: ${error.message}`);
-      throw new InternalServerErrorException('Ошибка при перераспределении деталей');
+      throw new InternalServerErrorException(
+        'Ошибка при перераспределении деталей',
+      );
+    }
+  }
+
+  @Post('return-parts')
+  @ApiOperation({ summary: 'Вернуть детали на производство после рекламации' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        partId: { type: 'number', description: 'ID детали', example: 1 },
+        palletId: { type: 'number', description: 'ID поддона', example: 1 },
+        quantity: {
+          type: 'number',
+          description: 'Количество деталей для возврата',
+          example: 10,
+        },
+        returnToStageId: {
+          type: 'number',
+          description: 'ID этапа для возврата',
+          example: 1,
+        },
+        userId: { type: 'number', description: 'ID пользователя', example: 1 },
+      },
+      required: ['partId', 'palletId', 'quantity', 'returnToStageId', 'userId'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Детали успешно возвращены на производство',
+  })
+  async returnPartsToProduction(
+    @Body()
+    returnDto: {
+      partId: number;
+      palletId: number;
+      quantity: number;
+      returnToStageId: number;
+      userId: number;
+    },
+  ) {
+    this.logger.log(
+      `Возврат ${returnDto.quantity} деталей для детали ${returnDto.partId} на поддон ${returnDto.palletId}, этап ${returnDto.returnToStageId}`,
+    );
+
+    try {
+      return await this.palletMachineNoSmenService.returnPartsToProduction(
+        returnDto.partId,
+        returnDto.palletId,
+        returnDto.quantity,
+        returnDto.returnToStageId,
+        returnDto.userId,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при возврате деталей: ${error.message}`);
+      throw new InternalServerErrorException(
+        'Ошибка при возврате деталей на производство',
+      );
     }
   }
 }

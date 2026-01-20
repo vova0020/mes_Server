@@ -1310,6 +1310,152 @@ export class PalletMachineNoSmenService {
   }
 
   /**
+   * Вернуть детали на производство после рекламации
+   */
+  async returnPartsToProduction(
+    partId: number,
+    palletId: number,
+    quantity: number,
+    returnToStageId: number,
+    userId: number,
+  ) {
+    this.logger.log(
+      `Возврат ${quantity} деталей для детали ${partId} на поддон ${palletId}, этап ${returnToStageId}`,
+    );
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // 1. Проверяем деталь
+      const part = await prisma.part.findUnique({
+        where: { partId },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Проверяем поддон
+      const pallet = await prisma.pallet.findUnique({
+        where: { palletId },
+      });
+
+      if (!pallet) {
+        throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
+      }
+
+      if (pallet.partId !== partId) {
+        throw new Error(`Поддон ${palletId} не принадлежит детали ${partId}`);
+      }
+
+      // 3. Проверяем этап
+      const routeStage = await prisma.routeStage.findFirst({
+        where: { 
+          routeId: part.routeId,
+          stageId: returnToStageId 
+        },
+        include: { stage: true },
+      });
+
+      if (!routeStage) {
+        throw new NotFoundException(`Этап с ID ${returnToStageId} не найден в маршруте детали`);
+      }
+
+      // 4. Подсчитываем общее количество отбракованных деталей
+      const totalDefective = await prisma.reclamation.aggregate({
+        where: { partId },
+        _sum: { quantity: true },
+      });
+
+      const totalDefectiveQuantity = Number(totalDefective._sum.quantity || 0);
+
+      // 5. Подсчитываем уже возвращенное количество
+      const alreadyReturned = await prisma.inventoryMovement.aggregate({
+        where: {
+          partId,
+          reason: 'RETURN_FROM_RECLAMATION',
+          deltaQuantity: { gt: 0 },
+        },
+        _sum: { deltaQuantity: true },
+      });
+
+      const totalReturned = Number(alreadyReturned._sum.deltaQuantity || 0);
+      const availableToReturn = totalDefectiveQuantity - totalReturned;
+
+      if (quantity > availableToReturn) {
+        throw new Error(
+          `Нельзя вернуть ${quantity} деталей. Доступно для возврата: ${availableToReturn} ` +
+          `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
+        );
+      }
+
+      // 6. Увеличиваем количество на поддоне
+      await prisma.pallet.update({
+        where: { palletId },
+        data: { quantity: { increment: quantity } },
+      });
+
+      // 7. Создаем запись о возврате
+      const inventoryMovement = await prisma.inventoryMovement.create({
+        data: {
+          partId,
+          palletId,
+          deltaQuantity: quantity,
+          reason: 'RETURN_FROM_RECLAMATION',
+          returnToStageId: routeStage.routeStageId,
+          userId,
+        },
+      });
+
+      this.logger.log(
+        `Создана запись о возврате ${quantity} деталей на поддон ${palletId}, этап ${routeStage.stage.stageName}`,
+      );
+
+      // Отправляем WebSocket уведомление
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Детали успешно возвращены на производство',
+        movement: {
+          id: inventoryMovement.movementId,
+          quantity,
+          pallet: {
+            id: palletId,
+            name: pallet.palletName,
+            newQuantity: Number(pallet.quantity) + quantity,
+          },
+          returnToStage: {
+            id: routeStage.stageId,
+            name: routeStage.stage.stageName,
+          },
+          defectStats: {
+            totalDefective: totalDefectiveQuantity,
+            alreadyReturned: totalReturned + quantity,
+            remainingToReturn: availableToReturn - quantity,
+          },
+        },
+      };
+    });
+  }
+
+  /**
    * Отбраковать детали с поддона
    */
   async defectPalletParts(
