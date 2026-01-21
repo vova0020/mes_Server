@@ -145,7 +145,6 @@ export class StatisticsService {
     const stats: MachineStats[] = [];
 
     for (const machineStage of machineStages) {
-      const machineUnit = machineStage.machine.loadUnit;
       const dataPoints = await this.calculateMachineStatsWithDates(
         machineStage.machineId,
         routeStageIds,
@@ -159,7 +158,7 @@ export class StatisticsService {
         machineId: machineStage.machineId,
         machineName: machineStage.machine.machineName,
         totalValue,
-        unit: machineUnit,
+        unit: machineStage.machine.loadUnit,
         dataPoints,
       });
     }
@@ -174,35 +173,63 @@ export class StatisticsService {
     endDate: Date,
     unit: UnitOfMeasurement,
   ): Promise<DataPoint[]> {
-    // Получаем прогресс по поддонам для этого этапа
-    const palletProgress = await this.prisma.palletStageProgress.findMany({
+    // Получаем routeStageIds для этого этапа
+    const routeStages = await this.prisma.routeStage.findMany({
       where: {
-        routeStage: {
-          routeId: { in: routeIds },
-          stageId: stageId,
-        },
-        status: 'COMPLETED',
+        routeId: { in: routeIds },
+        stageId: stageId,
+      },
+      select: { routeStageId: true },
+    });
+
+    const routeStageIds = routeStages.map(rs => rs.routeStageId);
+
+    // Используем MachineAssignment с processedQuantity
+    const assignments = await this.prisma.machineAssignment.findMany({
+      where: {
+        routeStageId: { in: routeStageIds },
         completedAt: {
           gte: startDate,
           lte: endDate,
         },
+        processedQuantity: { not: 0 },
       },
       include: {
         pallet: {
           include: {
-            part: true,
+            part: {
+              select: {
+                finishedLength: true,
+                finishedWidth: true,
+              },
+            },
           },
         },
       },
-      orderBy: {
-        completedAt: 'asc',
-      },
     });
 
-    return this.groupByDate(palletProgress.map(p => ({
-      date: p.completedAt!,
-      pallet: p.pallet,
-    })), unit);
+    const dataByDate = new Map<string, number>();
+
+    for (const assignment of assignments) {
+      const dateKey = assignment.completedAt!.toISOString().split('T')[0];
+      const quantity = Number(assignment.processedQuantity || 0);
+      
+      let value = 0;
+      if (unit === UnitOfMeasurement.PIECES) {
+        value = quantity;
+      } else {
+        const length = Number(assignment.pallet.part.finishedLength || 0);
+        const width = Number(assignment.pallet.part.finishedWidth || 0);
+        const area = (length * width) / 1000000; // мм² в м²
+        value = area * quantity;
+      }
+
+      dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
+    }
+
+    return Array.from(dataByDate.entries())
+      .map(([date, value]) => ({ date, value }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
 
   private async calculatePackingStageStatsWithDates(
@@ -276,33 +303,7 @@ export class StatisticsService {
     startDate: Date,
     endDate: Date,
   ): Promise<DataPoint[]> {
-    // Вариант 1: Пробуем получить из MachineOperationHistory
-    const operations = await this.prisma.machineOperationHistory.findMany({
-      where: {
-        machineId: machineId,
-        completedAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-        routeStageId: { in: routeStageIds },
-      },
-    });
-
-    if (operations.length > 0) {
-      const dataByDate = new Map<string, number>();
-
-      for (const op of operations) {
-        const dateKey = op.completedAt!.toISOString().split('T')[0];
-        const quantity = Number(op.quantityProcessed);
-        dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + quantity);
-      }
-
-      return Array.from(dataByDate.entries())
-        .map(([date, value]) => ({ date, value }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-    }
-
-    // Вариант 2: Если нет истории операций, используем MachineAssignment
+    // Используем MachineAssignment с processedQuantity
     const assignments = await this.prisma.machineAssignment.findMany({
       where: {
         machineId: machineId,
@@ -310,39 +311,47 @@ export class StatisticsService {
           gte: startDate,
           lte: endDate,
         },
+        routeStageId: { in: routeStageIds },
+        processedQuantity: { not: 0 },
       },
       include: {
         pallet: {
           include: {
             part: {
-              include: {
-                route: {
-                  include: {
-                    routeStages: {
-                      where: {
-                        routeStageId: { in: routeStageIds },
-                      },
-                    },
-                  },
-                },
+              select: {
+                finishedLength: true,
+                finishedWidth: true,
               },
             },
+          },
+        },
+        machine: {
+          select: {
+            loadUnit: true,
           },
         },
       },
     });
 
-    // Фильтруем только те назначения, где деталь проходит нужные этапы
-    const filteredAssignments = assignments.filter(
-      (a) => a.pallet.part.route.routeStages.length > 0,
-    );
-
     const dataByDate = new Map<string, number>();
 
-    for (const assignment of filteredAssignments) {
+    for (const assignment of assignments) {
       const dateKey = assignment.completedAt!.toISOString().split('T')[0];
-      const quantity = Number(assignment.pallet.quantity);
-      dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + quantity);
+      const quantity = Number(assignment.processedQuantity || 0);
+      
+      let value = 0;
+      const machineUnit = assignment.machine.loadUnit;
+      
+      if (machineUnit === 'шт' || machineUnit === 'pcs') {
+        value = quantity;
+      } else {
+        const length = Number(assignment.pallet.part.finishedLength || 0);
+        const width = Number(assignment.pallet.part.finishedWidth || 0);
+        const area = (length * width) / 1000000; // мм² в м²
+        value = area * quantity;
+      }
+      
+      dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
     }
 
     return Array.from(dataByDate.entries())

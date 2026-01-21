@@ -751,6 +751,15 @@ export class PalletsMasterService {
       if (status === OperationCompletionStatus.COMPLETED) {
         updateData.status = TaskStatus.COMPLETED;
         updateData.completedAt = new Date();
+        
+        // Записываем количество деталей на поддоне в processedQuantity
+        await this.prisma.machineAssignment.update({
+          where: { assignmentId: operationId },
+          data: { 
+            completedAt: new Date(),
+            processedQuantity: pallet.quantity, // Записываем количество в штуках
+          },
+        });
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
         updateData.status = TaskStatus.IN_PROGRESS;
         updateData.completedAt = null;
@@ -848,14 +857,6 @@ export class PalletsMasterService {
           machineAssignment.pallet.partId,
           'IN_PROGRESS',
         );
-      }
-
-      // Если операция завершена, завершаем назначение станка
-      if (status === OperationCompletionStatus.COMPLETED) {
-        await this.prisma.machineAssignment.update({
-          where: { assignmentId: operationId },
-          data: { completedAt: new Date() },
-        });
       }
 
       let message = 'Статус операции обновлен';

@@ -621,6 +621,14 @@ export class PalletMachineService {
         },
       });
 
+      // Получаем актуальное количество с поддона
+      const palletData = await prisma.pallet.findUnique({
+        where: { palletId },
+        select: { quantity: true },
+      });
+
+      const processedQuantity = Number(palletData?.quantity || 0);
+
       // Завершаем назначение станка для конкретного этапа
       await prisma.machineAssignment.updateMany({
         where: {
@@ -629,7 +637,10 @@ export class PalletMachineService {
           routeStageId: currentProgress.routeStageId,
           completedAt: null,
         },
-        data: { completedAt },
+        data: { 
+          completedAt,
+          processedQuantity,
+        },
       });
 
       // === МОДИФИЦИРОВАННАЯ ЛОГИКА ===
@@ -795,19 +806,13 @@ export class PalletMachineService {
         { status: 'updated' },
       );
 
-      // Получаем количество из исходного поддона
-      const palletQuantity = await prisma.pallet.findUnique({
-        where: { palletId },
-        select: { quantity: true },
-      });
-
       // Логируем завершение обработки поддона
       await this.auditService.logMachineOperation({
         machineId,
         palletId,
         partId: assignment.pallet.partId,
         routeStageId: currentProgress.routeStageId,
-        quantityProcessed: Number(palletQuantity?.quantity || 0),
+        quantityProcessed: processedQuantity,
         startedAt: assignment.assignedAt,
         completedAt,
         operatorId,

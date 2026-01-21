@@ -90,7 +90,7 @@ export class MachinMasterService {
         where: { stageId: stageId },
       });
 
-      if (!stage) {
+      if (!stage) { 
         throw new NotFoundException(`Участок с ID ${stageId} не найден`);
       }
 
@@ -147,16 +147,12 @@ export class MachinMasterService {
           include: {
             pallet: {
               select: {
-                palletId: true,
-                palletName: true,
-                quantity: true,
                 part: true,
               },
             },
             machine: {
               select: {
                 machineId: true,
-                machineName: true,
                 counterResetAt: true,
               },
             },
@@ -164,27 +160,9 @@ export class MachinMasterService {
         },
       );
 
-      // Формируем объект для быстрого доступа к количеству завершенных операций по ID станка
-      const completedQuantityByMachineId = completedAssignments.reduce(
-        (acc, assignment) => {
-          const machineId = assignment.machine.machineId;
-
-          if (!acc[machineId]) {
-            acc[machineId] = 0;
-          }
-
-          // Суммируем количество деталей на поддоне
-          acc[machineId] += Number(assignment.pallet.quantity);
-
-          return acc;
-        },
-        {},
-      );
-
       // Формируем ответ с дополнительными вычисляемыми полями
       const resultMachines = machines.map((machine) => {
         let plannedQuantity: number;
-        let completedQuantity: number;
 
         if (machine.loadUnit === 'м²') {
           // Расчет в квадратных метрах
@@ -196,47 +174,9 @@ export class MachinMasterService {
             },
             0,
           );
-
-          // Получаем завершенные назначения для расчета выполненного количества в м²
-          const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => {
-              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
-              const isAfterReset = machine.counterResetAt && assignment.completedAt
-                ? assignment.completedAt > machine.counterResetAt 
-                : true;
-              return isCorrectMachine && isAfterReset;
-            },
-          );
-          completedQuantity = machineCompletedAssignments.reduce(
-            (total, assignment) => {
-              const part = assignment.pallet.part;
-              const quantity = Number(assignment.pallet.quantity);
-              return total + this.calculateSquareMeters(part, quantity);
-            },
-            0,
-          );
         } else if (machine.loadUnit === 'м³') {
           // Расчет в кубических метрах
           plannedQuantity = machine.machineAssignments.reduce(
-            (total, assignment) => {
-              const part = assignment.pallet.part;
-              const quantity = Number(assignment.pallet.quantity);
-              return total + this.calculateCubicMeters(part, quantity);
-            },
-            0,
-          );
-
-          // Получаем завершенные назначения для расчета выполненного количества в м³
-          const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => {
-              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
-              const isAfterReset = machine.counterResetAt && assignment.completedAt
-                ? assignment.completedAt > machine.counterResetAt 
-                : true;
-              return isCorrectMachine && isAfterReset;
-            },
-          );
-          completedQuantity = machineCompletedAssignments.reduce(
             (total, assignment) => {
               const part = assignment.pallet.part;
               const quantity = Number(assignment.pallet.quantity);
@@ -257,28 +197,6 @@ export class MachinMasterService {
             },
             0,
           );
-
-          // Получаем завершенные назначения для расчета выполненного количества в м
-          const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => {
-              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
-              const isAfterReset = machine.counterResetAt && assignment.completedAt
-                ? assignment.completedAt > machine.counterResetAt 
-                : true;
-              return isCorrectMachine && isAfterReset;
-            },
-          );
-          completedQuantity = machineCompletedAssignments.reduce(
-            (total, assignment) => {
-              const part = assignment.pallet.part;
-              const quantity = Number(assignment.pallet.quantity);
-              if (part.finishedLength != null) {
-                return total + (part.finishedLength * quantity) / 1000;
-              }
-              return total;
-            },
-            0,
-          );
         } else if (machine.loadUnit === 'метры кромки') {
           // Расчет периметра обработки торца
           plannedQuantity = machine.machineAssignments.reduce(
@@ -289,46 +207,28 @@ export class MachinMasterService {
             },
             0,
           );
-
-          // Получаем завершенные назначения для расчета выполненного количества
-          const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => {
-              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
-              const isAfterReset = machine.counterResetAt && assignment.completedAt
-                ? assignment.completedAt > machine.counterResetAt 
-                : true;
-              return isCorrectMachine && isAfterReset;
-            },
-          );
-          completedQuantity = machineCompletedAssignments.reduce(
-            (total, assignment) => {
-              const part = assignment.pallet.part;
-              const quantity = Number(assignment.pallet.quantity);
-              return total + this.calculateEdgeProcessingMeters(part, quantity);
-            },
-            0,
-          );
         } else {
-          // Расчет в штуках (как было раньше)
+          // Расчет в штуках
           plannedQuantity = machine.machineAssignments.reduce(
             (total, assignment) => total + Number(assignment.pallet.quantity),
             0,
           );
-          // Фильтруем завершенные операции после сброса счетчика
-          const machineCompletedAssignments = completedAssignments.filter(
-            (assignment) => {
-              const isCorrectMachine = assignment.machine.machineId === machine.machineId;
-              const isAfterReset = machine.counterResetAt && assignment.completedAt
-                ? assignment.completedAt > machine.counterResetAt 
-                : true;
-              return isCorrectMachine && isAfterReset;
-            },
-          );
-          completedQuantity = machineCompletedAssignments.reduce(
-            (total, assignment) => total + Number(assignment.pallet.quantity),
-            0,
-          );
         }
+
+        // Расчет выполненного количества из processedQuantity (в штуках) с пересчетом в единицу измерения
+        const completedQuantity = completedAssignments
+          .filter(
+            (assignment) =>
+              assignment.machine.machineId === machine.machineId &&
+              (!machine.counterResetAt ||
+                !assignment.completedAt ||
+                assignment.completedAt > machine.counterResetAt),
+          )
+          .reduce((total, assignment) => {
+            const quantityInPieces = Number(assignment.processedQuantity);
+            const part = assignment.pallet.part;
+            return total + this.calculateQuantityByUnit(machine.loadUnit, part, quantityInPieces);
+          }, 0);
 
         function getPlannedQuantity(plannedQuantity, machine) {
           if (machine.loadUnit === 'м²') {
@@ -596,6 +496,27 @@ export class MachinMasterService {
    * @param moveTaskDto DTO с данными для перемещения задания
    * @returns Объект с сообщением об успешном перемещении
    */
+  /**
+   * Вычисляет количество в зависимости от единицы измерения станка
+   * @param loadUnit Единица измерения станка
+   * @param part Объект детали с размерами
+   * @param quantity Количество деталей
+   * @returns Количество в соответствующей единице измерения
+   */
+  private calculateQuantityByUnit(loadUnit: string, part: any, quantity: number): number {
+    if (loadUnit === 'м²') {
+      return this.calculateSquareMeters(part, quantity);
+    } else if (loadUnit === 'м³') {
+      return this.calculateCubicMeters(part, quantity);
+    } else if (loadUnit === 'м') {
+      return part.finishedLength ? (part.finishedLength * quantity) / 1000 : 0;
+    } else if (loadUnit === 'метры кромки') {
+      return this.calculateEdgeProcessingMeters(part, quantity);
+    } else {
+      return quantity; // Штуки
+    }
+  }
+
   /**
    * Вычисляет площадь в квадратных метрах на основе данных детали
    * @param part Объект детали с размерами

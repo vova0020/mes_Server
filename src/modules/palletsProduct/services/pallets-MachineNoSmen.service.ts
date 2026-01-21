@@ -606,10 +606,21 @@ export class PalletMachineNoSmenService {
     return this.prisma.$transaction(async (prisma) => {
       const completedAt = new Date();
 
+      // Получаем актуальное количество с поддона
+      const palletData = await prisma.pallet.findUnique({
+        where: { palletId },
+        select: { quantity: true },
+      });
+
+      const processedQuantity = Number(palletData?.quantity || 0);
+
       // Завершаем назначение станка
       await prisma.machineAssignment.update({
         where: { assignmentId: assignment.assignmentId },
-        data: { completedAt },
+        data: { 
+          completedAt,
+          processedQuantity,
+        },
       });
 
       // Завершаем текущий прогресс этапа
@@ -746,7 +757,7 @@ export class PalletMachineNoSmenService {
         palletId,
         partId: assignment.pallet.partId,
         routeStageId: currentProgress.routeStageId,
-        quantityProcessed: Number(assignment.pallet.quantity),
+        quantityProcessed: processedQuantity,
         startedAt: assignment.assignedAt,
         completedAt,
         operatorId,

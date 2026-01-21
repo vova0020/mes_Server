@@ -1248,6 +1248,8 @@ model MachineAssignment {
   assignedAt   DateTime  @map("assigned_at")
   /// Время завершения задания (если завершено)
   completedAt  DateTime? @map("completed_at")
+  /// Обработанное количество в штуках (для пересчета в единицы измерения станка)
+  processedQuantity Decimal @default(0) @map("processed_quantity")
 
   // связи: навигация к станку и паллете
   machine Machine @relation(fields: [machineId], references: [machineId])
