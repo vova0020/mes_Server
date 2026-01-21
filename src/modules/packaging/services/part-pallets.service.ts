@@ -2,11 +2,13 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PartPalletsQueryDto } from '../dto/part-pallets-query.dto';
 import { AssignPalletToPackageDto } from '../dto/assign-pallet-to-package.dto';
 import { SocketService } from '../../websocket/services/socket.service';
+import { AuditService } from '../../audit/services/audit.service';
 import {
   PartPalletsResponseDto,
   PalletDetailDto,
@@ -16,9 +18,12 @@ import {
 
 @Injectable()
 export class PartPalletsService {
+  private readonly logger = new Logger(PartPalletsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
+    private auditService: AuditService,
   ) {}
 
   // Получение поддонов по ID детали
@@ -185,64 +190,64 @@ export class PartPalletsService {
 
     // Преобразуем данные - показываем все поддоны
     const pallets: PalletDetailDto[] = filteredPallets.map((pallet) => {
-        const currentBufferCell = pallet.palletBufferCells[0];
+      const currentBufferCell = pallet.palletBufferCells[0];
 
-        // Проверяем, есть ли назначение для конкретной упаковки
-        const packageAssignment = packageId
-          ? pallet.packageAssignments.find((a) => a.packageId === packageId)
-          : null;
+      // Проверяем, есть ли назначение для конкретной упаковки
+      const packageAssignment = packageId
+        ? pallet.packageAssignments.find((a) => a.packageId === packageId)
+        : null;
 
-        // Рассчитываем общее использованное количество
-        const totalUsed = pallet.packageAssignments.reduce(
-          (sum, assignment) => sum + assignment.usedQuantity.toNumber(),
-          0,
-        );
+      // Рассчитываем общее использованное количество
+      const totalUsed = pallet.packageAssignments.reduce(
+        (sum, assignment) => sum + assignment.usedQuantity.toNumber(),
+        0,
+      );
 
-        // Всегда показываем доступное количество (исходное минус использованное)
-        const availableQuantity = pallet.quantity.toNumber() - totalUsed;
-        const displayQuantity = availableQuantity;
+      // Всегда показываем доступное количество (исходное минус использованное)
+      const availableQuantity = pallet.quantity.toNumber() - totalUsed;
+      const displayQuantity = availableQuantity;
 
-        return {
-          palletId: pallet.palletId,
-          palletName: pallet.palletName,
-          quantity: displayQuantity,
-          availableQuantity: availableQuantity,
-          status: packageAssignment 
-            ? 'AWAITING_PACKAGING' // Если назначен на эту упаковку
-            : 'PENDING', // Иначе доступен для назначения
-          assignedToPackage: packageAssignment
-            ? true
-            : pallet.packageAssignments.length > 0,
-          currentCell: currentBufferCell
-            ? {
-                cellId: currentBufferCell.cell.cellId,
-                cellCode: currentBufferCell.cell.cellCode,
-                status: currentBufferCell.cell.status as string,
-                capacity: currentBufferCell.cell.capacity.toNumber(),
-                currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
-                buffer: {
-                  bufferId: currentBufferCell.cell.buffer.bufferId,
-                  bufferName: currentBufferCell.cell.buffer.bufferName,
-                  location: currentBufferCell.cell.buffer.location,
-                },
-              }
-            : undefined,
-          placedAt: currentBufferCell?.placedAt,
-          machineAssignments: pallet.machineAssignments.map((assignment) => ({
-            assignmentId: assignment.assignmentId,
-            machineId: assignment.machineId,
-            machineName: assignment.machine.machineName,
-            assignedAt: assignment.assignedAt,
-            completedAt: assignment.completedAt || undefined,
-          })),
-          stageProgress: pallet.palletStageProgress.map((progress) => ({
-            routeStageId: progress.routeStageId,
-            stageName: progress.routeStage.stage.stageName,
-            status: progress.status as string,
-            completedAt: progress.completedAt || undefined,
-          })),
-        };
-      });
+      return {
+        palletId: pallet.palletId,
+        palletName: pallet.palletName,
+        quantity: displayQuantity,
+        availableQuantity: availableQuantity,
+        status: packageAssignment
+          ? 'AWAITING_PACKAGING' // Если назначен на эту упаковку
+          : 'PENDING', // Иначе доступен для назначения
+        assignedToPackage: packageAssignment
+          ? true
+          : pallet.packageAssignments.length > 0,
+        currentCell: currentBufferCell
+          ? {
+              cellId: currentBufferCell.cell.cellId,
+              cellCode: currentBufferCell.cell.cellCode,
+              status: currentBufferCell.cell.status as string,
+              capacity: currentBufferCell.cell.capacity.toNumber(),
+              currentLoad: currentBufferCell.cell.currentLoad.toNumber(),
+              buffer: {
+                bufferId: currentBufferCell.cell.buffer.bufferId,
+                bufferName: currentBufferCell.cell.buffer.bufferName,
+                location: currentBufferCell.cell.buffer.location,
+              },
+            }
+          : undefined,
+        placedAt: currentBufferCell?.placedAt,
+        machineAssignments: pallet.machineAssignments.map((assignment) => ({
+          assignmentId: assignment.assignmentId,
+          machineId: assignment.machineId,
+          machineName: assignment.machine.machineName,
+          assignedAt: assignment.assignedAt,
+          completedAt: assignment.completedAt || undefined,
+        })),
+        stageProgress: pallet.palletStageProgress.map((progress) => ({
+          routeStageId: progress.routeStageId,
+          stageName: progress.routeStage.stage.stageName,
+          status: progress.status as string,
+          completedAt: progress.completedAt || undefined,
+        })),
+      };
+    });
 
     const partInfoDto: PartInfoDto = {
       partId: partInfo.partId,
@@ -647,6 +652,317 @@ export class PartPalletsService {
         success: true,
         assignmentId: assignment.assignmentId,
         message: 'Поддон успешно назначен на упаковку',
+      };
+    });
+  }
+
+  /**
+   * Отбраковать детали с поддона
+   */
+  async defectPalletParts(
+    palletId: number,
+    quantity: number,
+    reportedById: number,
+    description?: string,
+    machineId?: number,
+    stageId?: number,
+  ) {
+    this.logger.log(`Отбраковка ${quantity} деталей с поддона ${palletId}`);
+
+    return await this.prisma.$transaction(async (prisma) => {
+      const pallet = await prisma.pallet.findUnique({
+        where: { palletId },
+        include: {
+          part: {
+            include: {
+              route: {
+                include: {
+                  routeStages: {
+                    include: { stage: true },
+                    orderBy: { sequenceNumber: 'asc' },
+                  },
+                },
+              },
+            },
+          },
+          palletStageProgress: {
+            where: { completedAt: null },
+            include: { routeStage: true },
+            take: 1,
+          },
+        },
+      });
+
+      if (!pallet) {
+        throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
+      }
+
+      if (Number(pallet.quantity) < quantity) {
+        throw new Error(
+          `Недостаточно деталей на поддоне. Доступно: ${pallet.quantity}, запрошено: ${quantity}`,
+        );
+      }
+
+      // Определяем корректный routeStageId
+      let routeStageId: number;
+
+      if (stageId) {
+        // Проверяем, что указанный этап существует в маршруте детали
+        const routeStage = await prisma.routeStage.findFirst({
+          where: {
+            routeId: pallet.part.routeId,
+            stageId: stageId,
+          },
+        });
+
+        if (!routeStage) {
+          throw new Error(`Этап с ID ${stageId} не найден в маршруте детали`);
+        }
+
+        routeStageId = routeStage.routeStageId;
+      } else {
+        // Используем первый этап маршрута
+        const firstRouteStage = pallet.part.route?.routeStages[0];
+        if (!firstRouteStage) {
+          throw new Error(`Не найден маршрут для детали с ID ${pallet.partId}`);
+        }
+        routeStageId = firstRouteStage.routeStageId;
+      }
+
+      // Создаем рекламацию
+      const reclamation = await prisma.reclamation.create({
+        data: {
+          partId: pallet.partId,
+          quantity,
+          routeStageId,
+          machineId,
+          palletId,
+          reportedById,
+          note: description,
+          status: 'NEW',
+        },
+      });
+
+      // Создаем запись движения запасов
+      await prisma.inventoryMovement.create({
+        data: {
+          partId: pallet.partId,
+          palletId,
+          deltaQuantity: -quantity,
+          reason: 'DEFECT',
+          sourceReclamationId: reclamation.reclamationId,
+          userId: reportedById,
+        },
+      });
+
+      // Уменьшаем количество деталей на поддоне
+      const newQuantity = Number(pallet.quantity) - quantity;
+      await prisma.pallet.update({
+        where: { palletId },
+        data: { quantity: newQuantity },
+      });
+
+      this.logger.log(
+        `Отбраковано ${quantity} деталей с поддона ${palletId}, создана рекламация ${reclamation.reclamationId}`,
+      );
+
+      // Логируем отбраковку
+      await this.auditService.logDefect(
+        machineId || 0,
+        pallet.partId,
+        'MACHINE_DEFECT',
+        quantity,
+        routeStageId,
+      );
+
+      await this.auditService.logReclamationAction(
+        reclamation.reclamationId,
+        'CREATED',
+        reportedById,
+        undefined,
+        'NEW',
+        description,
+      );
+
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      // Отправляем WebSocket уведомление о событии поддона
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Детали успешно отбракованы',
+        reclamation: {
+          id: reclamation.reclamationId,
+          quantity,
+          description,
+          createdAt: reclamation.createdAt,
+        },
+        pallet: {
+          id: pallet.palletId,
+          name: pallet.palletName,
+          newQuantity,
+        },
+      };
+    });
+  }
+
+  /**
+   * Вернуть детали на производство после рекламации
+   */
+  async returnPartsToProduction(
+    partId: number,
+    palletId: number,
+    quantity: number,
+    returnToStageId: number,
+    userId: number,
+  ) {
+    this.logger.log(
+      `Возврат ${quantity} деталей для детали ${partId} на поддон ${palletId}, этап ${returnToStageId}`,
+    );
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // 1. Проверяем деталь
+      const part = await prisma.part.findUnique({
+        where: { partId },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Проверяем поддон
+      const pallet = await prisma.pallet.findUnique({
+        where: { palletId },
+      });
+
+      if (!pallet) {
+        throw new NotFoundException(`Поддон с ID ${palletId} не найден`);
+      }
+
+      if (pallet.partId !== partId) {
+        throw new Error(`Поддон ${palletId} не принадлежит детали ${partId}`);
+      }
+
+      // 3. Проверяем этап
+      const routeStage = await prisma.routeStage.findFirst({
+        where: {
+          routeId: part.routeId,
+          stageId: returnToStageId,
+        },
+        include: { stage: true },
+      });
+
+      if (!routeStage) {
+        throw new NotFoundException(
+          `Этап с ID ${returnToStageId} не найден в маршруте детали`,
+        );
+      }
+
+      // 4. Подсчитываем общее количество отбракованных деталей
+      const totalDefective = await prisma.reclamation.aggregate({
+        where: { partId },
+        _sum: { quantity: true },
+      });
+
+      const totalDefectiveQuantity = Number(totalDefective._sum.quantity || 0);
+
+      // 5. Подсчитываем уже возвращенное количество
+      const alreadyReturned = await prisma.inventoryMovement.aggregate({
+        where: {
+          partId,
+          reason: 'RETURN_FROM_RECLAMATION',
+          deltaQuantity: { gt: 0 },
+        },
+        _sum: { deltaQuantity: true },
+      });
+
+      const totalReturned = Number(alreadyReturned._sum.deltaQuantity || 0);
+      const availableToReturn = totalDefectiveQuantity - totalReturned;
+
+      if (quantity > availableToReturn) {
+        throw new Error(
+          `Нельзя вернуть ${quantity} деталей. Доступно для возврата: ${availableToReturn} ` +
+            `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
+        );
+      }
+
+      // 6. Увеличиваем количество на поддоне
+      await prisma.pallet.update({
+        where: { palletId },
+        data: { quantity: { increment: quantity } },
+      });
+
+      // 7. Создаем запись о возврате
+      const inventoryMovement = await prisma.inventoryMovement.create({
+        data: {
+          partId,
+          palletId,
+          deltaQuantity: quantity,
+          reason: 'RETURN_FROM_RECLAMATION',
+          returnToStageId: routeStage.routeStageId,
+          userId,
+        },
+      });
+
+      this.logger.log(
+        `Создана запись о возврате ${quantity} деталей на поддон ${palletId}, этап ${routeStage.stage.stageName}`,
+      );
+
+      // Отправляем WebSocket уведомление
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
+        'machine_task:event',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Детали успешно возвращены на производство',
+        movement: {
+          id: inventoryMovement.movementId,
+          quantity,
+          pallet: {
+            id: palletId,
+            name: pallet.palletName,
+            newQuantity: Number(pallet.quantity) + quantity,
+          },
+          returnToStage: {
+            id: routeStage.stageId,
+            name: routeStage.stage.stageName,
+          },
+          defectStats: {
+            totalDefective: totalDefectiveQuantity,
+            alreadyReturned: totalReturned + quantity,
+            remainingToReturn: availableToReturn - quantity,
+          },
+        },
       };
     });
   }
