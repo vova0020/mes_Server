@@ -369,10 +369,10 @@ export class OrderManagementService {
         finishedLength?: number;
         finishedWidth?: number;
         groove?: string;
-        edgingNameL1: string; // Общее количество с учетом количества упаковок
-        edgingNameL2: string; // Общее количество с учетом количества упаковок
-        edgingNameW1: string; // Общее количество с учетом количества упаковок
-        edgingNameW2: string; // Общее количество с учетом количества упаковок
+        edgingNameL1: string | null;
+        edgingNameL2: string | null;
+        edgingNameW1: string | null;
+        edgingNameW2: string | null;
         totalQuantity: number;
         packages: { packageId: number; quantity: number }[];
       }
@@ -399,10 +399,10 @@ export class OrderManagementService {
             finishedLength: comp.finishedLength ?? undefined,
             finishedWidth: comp.finishedWidth ?? undefined,
             groove: comp.groove ?? undefined,
-            edgingNameL1: comp.edgingNameL1 ?? "", // Общее количество с учетом количества упаковок
-            edgingNameL2: comp.edgingNameL2 ?? "", // Общее количество с учетом количества упаковок
-            edgingNameW1: comp.edgingNameW1 ?? "", // Общее количество с учетом количества упаковок
-            edgingNameW2: comp.edgingNameW2 ?? "", // Общее количество с учетом количества упаковок
+            edgingNameL1: comp.edgingNameL1 ?? null,
+            edgingNameL2: comp.edgingNameL2 ?? null,
+            edgingNameW1: comp.edgingNameW1 ?? null,
+            edgingNameW2: comp.edgingNameW2 ?? null,
             totalQuantity: Number(comp.quantity),
             packages: [
               { packageId: pkg.packageId, quantity: Number(comp.quantity) },
@@ -427,6 +427,10 @@ export class OrderManagementService {
           finishedLength: partData.finishedLength ?? undefined,
           finishedWidth: partData.finishedWidth ?? undefined,
           groove: partData.groove ?? undefined,
+          edgingNameL1: partData.edgingNameL1 || null,
+          edgingNameL2: partData.edgingNameL2 || null,
+          edgingNameW1: partData.edgingNameW1 || null,
+          edgingNameW2: partData.edgingNameW2 || null,
         },
       });
 

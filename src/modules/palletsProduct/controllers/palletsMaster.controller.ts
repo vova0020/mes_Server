@@ -43,7 +43,7 @@ import {
 @ApiTags('master pallets')
 @Controller('master')
 export class PalletsMasterController {
-  // соз��аём собственный логгер с именем контроллера
+  // создаём собственный логгер с именем контроллера
   private readonly logger = new Logger(PalletsMasterController.name);
 
   // инжектим PalletsMasterService, но называем параметр palletOperationsService,

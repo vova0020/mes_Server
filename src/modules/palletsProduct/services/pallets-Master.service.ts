@@ -88,19 +88,37 @@ export class PalletsMasterService {
       },
     });
 
-    // 4. Рассчитываем количество отбракованных деталей
-    const defectiveQuantity = await this.prisma.reclamation.aggregate({
-      where: { partId: detailId },
-      _sum: { quantity: true },
-    });
-    const totalDefectiveQuantity = Number(defectiveQuantity._sum.quantity || 0);
-
-    // 5. Рассчитываем количество нераспределенных деталей с учетом брака
+    // 4. Рассчитываем количество нераспределенных деталей с учетом рекламаций
     const totalPalletQuantity = pallets.reduce((sum, pallet) => {
       return sum + Number(pallet.quantity);
     }, 0);
+
+    // Получаем общее количество отбракованных деталей
+    const totalDefectiveQuantity = await this.prisma.reclamation.aggregate({
+      where: { partId: detailId },
+      _sum: { quantity: true },
+    });
+
+    // Получаем количество возвращенных деталей (они уже добавлены обратно на поддоны)
+    const returnedQuantity = await this.prisma.inventoryMovement.aggregate({
+      where: {
+        partId: detailId,
+        reason: 'RETURN_FROM_RECLAMATION',
+        deltaQuantity: { gt: 0 },
+      },
+      _sum: { deltaQuantity: true },
+    });
+
+    const defectiveQuantity = Number(totalDefectiveQuantity._sum.quantity || 0);
+    const returnedFromDefects = Number(returnedQuantity._sum.deltaQuantity || 0);
+    
+    // Активные отбраковки = Всего отбраковано - Возвращено
+    // Возвращенные детали уже учтены в totalPalletQuantity (они на поддонах)
+    const activeDefectiveQuantity = defectiveQuantity - returnedFromDefects;
+    
+    // Формула: Нераспределено = Всего - На поддонах - Активные отбраковки
     const unallocatedQuantity =
-      Number(part.totalQuantity) - totalPalletQuantity - totalDefectiveQuantity;
+      Number(part.totalQuantity) - totalPalletQuantity - activeDefectiveQuantity;
 
     // 6. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {

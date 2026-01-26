@@ -197,7 +197,7 @@ export class MachinMasterService {
             },
             0,
           );
-        } else if (machine.loadUnit === 'метры кромки') {
+        } else if (machine.loadUnit === 'м кромки') {
           // Расчет периметра обработки торца
           plannedQuantity = machine.machineAssignments.reduce(
             (total, assignment) => {
@@ -237,7 +237,7 @@ export class MachinMasterService {
             return Number(plannedQuantity.toFixed(2));
           } else if (machine.loadUnit === 'м') {
             return Number(plannedQuantity.toFixed(0));
-          } else if (machine.loadUnit === 'м обработки торца') {
+          } else if (machine.loadUnit === 'м кромки') {
             return Number(plannedQuantity.toFixed(0));
           } else {
             return Number(plannedQuantity.toFixed(0));
@@ -510,7 +510,7 @@ export class MachinMasterService {
       return this.calculateCubicMeters(part, quantity);
     } else if (loadUnit === 'м') {
       return part.finishedLength ? (part.finishedLength * quantity) / 1000 : 0;
-    } else if (loadUnit === 'метры кромки') {
+    } else if (loadUnit === 'м кромки') {
       return this.calculateEdgeProcessingMeters(part, quantity);
     } else {
       return quantity; // Штуки
@@ -579,17 +579,17 @@ export class MachinMasterService {
   }
 
   /**
-   * Вычисляет метры обработки торца на основе периметра с условиями
+   * Вычисляет м кромки на основе заполненных полей облицовки
    * @param part Объект детали с размерами и данными об облицовке
    * @param quantity Количество деталей
-   * @returns Метры обработки торца
+   * @returns М кромки
    */
   private calculateEdgeProcessingMeters(part: any, quantity: number): number {
     const length = part.finishedLength;
     const width = part.finishedWidth;
 
     this.logger.debug(
-      `Calculating edge processing meters: length=${length}, width=${width}, quantity=${quantity}`,
+      `Calculating edge processing meters: length=${length}, width=${width}, edgingL1=${part.edgingNameL1}, edgingL2=${part.edgingNameL2}, edgingW1=${part.edgingNameW1}, edgingW2=${part.edgingNameW2}, quantity=${quantity}`,
     );
 
     if (!length || !width || length <= 0 || width <= 0) {
@@ -597,29 +597,30 @@ export class MachinMasterService {
       return 0;
     }
 
-    let perimeter = 0;
+    let edgeLength = 0;
 
     // Добавляем длину если заполнена edgingNameL1
     if (part.edgingNameL1) {
-      perimeter += length;
+      edgeLength += length;
     }
 
     // Добавляем длину если заполнена edgingNameL2
     if (part.edgingNameL2) {
-      perimeter += length;
+      edgeLength += length;
     }
 
     // Добавляем ширину если заполнена edgingNameW1
     if (part.edgingNameW1) {
-      perimeter += width;
+      edgeLength += width;
     }
 
     // Добавляем ширину если заполнена edgingNameW2
     if (part.edgingNameW2) {
-      perimeter += width;
+      edgeLength += width;
     }
 
-    const result = (perimeter * quantity) / 1000; // Переводим из мм в м
+    // Умножаем на количество деталей и переводим из мм в м
+    const result = (edgeLength * quantity) / 1000;
     this.logger.debug(`Edge processing meters result: ${result}`);
 
     return result;
