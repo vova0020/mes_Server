@@ -33,6 +33,8 @@ export const ROOMS = {
   TECHNOLOGIST: 'room:technologist',
   /** Комната директора  */
   DIRECTOR: 'room:director',
+  /** Комната директора  */
+  STATISTICKS: 'room:statisticks',
 };
 
 /**

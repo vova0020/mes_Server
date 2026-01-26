@@ -2,7 +2,8 @@
   "name": "mes-scripts",
   "version": "1.0.0",
   "scripts": {
-    "update-fields": "npx ts-node update-part-fields.ts"
+    "update-fields": "npx ts-node update-part-fields.ts",
+    "migrate:edging": "cd .. && npx ts-node scripts/migrate-edging-data.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",

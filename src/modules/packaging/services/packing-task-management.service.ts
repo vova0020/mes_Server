@@ -267,6 +267,11 @@ export class PackingTaskManagementService {
         'order:stats',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:statisticks'],
+        'statisticks:event',
+        { status: 'updated' },
+      );
 
       return this.mapToResponseDto(updatedTask);
     });

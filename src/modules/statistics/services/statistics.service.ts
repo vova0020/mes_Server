@@ -115,6 +115,7 @@ export class StatisticsService {
         dto.lineId,
         startDate,
         endDate,
+        dto.stageId,
       );
     }
 
@@ -246,6 +247,13 @@ export class StatisticsService {
           gte: startDate,
           lte: endDate,
         },
+        machine: {
+          machinesStages: {
+            some: {
+              stageId: stageId,
+            },
+          },
+        },
         package: {
           composition: {
             some: {
@@ -321,6 +329,11 @@ export class StatisticsService {
               select: {
                 finishedLength: true,
                 finishedWidth: true,
+                thickness: true,
+                edgingNameL1: true,
+                edgingNameL2: true,
+                edgingNameW1: true,
+                edgingNameW2: true,
               },
             },
           },
@@ -341,14 +354,35 @@ export class StatisticsService {
       
       let value = 0;
       const machineUnit = assignment.machine.loadUnit;
+      const part = assignment.pallet.part;
       
       if (machineUnit === 'шт' || machineUnit === 'pcs') {
         value = quantity;
+      } else if (machineUnit === 'м²') {
+        const length = Number(part.finishedLength || 0);
+        const width = Number(part.finishedWidth || 0);
+        value = (length * width * quantity) / 1000000;
+      } else if (machineUnit === 'м³') {
+        const length = Number(part.finishedLength || 0);
+        const width = Number(part.finishedWidth || 0);
+        const thickness = Number(part.thickness || 0);
+        value = (length * width * thickness * quantity) / 1000000000;
+      } else if (machineUnit === 'м') {
+        const length = Number(part.finishedLength || 0);
+        value = (length * quantity) / 1000;
+      } else if (machineUnit === 'м кромки') {
+        const length = Number(part.finishedLength || 0);
+        const width = Number(part.finishedWidth || 0);
+        let edgeLength = 0;
+        if (part.edgingNameL1) edgeLength += length;
+        if (part.edgingNameL2) edgeLength += length;
+        if (part.edgingNameW1) edgeLength += width;
+        if (part.edgingNameW2) edgeLength += width;
+        value = (edgeLength * quantity) / 1000;
       } else {
-        const length = Number(assignment.pallet.part.finishedLength || 0);
-        const width = Number(assignment.pallet.part.finishedWidth || 0);
-        const area = (length * width) / 1000000; // мм² в м²
-        value = area * quantity;
+        const length = Number(part.finishedLength || 0);
+        const width = Number(part.finishedWidth || 0);
+        value = (length * width * quantity) / 1000000;
       }
       
       dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
@@ -363,6 +397,7 @@ export class StatisticsService {
     lineId: number,
     startDate: Date,
     endDate: Date,
+    stageId: number,
   ): Promise<MachineStats[]> {
     // Получаем маршруты для этой линии
     const routes = await this.prisma.route.findMany({
@@ -371,13 +406,20 @@ export class StatisticsService {
     });
     const routeIds = routes.map(r => r.routeId);
 
-    // Получаем задачи упаковки с completedQuantity > 0
+    // Получаем задачи упаковки с completedQuantity > 0 только для станков данного этапа
     const packingTasks = await this.prisma.packingTask.findMany({
       where: {
         completedQuantity: { gt: 0 },
         assignedAt: {
           gte: startDate,
           lte: endDate,
+        },
+        machine: {
+          machinesStages: {
+            some: {
+              stageId: stageId,
+            },
+          },
         },
         package: {
           composition: {

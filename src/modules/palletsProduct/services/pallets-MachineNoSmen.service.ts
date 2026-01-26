@@ -767,6 +767,11 @@ export class PalletMachineNoSmenService {
         'order:stats',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:statisticks'],
+        'statisticks:event',
+        { status: 'updated' },
+      );
 
       // Логируем завершение обработки
       await this.auditService.logMachineOperation({

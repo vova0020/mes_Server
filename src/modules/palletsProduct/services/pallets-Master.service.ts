@@ -18,7 +18,7 @@ export class PalletsMasterService {
     private prisma: PrismaService,
     private socketService: SocketService,
     private auditService: AuditService,
-  ) { }
+  ) {}
 
   /**
    * Получить все поддоны по ID детали
@@ -70,7 +70,7 @@ export class PalletsMasterService {
           take: 1,
         },
         machineAssignments: {
-          where: { 
+          where: {
             completedAt: null,
             routeStageId: currentRouteStage.routeStageId,
           },
@@ -110,15 +110,19 @@ export class PalletsMasterService {
     });
 
     const defectiveQuantity = Number(totalDefectiveQuantity._sum.quantity || 0);
-    const returnedFromDefects = Number(returnedQuantity._sum.deltaQuantity || 0);
-    
+    const returnedFromDefects = Number(
+      returnedQuantity._sum.deltaQuantity || 0,
+    );
+
     // Активные отбраковки = Всего отбраковано - Возвращено
     // Возвращенные детали уже учтены в totalPalletQuantity (они на поддонах)
     const activeDefectiveQuantity = defectiveQuantity - returnedFromDefects;
-    
+
     // Формула: Нераспределено = Всего - На поддонах - Активные отбраковки
     const unallocatedQuantity =
-      Number(part.totalQuantity) - totalPalletQuantity - activeDefectiveQuantity;
+      Number(part.totalQuantity) -
+      totalPalletQuantity -
+      activeDefectiveQuantity;
 
     // 6. Преобразуем в DTO
     const palletDtos: PalletDto[] = pallets.map((pallet) => {
@@ -129,16 +133,16 @@ export class PalletsMasterService {
       // Если есть запись прогресса — конструируем объект, иначе null
       const currentOperation = stageProgress
         ? {
-          id: stageProgress.pspId,
-          status: stageProgress.status,
-          startedAt: new Date(),
-          completedAt: stageProgress.completedAt ?? undefined,
-          processStep: {
-            id: currentRouteStage.stageId,
-            name: currentRouteStage.stage.stageName,
-            sequence: Number(currentRouteStage.sequenceNumber),
-          },
-        }
+            id: stageProgress.pspId,
+            status: stageProgress.status,
+            startedAt: new Date(),
+            completedAt: stageProgress.completedAt ?? undefined,
+            processStep: {
+              id: currentRouteStage.stageId,
+              name: currentRouteStage.stage.stageName,
+              sequence: Number(currentRouteStage.sequenceNumber),
+            },
+          }
         : null;
 
       return {
@@ -149,19 +153,19 @@ export class PalletsMasterService {
 
         bufferCell: currentBuffer
           ? {
-            id: currentBuffer.cell.cellId,
-            code: currentBuffer.cell.cellCode,
-            bufferId: currentBuffer.cell.bufferId,
-            bufferName: currentBuffer.cell.buffer?.bufferName,
-          }
+              id: currentBuffer.cell.cellId,
+              code: currentBuffer.cell.cellCode,
+              bufferId: currentBuffer.cell.bufferId,
+              bufferName: currentBuffer.cell.buffer?.bufferName,
+            }
           : null,
 
         machine: currentMachine?.machine
           ? {
-            id: currentMachine.machine.machineId,
-            name: currentMachine.machine.machineName,
-            status: currentMachine.machine.status,
-          }
+              id: currentMachine.machine.machineId,
+              name: currentMachine.machine.machineName,
+              status: currentMachine.machine.status,
+            }
           : null,
 
         // Показываем, назначен ли поддон на станок для текущего этапа
@@ -347,7 +351,7 @@ export class PalletsMasterService {
         operatorId,
         undefined,
         { machineId, stageId: segmentId },
-        { assignmentId: machineAssignment.assignmentId }
+        { assignmentId: machineAssignment.assignmentId },
       );
 
       // 9. Возвращаем DTO
@@ -374,10 +378,10 @@ export class PalletsMasterService {
           },
           operator: operatorId
             ? {
-              id: operatorId,
-              username: 'Unknown',
-              details: { fullName: 'Unknown User' },
-            }
+                id: operatorId,
+                username: 'Unknown',
+                details: { fullName: 'Unknown User' },
+              }
             : undefined,
         },
       };
@@ -471,8 +475,8 @@ export class PalletsMasterService {
       if (newLoad > Number(bufferCell.capacity)) {
         throw new Error(
           `Недостаточно места в ячейке ${bufferCell.cellCode}. ` +
-          `Текущая загрузка: ${currentLoad} поддонов, требуется: 1 поддон, ` +
-          `максимальная вместимость: ${bufferCell.capacity} поддонов`,
+            `Текущая загрузка: ${currentLoad} поддонов, требуется: 1 поддон, ` +
+            `максимальная вместимость: ${bufferCell.capacity} поддонов`,
         );
       }
 
@@ -531,8 +535,6 @@ export class PalletsMasterService {
           }
         }
 
-
-
         // Создаем новое размещение в буфере
         const palletBufferCell = await prisma.palletBufferCell.create({
           data: {
@@ -568,7 +570,7 @@ export class PalletsMasterService {
 
         this.logger.log(
           `Поддон ${palletId} перемещен в ячейку буфера ${bufferCell.cellCode}. ` +
-          `Новая загрузка: ${newLoad}/${bufferCell.capacity} поддонов, статус: ${newStatus}`,
+            `Новая загрузка: ${newLoad}/${bufferCell.capacity} поддонов, статус: ${newStatus}`,
         );
 
         // Логируем перемещение поддона в буфер
@@ -637,7 +639,9 @@ export class PalletsMasterService {
     stageId: number,
     masterId?: number,
   ) {
-    this.logger.log(`Обновление статуса операции ${operationId} на ${status} для этапа ${stageId}`);
+    this.logger.log(
+      `Обновление статуса операции ${operationId} на ${status} для этапа ${stageId}`,
+    );
 
     try {
       // Ищем назначение станка по operationId (это assignmentId из MachineAssignment)
@@ -684,7 +688,7 @@ export class PalletsMasterService {
       if (machineRouteStage.stageId !== stageId) {
         throw new Error(
           `Назначение ${operationId} не относится к этапу ${stageId}. ` +
-          `Текущий этап назначения: ${machineRouteStage.stage.stageName} (ID: ${machineRouteStage.stageId})`,
+            `Текущий этап назначения: ${machineRouteStage.stage.stageName} (ID: ${machineRouteStage.stageId})`,
         );
       }
 
@@ -718,13 +722,12 @@ export class PalletsMasterService {
 
       const allRouteStages = pallet.part.route?.routeStages || [];
 
-
-
       // Ищем или создаем прогресс этапа
-      let stageProgress = pallet.palletStageProgress.find(progress => 
-        progress.routeStage.routeStageId === machineRouteStage.routeStageId
+      let stageProgress = pallet.palletStageProgress.find(
+        (progress) =>
+          progress.routeStage.routeStageId === machineRouteStage.routeStageId,
       );
-      
+
       if (!stageProgress) {
         // Создаем новый прогресс этапа
         stageProgress = await this.prisma.palletStageProgress.create({
@@ -740,17 +743,24 @@ export class PalletsMasterService {
       }
 
       // Проверяем последовательность этапов
-      const currentStageIndex = allRouteStages.findIndex(rs => rs.routeStageId === machineRouteStage.routeStageId);
-      
+      const currentStageIndex = allRouteStages.findIndex(
+        (rs) => rs.routeStageId === machineRouteStage.routeStageId,
+      );
+
       if (currentStageIndex > 0) {
         const previousRouteStage = allRouteStages[currentStageIndex - 1];
         const previousStageProgress = pallet.palletStageProgress.find(
-          progress => progress.routeStage.routeStageId === previousRouteStage.routeStageId
+          (progress) =>
+            progress.routeStage.routeStageId ===
+            previousRouteStage.routeStageId,
         );
-        
-        if (!previousStageProgress || previousStageProgress.status !== TaskStatus.COMPLETED) {
+
+        if (
+          !previousStageProgress ||
+          previousStageProgress.status !== TaskStatus.COMPLETED
+        ) {
           throw new Error(
-            `Нельзя взять поддон ${machineAssignment.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`
+            `Нельзя взять поддон ${machineAssignment.palletId} в работу на этапе "${machineRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
           );
         }
       }
@@ -769,11 +779,11 @@ export class PalletsMasterService {
       if (status === OperationCompletionStatus.COMPLETED) {
         updateData.status = TaskStatus.COMPLETED;
         updateData.completedAt = new Date();
-        
+
         // Записываем количество деталей на поддоне в processedQuantity
         await this.prisma.machineAssignment.update({
           where: { assignmentId: operationId },
-          data: { 
+          data: {
             completedAt: new Date(),
             processedQuantity: pallet.quantity, // Записываем количество в штуках
           },
@@ -868,7 +878,6 @@ export class PalletsMasterService {
         //   machineAssignment.pallet.partId,
         //   stageProgress.routeStageId,
         // );
-
       } else if (status === OperationCompletionStatus.IN_PROGRESS) {
         await this.updatePartStatusIfNeeded(
           this.prisma,
@@ -896,7 +905,7 @@ export class PalletsMasterService {
         masterId,
         { status: stageProgress.status },
         { status: updatedStageProgress.status },
-        { operationId, machineId: machineAssignment.machineId }
+        { operationId, machineId: machineAssignment.machineId },
       );
 
       // Отправляем WebSocket уведомление о событии поддона
@@ -934,6 +943,11 @@ export class PalletsMasterService {
         'order:stats',
         { status: 'updated' },
       );
+      this.socketService.emitToMultipleRooms(
+        ['room:statisticks'],
+        'statisticks:event',
+        { status: 'updated' },
+      );
 
       const currentMachine = machineAssignment.machine;
 
@@ -951,10 +965,10 @@ export class PalletsMasterService {
           },
           machine: currentMachine
             ? {
-              id: currentMachine.machineId,
-              name: currentMachine.machineName,
-              status: currentMachine.status,
-            }
+                id: currentMachine.machineId,
+                name: currentMachine.machineName,
+                status: currentMachine.status,
+              }
             : undefined,
           processStep: {
             id: updatedStageProgress.routeStage.stageId,
@@ -963,12 +977,12 @@ export class PalletsMasterService {
           operator: undefined, // В новой схеме нет прямой связи с оператором
           master: masterId
             ? {
-              id: masterId,
-              username: 'Unknown',
-              details: {
-                fullName: 'Unknown Master',
-              },
-            }
+                id: masterId,
+                username: 'Unknown',
+                details: {
+                  fullName: 'Unknown Master',
+                },
+              }
             : undefined,
         },
       };
@@ -987,7 +1001,9 @@ export class PalletsMasterService {
     machineId: number,
     stageId?: number,
   ): Promise<MachineTaskMasterResponseDto[]> {
-    this.logger.log(`Получение сменного задания для станка с ID: ${machineId}, этап: ${stageId}`);
+    this.logger.log(
+      `Получение сменного задания для станка с ID: ${machineId}, этап: ${stageId}`,
+    );
 
     try {
       // Проверяем существование станка
@@ -1002,9 +1018,9 @@ export class PalletsMasterService {
       // Получаем этапы станка
       const machineStages = await this.prisma.machineStage.findMany({
         where: { machineId },
-        select: { stageId: true }
+        select: { stageId: true },
       });
-      const machineStageIds = machineStages.map(ms => ms.stageId);
+      const machineStageIds = machineStages.map((ms) => ms.stageId);
 
       // Если указан stageId, проверяем что станок может выполнять этот этап
       if (stageId && !machineStageIds.includes(stageId)) {
@@ -1021,7 +1037,7 @@ export class PalletsMasterService {
           where: { stageId },
           select: { routeStageId: true },
         });
-        routeStageIds = routeStages.map(rs => rs.routeStageId);
+        routeStageIds = routeStages.map((rs) => rs.routeStageId);
       }
 
       // Получаем активные назначения для данного станка
@@ -1029,9 +1045,10 @@ export class PalletsMasterService {
         where: {
           machineId,
           completedAt: null,
-          ...(routeStageIds && routeStageIds.length > 0 && {
-            routeStageId: { in: routeStageIds },
-          }),
+          ...(routeStageIds &&
+            routeStageIds.length > 0 && {
+              routeStageId: { in: routeStageIds },
+            }),
         },
         include: {
           pallet: {
@@ -1055,11 +1072,13 @@ export class PalletsMasterService {
                 },
               },
               palletStageProgress: {
-                where: stageId ? {
-                  routeStage: {
-                    stageId: stageId,
-                  },
-                } : undefined,
+                where: stageId
+                  ? {
+                      routeStage: {
+                        stageId: stageId,
+                      },
+                    }
+                  : undefined,
                 include: {
                   routeStage: {
                     include: {
@@ -1091,10 +1110,10 @@ export class PalletsMasterService {
       const tasks = machineAssignments.map((assignment) => {
         const pallet = assignment.pallet;
         const part = pallet.part;
-        
+
         // Находим прогресс этапа для данного назначения
-        const stageProgress = pallet.palletStageProgress.find(progress => 
-          progress.routeStageId === assignment.routeStageId
+        const stageProgress = pallet.palletStageProgress.find(
+          (progress) => progress.routeStageId === assignment.routeStageId,
         );
 
         // Получаем информацию о заказе через связь с пакетом
@@ -1181,8 +1200,8 @@ export class PalletsMasterService {
       if (quantity > availableQuantity) {
         throw new Error(
           `Недостаточно деталей для создания поддона. ` +
-          `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
-          `(общее количество: ${part.totalQuantity}, распределено: ${allocatedQuantity}, отбраковано: ${totalDefectiveQuantity})`,
+            `Запрошено: ${quantity}, доступно: ${availableQuantity} ` +
+            `(общее количество: ${part.totalQuantity}, распределено: ${allocatedQuantity}, отбраковано: ${totalDefectiveQuantity})`,
         );
       }
 
@@ -1224,7 +1243,7 @@ export class PalletsMasterService {
         undefined,
         undefined,
         { partId, quantity, palletName: finalPalletName },
-        { availableQuantity: availableQuantity - quantity }
+        { availableQuantity: availableQuantity - quantity },
       );
 
       // Отправляем WebSocket уведомление о событии поддона
@@ -1244,7 +1263,7 @@ export class PalletsMasterService {
         'order:stats',
         { status: 'updated' },
       );
-       this.socketService.emitToMultipleRooms(
+      this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'machine_task:event',
         { status: 'updated' },
@@ -1299,19 +1318,19 @@ export class PalletsMasterService {
 
     const pallet = await this.prisma.pallet.findUnique({
       where: { palletId },
-      include: { 
+      include: {
         part: {
           include: {
             route: {
               include: {
                 routeStages: {
                   orderBy: { sequenceNumber: 'asc' },
-                  take: 1
-                }
-              }
-            }
-          }
-        }
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1328,20 +1347,20 @@ export class PalletsMasterService {
     return await this.prisma.$transaction(async (prisma) => {
       // Определяем корректный routeStageId
       let routeStageId: number;
-      
+
       if (stageId) {
         // Проверяем, что указанный этап существует в маршруте детали
         const routeStage = await prisma.routeStage.findFirst({
           where: {
             routeId: pallet.part.routeId,
-            stageId: stageId
-          }
+            stageId: stageId,
+          },
         });
-        
+
         if (!routeStage) {
           throw new Error(`Этап с ID ${stageId} не найден в маршруте детали`);
         }
-        
+
         routeStageId = routeStage.routeStageId;
       } else {
         // Используем первый этап маршрута
@@ -1399,7 +1418,7 @@ export class PalletsMasterService {
         'order:stats',
         { status: 'updated' },
       );
-       this.socketService.emitToMultipleRooms(
+      this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'machine_task:event',
         { status: 'updated' },
@@ -1411,7 +1430,7 @@ export class PalletsMasterService {
         reclamation.partId,
         'MANUAL_DEFECT',
         quantity,
-        routeStageId
+        routeStageId,
       );
 
       await this.auditService.logReclamationAction(
@@ -1420,7 +1439,7 @@ export class PalletsMasterService {
         reportedById,
         undefined,
         'REPORTED',
-        description
+        description,
       );
 
       return {
@@ -1594,7 +1613,7 @@ export class PalletsMasterService {
         if (Number(pallet.quantity) < quantity) {
           throw new Error(
             `На поддоне ${palletId} недостаточно деталей для списания. ` +
-            `Доступно: ${pallet.quantity}, требуется: ${quantity}`,
+              `Доступно: ${pallet.quantity}, требуется: ${quantity}`,
           );
         }
       }
@@ -2041,15 +2060,17 @@ export class PalletsMasterService {
 
       // 3. Проверяем этап
       const routeStage = await prisma.routeStage.findFirst({
-        where: { 
+        where: {
           routeId: part.routeId,
-          stageId: returnToStageId 
+          stageId: returnToStageId,
         },
         include: { stage: true },
       });
 
       if (!routeStage) {
-        throw new NotFoundException(`Этап с ID ${returnToStageId} не найден в маршруте детали`);
+        throw new NotFoundException(
+          `Этап с ID ${returnToStageId} не найден в маршруте детали`,
+        );
       }
 
       // 4. Подсчитываем общее количество отбракованных деталей
@@ -2076,7 +2097,7 @@ export class PalletsMasterService {
       if (quantity > availableToReturn) {
         throw new Error(
           `Нельзя вернуть ${quantity} деталей. Доступно для возврата: ${availableToReturn} ` +
-          `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
+            `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
         );
       }
 
@@ -2115,11 +2136,17 @@ export class PalletsMasterService {
         { status: 'updated' },
       );
       this.socketService.emitToMultipleRooms(
-        ['room:technologist', 'room:director'],
+        [
+          'room:technologist',
+          'room:director',
+          'room:masterceh',
+          'room:machines',
+          'room:machinesnosmen',
+        ],
         'order:stats',
         { status: 'updated' },
       );
-       this.socketService.emitToMultipleRooms(
+      this.socketService.emitToMultipleRooms(
         ['room:masterceh', 'room:machines', 'room:machinesnosmen'],
         'machine_task:event',
         { status: 'updated' },

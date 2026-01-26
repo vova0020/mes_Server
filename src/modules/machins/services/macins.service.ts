@@ -114,34 +114,34 @@ export class MachinsService {
       if (machine.loadUnit === 'м²') {
         completedQuantity = filteredAssignments.reduce((total, assignment) => {
           const part = assignment.pallet.part;
-          const quantity = Number(assignment.pallet.quantity);
+          const quantity = Number(assignment.processedQuantity || 0);
           return total + this.calculateSquareMeters(part, quantity);
         }, 0);
       } else if (machine.loadUnit === 'м³') {
         completedQuantity = filteredAssignments.reduce((total, assignment) => {
           const part = assignment.pallet.part;
-          const quantity = Number(assignment.pallet.quantity);
+          const quantity = Number(assignment.processedQuantity || 0);
           return total + this.calculateCubicMeters(part, quantity);
         }, 0);
       } else if (machine.loadUnit === 'м') {
         completedQuantity = filteredAssignments.reduce((total, assignment) => {
           const part = assignment.pallet.part;
-          const quantity = Number(assignment.pallet.quantity);
+          const quantity = Number(assignment.processedQuantity || 0);
           if (part.finishedLength != null) {
             return total + (part.finishedLength * quantity) / 1000;
           }
           return total;
         }, 0);
-      } else if (machine.loadUnit === 'м обработки торца') {
+      } else if (machine.loadUnit === 'м кромки') {
         completedQuantity = filteredAssignments.reduce((total, assignment) => {
           const part = assignment.pallet.part;
-          const quantity = Number(assignment.pallet.quantity);
+          const quantity = Number(assignment.processedQuantity || 0);
           return total + this.calculateEdgeProcessingMeters(part, quantity);
         }, 0);
       } else {
         // Расчет в штуках
         completedQuantity = filteredAssignments.reduce(
-          (total, assignment) => total + Number(assignment.pallet.quantity),
+          (total, assignment) => total + Number(assignment.processedQuantity || 0),
           0,
         );
       }
@@ -278,7 +278,7 @@ export class MachinsService {
   }
 
   /**
-   * Вычисляет метры обработки торца на основе периметра с условиями
+   * Вычисляет м кромки на основе заполненных полей облицовки
    */
   private calculateEdgeProcessingMeters(part: any, quantity: number): number {
     const length = part.finishedLength;
@@ -288,21 +288,21 @@ export class MachinsService {
       return 0;
     }
 
-    let perimeter = 0;
+    let edgeLength = 0;
 
     if (part.edgingNameL1) {
-      perimeter += length;
+      edgeLength += length;
     }
     if (part.edgingNameL2) {
-      perimeter += length;
+      edgeLength += length;
     }
     if (part.edgingNameW1) {
-      perimeter += width;
+      edgeLength += width;
     }
     if (part.edgingNameW2) {
-      perimeter += width;
+      edgeLength += width;
     }
 
-    return (perimeter * quantity) / 1000;
+    return (edgeLength * quantity) / 1000;
   }
 }
