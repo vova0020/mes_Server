@@ -210,7 +210,11 @@ export class PackingTaskManagementService {
 
       // Если задача частично выполнена, обновляем частичный прогресс на станке
       if (newStatus === PackingTaskStatus.PARTIALLY_COMPLETED) {
-        await this.updateMachinePartialProgress(tx, updatedTask.machineId, completedQty);
+        await this.updateMachinePartialProgress(
+          tx,
+          updatedTask.machineId,
+          completedQty,
+        );
       }
 
       // Обновляем статус упаковки
@@ -435,7 +439,7 @@ export class PackingTaskManagementService {
         package: {
           include: {
             order: true,
-          }, 
+          },
         },
       },
     });
@@ -451,7 +455,8 @@ export class PackingTaskManagementService {
 
     // Обрабатываем completedQuantity если передано
     if (dto.completedQuantity !== undefined) {
-      const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+      const newCompletedQuantity =
+        existingTask.completedQuantity.toNumber() + dto.completedQuantity;
       if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
         throw new BadRequestException(
           `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
@@ -466,7 +471,9 @@ export class PackingTaskManagementService {
       existingTask.status !== PackingTaskStatus.IN_PROGRESS
     ) {
       // Проверяем только оставшееся количество для выполнения
-      const remainingQuantity = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
+      const remainingQuantity =
+        existingTask.assignedQuantity.toNumber() -
+        existingTask.completedQuantity.toNumber();
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
         remainingQuantity,
@@ -485,8 +492,10 @@ export class PackingTaskManagementService {
       }
 
       // Проверяем наличие достаточного количества деталей для выполнения
-      const completedQty = dto.completedQuantity ?? 
-        (existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber());
+      const completedQty =
+        dto.completedQuantity ??
+        existingTask.assignedQuantity.toNumber() -
+          existingTask.completedQuantity.toNumber();
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
         completedQty,
@@ -523,8 +532,16 @@ export class PackingTaskManagementService {
 
         // Обновляем счетчик станка при любом выполнении работы
         if (dto.completedQuantity !== undefined && dto.completedQuantity > 0) {
-          await this.updateMachineCounter(tx, updatedTask.machineId, dto.completedQuantity);
-          await this.updateMachinePartialProgress(tx, updatedTask.machineId, dto.completedQuantity);
+          await this.updateMachineCounter(
+            tx,
+            updatedTask.machineId,
+            dto.completedQuantity,
+          );
+          await this.updateMachinePartialProgress(
+            tx,
+            updatedTask.machineId,
+            dto.completedQuantity,
+          );
         }
 
         // Вычитаем запасы только для новых выполненных упаковок
@@ -540,7 +557,9 @@ export class PackingTaskManagementService {
           dto.completedQuantity === undefined
         ) {
           // Если статус меняется на COMPLETED без указания количества, выполняем остаток
-          const remainingQty = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
+          const remainingQty =
+            existingTask.assignedQuantity.toNumber() -
+            existingTask.completedQuantity.toNumber();
           if (remainingQty > 0) {
             await this.deductInventoryForCompletedPackages(
               tx,
@@ -548,11 +567,19 @@ export class PackingTaskManagementService {
               remainingQty,
             );
             // Обновляем счетчик станка при полном выполнении остатка
-            await this.updateMachineCounter(tx, updatedTask.machineId, remainingQty);
-            
+            await this.updateMachineCounter(
+              tx,
+              updatedTask.machineId,
+              remainingQty,
+            );
+
             // Обновляем частичный прогресс при полном завершении
             if (remainingQty > 0) {
-              await this.updateMachinePartialProgress(tx, updatedTask.machineId, remainingQty);
+              await this.updateMachinePartialProgress(
+                tx,
+                updatedTask.machineId,
+                remainingQty,
+              );
             }
           }
         } else if (
@@ -561,7 +588,11 @@ export class PackingTaskManagementService {
           dto.completedQuantity !== undefined
         ) {
           // Если статус меняется на COMPLETED с указанием количества, также обновляем partiallyCompleted
-          await this.updateMachinePartialProgress(tx, updatedTask.machineId, dto.completedQuantity);
+          await this.updateMachinePartialProgress(
+            tx,
+            updatedTask.machineId,
+            dto.completedQuantity,
+          );
         }
 
         // Обновляем статус упаковки
@@ -590,6 +621,11 @@ export class PackingTaskManagementService {
           'order:stats',
           { status: 'updated' },
         );
+        this.socketService.emitToMultipleRooms(
+          ['room:statisticks'],
+          'statisticks:event',
+          { status: 'updated' },
+        ); 
 
         return this.mapToResponseDto(updatedTask);
       });
@@ -751,9 +787,9 @@ export class PackingTaskManagementService {
                 part: true,
                 packageAssignments: {
                   select: {
-                    usedQuantity: true
-                  }
-                }
+                    usedQuantity: true,
+                  },
+                },
               },
             },
           },
@@ -810,13 +846,16 @@ export class PackingTaskManagementService {
         const palletTotalQuantity = assignment.pallet.quantity.toNumber();
         const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
           (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
-          0
+          0,
         );
         const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
         const assignedToThisPackage = assignment.quantity.toNumber();
-        
+
         // Берем минимум из назначенного на упаковку и доступного с поддона
-        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+        return (
+          sum +
+          Math.max(0, Math.min(assignedToThisPackage, availableFromPallet))
+        );
       }, 0);
 
       if (availableQuantity < requiredQuantity) {
@@ -1063,8 +1102,9 @@ export class PackingTaskManagementService {
 
     for (const assignment of assignments) {
       // Вычисляем неиспользованное количество (назначенное минус использованное)
-      const unusedQuantity = assignment.quantity.toNumber() - assignment.usedQuantity.toNumber();
-      
+      const unusedQuantity =
+        assignment.quantity.toNumber() - assignment.usedQuantity.toNumber();
+
       // Если есть неиспользованное количество, обновляем назначение
       if (unusedQuantity > 0) {
         // Обновляем назначение - устанавливаем quantity равным usedQuantity
