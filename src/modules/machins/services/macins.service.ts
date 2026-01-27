@@ -33,7 +33,9 @@ export class MachinsService {
     }
 
     // Проверяем, привязан ли станок к финальному этапу (упаковка)
-    const isFinalStage = machine.machinesStages.some(ms => ms.stage.finalStage);
+    const isFinalStage = machine.machinesStages.some(
+      (ms) => ms.stage.finalStage,
+    );
 
     let completedQuantity: number;
 
@@ -51,7 +53,7 @@ export class MachinsService {
           status: 'COMPLETED',
         },
       });
-      
+
       // Получаем частично выполненные задачи после сброса счетчика
       const partialTasks = await this.prisma.packingTask.findMany({
         where: {
@@ -65,48 +67,51 @@ export class MachinsService {
           completedQuantity: { gt: 0 },
         },
       });
-      
+
       const completedAmount = completedTasks.reduce(
         (sum, task) => sum + Number(task.completedQuantity),
         0,
       );
-      
+
       const partialAmount = partialTasks.reduce(
         (sum, task) => sum + Number(task.completedQuantity),
         0,
       );
-      
+
       const savedPartialAmount = Number(machine.partiallyCompleted) || 0;
-      
+
       completedQuantity = completedAmount + partialAmount + savedPartialAmount;
     } else {
       // Для обычных этапов считаем из MachineAssignment
-      const completedAssignments = await this.prisma.machineAssignment.findMany({
-        where: {
-          machineId: id,
-          completedAt: {
-            not: null,
-          },
-          ...(machine.counterResetAt && {
+      const completedAssignments = await this.prisma.machineAssignment.findMany(
+        {
+          where: {
+            machineId: id,
             completedAt: {
-              gte: machine.counterResetAt,
+              not: null,
             },
-          }),
-        },
-        include: {
-          pallet: {
-            select: {
-              quantity: true,
-              part: true,
+            ...(machine.counterResetAt && {
+              completedAt: {
+                gte: machine.counterResetAt,
+              },
+            }),
+          },
+          include: {
+            pallet: {
+              select: {
+                quantity: true,
+                part: true,
+              },
             },
           },
         },
-      });
+      );
 
       const filteredAssignments = completedAssignments.filter((assignment) => {
-        const isAfterReset = machine.counterResetAt && assignment.completedAt
-          ? assignment.completedAt > machine.counterResetAt 
-          : true;
+        const isAfterReset =
+          machine.counterResetAt && assignment.completedAt
+            ? assignment.completedAt > machine.counterResetAt
+            : true;
         return isAfterReset;
       });
 
@@ -141,7 +146,8 @@ export class MachinsService {
       } else {
         // Расчет в штуках
         completedQuantity = filteredAssignments.reduce(
-          (total, assignment) => total + Number(assignment.processedQuantity || 0),
+          (total, assignment) =>
+            total + Number(assignment.processedQuantity || 0),
           0,
         );
       }
@@ -150,9 +156,10 @@ export class MachinsService {
     // Рассчитываем процент выполнения
     const recommendedLoad = Number(machine.recommendedLoad);
     const roundedCompletedQuantity = Math.round(completedQuantity);
-    const completionPercentage = recommendedLoad > 0 
-      ? Math.round((roundedCompletedQuantity / recommendedLoad) * 100)
-      : 0;
+    const completionPercentage =
+      recommendedLoad > 0
+        ? Math.round((roundedCompletedQuantity / recommendedLoad) * 100)
+        : 0;
 
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = machine.machinesStages[0]?.stage || null;
@@ -227,6 +234,11 @@ export class MachinsService {
     this.socketService.emitToMultipleRooms(
       ['room:technologist', 'room:director'],
       'machine_setting:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+      ['room:statisticks'],
+      'statisticks:event',
       { status: 'updated' },
     );
 
