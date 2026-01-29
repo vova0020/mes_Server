@@ -1146,7 +1146,7 @@ model DetailDirectory {
   /// Артикул СБ детали (для ПФ СБ)
   sbPartSku           String?  @map("sb_part_sku")
   /// Подстопное место на конвейере
-  conveyorPosition    Float?   @map("conveyor_Position")
+  conveyorPosition    String?   @map("conveyor_Position")
 
   /// Связь «многие-ко-многим» через промежуточную таблицу
   packageDetails PackageDetailDirectory[]
@@ -1164,7 +1164,7 @@ model PackageDetailDirectory {
   routeId   Int?
 
   /// Количество деталей в упаковке
-  quantity Int
+  quantity Decimal
 
   package PackageDirectory @relation(fields: [packageId], references: [packageId])
   detail  DetailDirectory  @relation(fields: [detailId], references: [id])

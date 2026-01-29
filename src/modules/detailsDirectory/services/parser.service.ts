@@ -146,7 +146,7 @@ export class ParserService {
     }
     
     // Преобразуем числовые поля
-    if (['thickness', 'thicknessWithEdging', 'finishedLength', 'finishedWidth', 'conveyorPosition', 'quantity', 'routeId'].includes(fieldName)) {
+    if (['thickness', 'thicknessWithEdging', 'finishedLength', 'finishedWidth', 'quantity', 'routeId'].includes(fieldName)) {
       if (value === null || value === undefined || value === '') return 0;
       const num = Number(value);
       return isNaN(num) ? 0 : num;

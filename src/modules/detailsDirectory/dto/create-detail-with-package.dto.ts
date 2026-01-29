@@ -104,8 +104,8 @@ export class CreateDetailWithPackageDto {
   sbPartSku?: string;
 
   @IsOptional()
-  @IsNumber()
-  conveyorPosition?: number;
+  @IsString()
+  conveyorPosition?: string;
 
   // Поля для привязки к упаковке
   @IsInt()
@@ -115,7 +115,7 @@ export class CreateDetailWithPackageDto {
   @Min(1)
   packageId: number;
 
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @Min(0.01)
   quantity: number;
 }

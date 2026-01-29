@@ -18,7 +18,6 @@ import { RouteDto } from '../dto/route.dto';
 export class DetailsController {
   constructor(private readonly detailsService: DetailsService) {}
 
-
   /**
    * GET /details/routes
    * Получить список всех маршрутов
@@ -44,6 +43,19 @@ export class DetailsController {
     return {
       message: 'Детали успешно получены',
       data: details,
+    };
+  }
+
+  /**
+   * GET /details/:id
+   * Получить деталь по ID
+   */
+  @Get(':id')
+  async getDetailById(@Param('id', ParseIntPipe) id: number) {
+    const detail = await this.detailsService.getDetailById(id);
+    return {
+      message: 'Деталь успешно получена',
+      data: detail,
     };
   }
 

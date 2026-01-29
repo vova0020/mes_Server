@@ -104,8 +104,8 @@ export class CreateDetailDto {
   sbPartSku?: string;
 
   @IsOptional()
-  @IsNumber()
-  conveyorPosition?: number;
+  @IsString()
+  conveyorPosition?: string;
 
   @IsNumber()
   routeId: number;

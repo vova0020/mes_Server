@@ -124,7 +124,7 @@ export class ProductionOrdersService {
               partName: detailDirectory.partName,
               partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
               routeId: packageDetail.routeId || 1,
-              quantity: packageDetail.quantity * packageDto.quantity, // Общее количество в заказе
+              quantity: Math.ceil(Number(packageDetail.quantity) * Number(packageDto.quantity)), // Общее количество в заказе (округление вверх)
               quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
               materialName: detailDirectory.materialName,
               materialSku: detailDirectory.materialSku,
@@ -360,7 +360,7 @@ export class ProductionOrdersService {
                 partName: detailDirectory.partName,
                 partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
                 routeId: packageDetail.routeId || 1,
-                quantity: packageDetail.quantity * packageDto.quantity, // Общее количество в заказе
+                quantity: Math.ceil(Number(packageDetail.quantity) * Number(packageDto.quantity)), // Общее количество в заказе (округление вверх)
                 quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
                 materialName: detailDirectory.materialName,
                 materialSku: detailDirectory.materialSku,
@@ -613,7 +613,7 @@ export class ProductionOrdersService {
         detailId: detail.detail.id,
         partSku: detail.detail.partSku,
         partName: detail.detail.partName,
-        quantity: detail.quantity,
+        quantity: Number(detail.quantity),
       })),
     }));
   }

@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsString, IsOptional, IsNumber, IsBoolean, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsString, IsOptional, IsNumber, IsBoolean, Min, ValidateNested, Allow } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class DetailFromFileDto {
@@ -105,17 +105,24 @@ export class DetailFromFileDto {
   sbPartSku?: string;
 
   @IsOptional()
-  @IsNumber()
-  conveyorPosition?: number;
+  @IsString()
+  conveyorPosition?: string;
 
   @IsOptional()
   @IsNumber()
   routeId?: number;
 
   // Количество деталей в упаковке (передается вместе с деталью)
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @Min(0.01)
   quantity: number;
+
+  // Служебные поля (игнорируются при сохранении, используются только для отображения)
+  @Allow()
+  availableRoutes?: { routeId: number; routeName: string }[];
+  
+  @Allow()
+  currentRouteId?: number;
 }
 
 export class SaveDetailsFromFileDto {

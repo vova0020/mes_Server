@@ -47,6 +47,10 @@ export interface ValidatedPart {
   quantity?: number;
   // Флаг связи с указанной упаковкой
   hasPackageConnection?: boolean;
+  // Доступные маршруты для детали (на основе материала)
+  availableRoutes?: { routeId: number; routeName: string }[];
+  // Текущий маршрут детали (если деталь уже существует)
+  currentRouteId?: number;
 }
 
 @Injectable()
@@ -76,10 +80,16 @@ export class ValidationService {
           where: { partSku: parsed.partSku },
           include: {
             packageDetails: {
-              include: { package: true },
+              include: { 
+                package: true,
+                route: true,
+              },
             },
           },
         });
+
+        // Получаем доступные маршруты на основе материала
+        const availableRoutes = await this.getAvailableRoutes(parsed.materialSku);
 
         if (!dbDetail) {
           // Детали нет в каталоге
@@ -87,8 +97,9 @@ export class ValidationService {
             ...parsed,
             detailExists: false,
             packageId,
-           quantity:parsed.quantity,
+            quantity: parsed.quantity,
             hasPackageConnection: false,
+            availableRoutes,
           };
         }
 
@@ -96,7 +107,7 @@ export class ValidationService {
         const packages = dbDetail.packageDetails.map((pd) => ({
           packageCode: pd.package.packageCode,
           packageName: pd.package.packageName,
-          quantity: pd.quantity,
+          quantity: Number(pd.quantity),
         }));
 
         // Проверяем связь с указанной упаковкой
@@ -149,16 +160,77 @@ export class ValidationService {
           }
         }
 
+        // Получаем текущий маршрут из связи с упаковкой (если есть)
+        // Если указан packageId - берем маршрут для этой упаковки
+        // Если нет связи с указанной упаковкой - берем из первой найденной
+        let currentRouteId: number | undefined;
+        if (packageId) {
+          const packageConnection = dbDetail.packageDetails.find(pd => pd.packageId === packageId);
+          currentRouteId = packageConnection?.routeId ?? dbDetail.packageDetails[0]?.routeId ?? undefined;
+        } else {
+          currentRouteId = dbDetail.packageDetails[0]?.routeId ?? undefined;
+        }
+
         return {
           ...parsed,
           detailExists: true,
           packages,
           diffs: diffs.length ? diffs : undefined,
           packageId,
-          // quantity:,
+          quantity: parsed.quantity,
           hasPackageConnection,
+          availableRoutes,
+          currentRouteId,
         };
       }),
     );
+  }
+
+  /**
+   * Получает доступные маршруты для детали на основе материала
+   * Материал → Линия → Маршруты
+   */
+  private async getAvailableRoutes(materialSku?: string): Promise<{ routeId: number; routeName: string }[]> {
+    if (!materialSku) {
+      return [];
+    }
+
+    // Находим материал по артикулу
+    const material = await this.prisma.material.findFirst({
+      where: { article: materialSku },
+      include: {
+        lines: {
+          include: {
+            line: {
+              include: {
+                routes: {
+                  select: {
+                    routeId: true,
+                    routeName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!material) {
+      return [];
+    }
+
+    // Собираем все уникальные маршруты из всех линий, связанных с материалом
+    const routesMap = new Map<number, string>();
+    material.lines.forEach((lineMaterial) => {
+      lineMaterial.line.routes.forEach((route) => {
+        routesMap.set(route.routeId, route.routeName);
+      });
+    });
+
+    return Array.from(routesMap.entries()).map(([routeId, routeName]) => ({
+      routeId,
+      routeName,
+    }));
   }
 }

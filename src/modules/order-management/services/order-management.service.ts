@@ -383,10 +383,10 @@ export class OrderManagementService {
         const key = `${comp.partCode}_${comp.routeId}`;
         if (consolidatedParts.has(key)) {
           const existing = consolidatedParts.get(key)!;
-          existing.totalQuantity += Number(comp.quantity);
+          existing.totalQuantity += Math.ceil(Number(comp.quantity));
           existing.packages.push({
             packageId: pkg.packageId,
-            quantity: Number(comp.quantity),
+            quantity: Math.ceil(Number(comp.quantity)),
           });
         } else {
           consolidatedParts.set(key, {
@@ -403,9 +403,9 @@ export class OrderManagementService {
             edgingNameL2: comp.edgingNameL2 ?? null,
             edgingNameW1: comp.edgingNameW1 ?? null,
             edgingNameW2: comp.edgingNameW2 ?? null,
-            totalQuantity: Number(comp.quantity),
+            totalQuantity: Math.ceil(Number(comp.quantity)),
             packages: [
-              { packageId: pkg.packageId, quantity: Number(comp.quantity) },
+              { packageId: pkg.packageId, quantity: Math.ceil(Number(comp.quantity)) },
             ],
           });
         }

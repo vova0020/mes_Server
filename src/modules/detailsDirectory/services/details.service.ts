@@ -107,6 +107,39 @@ export class DetailsService {
   }
 
   /**
+   * Получить деталь по ID
+   */
+  async getDetailById(id: number): Promise<DetailWithPackages> {
+    const detail = await this.prisma.detailDirectory.findUnique({
+      where: { id },
+      include: {
+        packageDetails: {
+          include: {
+            package: {
+              select: {
+                packageCode: true,
+                packageName: true,
+              },
+            },
+            route: {
+              select: {
+                routeId: true,
+                routeName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!detail) {
+      throw new NotFoundException(`Деталь с ID ${id} не найдена`);
+    }
+
+    return detail as DetailWithPackages;
+  }
+
+  /**
    * Получить все детали связанные с упаковкой по ID упаковки
    */
   async getDetailsByPackageId(
@@ -148,7 +181,7 @@ export class DetailsService {
 
     return packageWithDetails.packageDetails.map((pd) => ({
       ...pd.detail,
-      quantity: pd.quantity, // Добавляем количество деталей в упаковке
+      quantity: Number(pd.quantity), // Добавляем количество деталей в упаковке
       route: pd.route,
     }));
   }
@@ -351,23 +384,18 @@ export class DetailsService {
     // Проверяем, что деталь с таким артикулом не существует
     const existingDetail = await this.prisma.detailDirectory.findUnique({
       where: { partSku: detailData.partSku },
+      include: {
+        packageDetails: {
+          where: { packageId },
+        },
+      },
     });
 
     if (existingDetail) {
       // Если деталь уже существует, проверяем связь с упаковкой
-      const existingConnection =
-        await this.prisma.packageDetailDirectory.findUnique({
-          where: {
-            packageId_detailId: {
-              packageId,
-              detailId: existingDetail.id,
-            },
-          },
-        });
-
-      if (existingConnection) {
+      if (existingDetail.packageDetails.length > 0) {
         throw new BadRequestException(
-          `Деталь с артикулом ${detailData.partSku} уже связана с упаковкой ${packageExists.packageCode}`,
+          `Деталь с артикулом ${detailData.partSku} уже связана с упаковкой ${packageExists.packageCode}. Используйте редактирование вместо копирования.`,
         );
       }
 
@@ -442,6 +470,9 @@ export class DetailsService {
     updated: number;
     connected: number;
   }> {
+    // Группируем детали: если все поля кроме quantity совпадают - суммируем quantity
+    const consolidatedDetails = this.consolidateDetails(details);
+
     let created = 0;
     let updated = 0;
     let connected = 0;
@@ -455,7 +486,7 @@ export class DetailsService {
       throw new NotFoundException(`Упаковка с ID ${packageId} не найдена`);
     }
 
-    for (const detailData of details) {
+    for (const detailData of consolidatedDetails) {
       const { quantity, routeId, ...detailFields } = detailData;
 
       // Ищем существующую деталь
@@ -562,6 +593,58 @@ export class DetailsService {
     );
     
     return { created, updated, connected };
+  }
+
+  /**
+   * Группирует детали: если все поля кроме quantity совпадают - суммирует quantity
+   */
+  private consolidateDetails(details: DetailFromFileDto[]): DetailFromFileDto[] {
+    const consolidatedMap = new Map<string, DetailFromFileDto>();
+
+    for (const detail of details) {
+      // Создаем ключ из всех полей кроме quantity и служебных
+      const key = JSON.stringify({
+        partSku: detail.partSku,
+        partName: detail.partName,
+        materialName: detail.materialName,
+        materialSku: detail.materialSku,
+        thickness: detail.thickness,
+        thicknessWithEdging: detail.thicknessWithEdging,
+        finishedLength: detail.finishedLength,
+        finishedWidth: detail.finishedWidth,
+        groove: detail.groove,
+        edgingSkuL1: detail.edgingSkuL1,
+        edgingNameL1: detail.edgingNameL1,
+        edgingSkuL2: detail.edgingSkuL2,
+        edgingNameL2: detail.edgingNameL2,
+        edgingSkuW1: detail.edgingSkuW1,
+        edgingNameW1: detail.edgingNameW1,
+        edgingSkuW2: detail.edgingSkuW2,
+        edgingNameW2: detail.edgingNameW2,
+        plasticFace: detail.plasticFace,
+        plasticFaceSku: detail.plasticFaceSku,
+        plasticBack: detail.plasticBack,
+        plasticBackSku: detail.plasticBackSku,
+        pf: detail.pf,
+        pfSku: detail.pfSku,
+        sbPart: detail.sbPart,
+        pfSb: detail.pfSb,
+        sbPartSku: detail.sbPartSku,
+        conveyorPosition: detail.conveyorPosition,
+        routeId: detail.routeId,
+      });
+
+      if (consolidatedMap.has(key)) {
+        // Суммируем quantity
+        const existing = consolidatedMap.get(key)!;
+        existing.quantity += detail.quantity;
+      } else {
+        // Добавляем новую запись
+        consolidatedMap.set(key, { ...detail });
+      }
+    }
+
+    return Array.from(consolidatedMap.values());
   }
 
   /**

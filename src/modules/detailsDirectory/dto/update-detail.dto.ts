@@ -106,8 +106,8 @@ export class UpdateDetailDto {
   sbPartSku?: string;
 
   @IsOptional()
-  @IsNumber()
-  conveyorPosition?: number;
+  @IsString()
+  conveyorPosition?: string;
 
   // Поля для обновления связи с упаковкой
   @IsOptional()
