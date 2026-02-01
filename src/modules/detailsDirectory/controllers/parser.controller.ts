@@ -11,6 +11,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { unlink } from 'fs/promises';
 import { ParserService } from '../services/parser.service';
 import { ValidationService } from '../services/validation.service';
 import { UploadFileDto } from '../dto/upload-file.dto';
@@ -72,7 +73,12 @@ export class ParserController {
         // uploadDto.quantity,
       );
 
-      // 3. Возвращаем клиенту результат
+      // 3. Удаляем файл после обработки
+      await unlink(file.path).catch((err) =>
+        console.error('Ошибка удаления файла:', err),
+      );
+
+      // 4. Возвращаем клиенту результат
       return {
         message: 'Файл успешно обработан',
         filename: file.originalname,
@@ -81,6 +87,10 @@ export class ParserController {
         // quantity: uploadDto.quantity,
       };
     } catch (error) {
+      // Удаляем файл даже при ошибке
+      await unlink(file.path).catch((err) =>
+        console.error('Ошибка удаления файла:', err),
+      );
       throw new BadRequestException(`Ошибка обработки файла: ${error.message}`);
     }
   }
