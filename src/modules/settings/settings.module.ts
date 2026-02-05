@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { MulterModule } from '@nestjs/platform-express';
 import { SharedModule } from '../../shared/shared.module';
 import { MaterialGroupsController } from './controllers/materials/material-groups.controller';
 import { MaterialsController } from './controllers/materials/materials.controller';
+import { MaterialParserController } from './controllers/materials/material-parser.controller';
 import { MaterialGroupsService } from './services/materials/material-groups.service';
 import { MaterialsService } from './services/materials/materials.service';
+import { MaterialParserService } from './services/materials/material-parser.service';
+import { MaterialsManagementService } from './services/materials/materials-management.service';
+import { MaterialValidationService } from './services/materials/material-validation.service';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { ProductionStagesLevel1Service } from './services/line/production-stages-level1.service';
 import { ProductionStagesLevel2Service } from './services/line/production-stages-level2.service';
@@ -32,10 +37,14 @@ import { SettingsImagesService } from './services/images/settings-images.service
     ConfigModule,
     SharedModule, // Импортируем SharedModule для доступа к PrismaService
     WebsocketModule,
+    MulterModule.register({
+      dest: './uploads',
+    }),
   ],
   controllers: [
     MaterialGroupsController,
     MaterialsController,
+    MaterialParserController,
     ProductionLinesController,
     ProductionStagesLevel1Controller,
     ProductionStagesLevel2Controller,
@@ -48,6 +57,9 @@ import { SettingsImagesService } from './services/images/settings-images.service
   providers: [
     MaterialGroupsService,
     MaterialsService,
+    MaterialParserService,
+    MaterialsManagementService,
+    MaterialValidationService,
     ProductionLinesService,
     ProductionStagesLevel1Service,
     ProductionStagesLevel2Service,
@@ -64,6 +76,9 @@ import { SettingsImagesService } from './services/images/settings-images.service
   exports: [
     MaterialGroupsService,
     MaterialsService,
+    MaterialParserService,
+    MaterialsManagementService,
+    MaterialValidationService,
     ProductionLinesService,
     ProductionStagesLevel1Service,
     ProductionStagesLevel2Service,
