@@ -642,13 +642,15 @@ export class ProductionOrdersService {
           ? pkg.composition?.map((comp: any) => ({
               partCode: comp.partCode,
               partName: comp.partName,
-              quantity: Number(comp.quantity),
+              quantityPerPackage: Number(comp.quantityPerPackage),
+              totalQuantity: Number(comp.quantity),
             })) || []
           : pkg.productionPackageParts?.map((ppp: any) => ({
               partId: ppp.part.partId,
               partCode: ppp.part.partCode,
               partName: ppp.part.partName,
-              quantity: Number(ppp.part.totalQuantity),
+              quantityPerPackage: Number(ppp.quantity),
+              totalQuantity: Number(ppp.part.totalQuantity),
             })) || [],
       })),
     };
