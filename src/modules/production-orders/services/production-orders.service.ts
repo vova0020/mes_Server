@@ -66,12 +66,17 @@ export class ProductionOrdersService {
     }
 
     // Проверяем, что у всех упаковок есть детали
-    for (const pkg of existingPackages) {
-      if (!pkg.packageDetails || pkg.packageDetails.length === 0) {
-        throw new BadRequestException(
-          `Упаковка "${pkg.packageName}" (ID: ${pkg.packageId}) не содержит деталей в справо��нике`,
-        );
-      }
+    const packagesWithoutDetails = existingPackages.filter(
+      (pkg) => !pkg.packageDetails || pkg.packageDetails.length === 0,
+    );
+
+    if (packagesWithoutDetails.length > 0) {
+      const packageNames = packagesWithoutDetails
+        .map((pkg) => `"${pkg.packageName}" (ID: ${pkg.packageId})`)
+        .join(', ');
+      throw new BadRequestException(
+        `Следующие упаковки не содержат деталей в справочнике: ${packageNames}`,
+      );
     }
 
     // Создаем заказ в транзакции
@@ -275,12 +280,17 @@ export class ProductionOrdersService {
       }
 
       // Проверяем, что у всех упаковок есть детали
-      for (const pkg of existingPackages) {
-        if (!pkg.packageDetails || pkg.packageDetails.length === 0) {
-          throw new BadRequestException(
-            `Упаковка "${pkg.packageName}" (ID: ${pkg.packageId}) не содержит деталей в справочнике`,
-          );
-        }
+      const packagesWithoutDetails = existingPackages.filter(
+        (pkg) => !pkg.packageDetails || pkg.packageDetails.length === 0,
+      );
+
+      if (packagesWithoutDetails.length > 0) {
+        const packageNames = packagesWithoutDetails
+          .map((pkg) => `"${pkg.packageName}" (ID: ${pkg.packageId})`)
+          .join(', ');
+        throw new BadRequestException(
+          `Следующие упаковки не содержат деталей в справочнике: ${packageNames}`,
+        );
       }
     }
 

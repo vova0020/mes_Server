@@ -44,6 +44,20 @@ export class OrderFromFileService {
       );
     }
 
+    // Проверяем, что у всех упаковок есть детали
+    const packagesWithoutDetails: string[] = [];
+    for (const [code, pkg] of packageMap) {
+      if (!pkg.packageDetails || pkg.packageDetails.length === 0) {
+        packagesWithoutDetails.push(`"${pkg.packageName}" (${code})`);
+      }
+    }
+
+    if (packagesWithoutDetails.length > 0) {
+      throw new BadRequestException(
+        `Следующие упаковки не содержат деталей в справочнике: ${packagesWithoutDetails.join(', ')}`,
+      );
+    }
+
     // Создаем заказ
     const order = await this.prisma.order.create({
       data: {
