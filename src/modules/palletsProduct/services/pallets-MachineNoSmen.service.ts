@@ -265,104 +265,46 @@ export class PalletMachineNoSmenService {
         );
       }
 
-      // Для станков без сменного задания - проверяем только что этап не завершен
-      // и что нет более ранних незавершенных этапов
+      // Проверяем последовательность этапов (как в обычном станке)
       const allRouteStages = pallet.part.route.routeStages;
       const currentStageIndex = allRouteStages.findIndex(
         (rs) => rs.routeStageId === targetRouteStage.routeStageId,
       );
 
-      // Проверяем, что все предыдущие этапы завершены
-      for (let i = 0; i < currentStageIndex; i++) {
-        const earlierRouteStage = allRouteStages[i];
-        const earlierStageProgress = pallet.palletStageProgress.find(
+      // Проверяем только непосредственно предыдущий этап
+      if (currentStageIndex > 0) {
+        const previousRouteStage = allRouteStages[currentStageIndex - 1];
+        const previousStageProgress = pallet.palletStageProgress.find(
           (progress) =>
-            progress.routeStage.routeStageId === earlierRouteStage.routeStageId,
+            progress.routeStage.routeStageId === previousRouteStage.routeStageId,
         );
 
-        // Если предыдущий этап не найден или не завершен - нельзя брать текущий
         if (
-          !earlierStageProgress ||
-          earlierStageProgress.status !== TaskStatus.COMPLETED
+          !previousStageProgress ||
+          previousStageProgress.status !== TaskStatus.COMPLETED
         ) {
           throw new Error(
-            `Нельзя взять поддон ${palletId} в работу. Предыдущий этап "${earlierRouteStage.stage.stageName}" не завершен`,
+            `Нельзя взять поддон ${palletId} в работу на этапе "${targetRouteStage.stage.stageName}". Предыдущий этап "${previousRouteStage.stage.stageName}" не завершен`,
           );
         }
       }
 
-      // --- УБРАНО: массовое создание записей прогресса для всех этапов ---
-      // Вместо этого — если у поддона нет записей прогресса, создаём только запись для целевого этапа.
-      if (
-        !pallet.palletStageProgress ||
-        pallet.palletStageProgress.length === 0
-      ) {
-        this.logger.log(
-          `Создание единственной записи прогресса для поддона ${palletId} для этапа routeStageId=${targetRouteStage.routeStageId}`,
-        );
+      // Проверяем, что поддон не находится в процессе обработки на другом станке для того же этапа
+      const conflictingAssignment = await prisma.machineAssignment.findFirst({
+        where: {
+          palletId,
+          completedAt: null,
+          machineId: { not: machineId },
+          routeStageId: targetRouteStage.routeStageId,
+        },
+        include: { machine: true },
+      });
 
-        const created = await prisma.palletStageProgress.create({
-          data: {
-            palletId,
-            routeStageId: targetRouteStage.routeStageId,
-            status: TaskStatus.NOT_PROCESSED,
-          },
-          include: {
-            routeStage: { include: { stage: true, substage: true } },
-          },
-        });
-
-        // Обновим локальный объект pallet — чтобы дальше работать с актуальными данными
-        const updatedPallet = await prisma.pallet.findUnique({
-          where: { palletId },
-          include: {
-            part: {
-              include: {
-                route: {
-                  include: {
-                    routeStages: {
-                      include: { stage: true, substage: true },
-                      orderBy: { sequenceNumber: 'asc' },
-                    },
-                  },
-                },
-              },
-            },
-            palletStageProgress: {
-              include: {
-                routeStage: { include: { stage: true, substage: true } },
-              },
-              orderBy: { pspId: 'desc' },
-            },
-          },
-        });
-
-        if (updatedPallet) {
-          Object.assign(pallet, updatedPallet);
-        }
-      }
-
-      // Находим первый незавершенный этап в правильной последовательности
-      const sortedStageProgress = (pallet.palletStageProgress || []).sort(
-        (a, b) =>
-          Number(a.routeStage.sequenceNumber) -
-          Number(b.routeStage.sequenceNumber),
-      );
-
-      const nextStageProgress = sortedStageProgress.find(
-        (progress) =>
-          progress.status === TaskStatus.NOT_PROCESSED ||
-          progress.status === TaskStatus.PENDING,
-      );
-
-      if (!nextStageProgress) {
+      if (conflictingAssignment) {
         throw new Error(
-          `У поддона ${palletId} нет доступных этапов для обработки`,
+          `Поддон ${palletId} уже находится в обработке на станке ${conflictingAssignment.machineId} для этапа "${targetRouteStage.stage.stageName}"`,
         );
       }
-
-      // 4. Для станков без сменного задания не проверяем существующие назначения
-      // Они могут быть созданы мастером заранее для других этапов
 
       // 5. Создаем назначение на станок (сменное задание)
       const machineAssignment = await prisma.machineAssignment.create({
