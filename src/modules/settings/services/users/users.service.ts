@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../../../../shared/prisma.service';
 
 import { PickersService } from './pickers.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import {
   CreateUserDto,
   UpdateUserDto,

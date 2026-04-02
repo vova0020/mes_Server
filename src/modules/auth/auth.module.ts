@@ -9,18 +9,20 @@ import { SharedModule } from '../../shared/shared.module';
 @Module({
   imports: [
     ConfigModule,
-    SharedModule, // Импортируем SharedModule для доступа к PrismaService
+    SharedModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async () => ({
         secret: process.env.JWT_SECRET || 'YOUR_SECRET_KEY',
-        signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
+        signOptions: { 
+          expiresIn: (process.env.JWT_EXPIRES_IN || '8h') as any 
+        },
       }),
       inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService], // Экспортируем AuthService для использования в других модулях
+  exports: [AuthService],
 })
 export class AuthModule {}
