@@ -172,13 +172,22 @@ export class OrderStatisticsService {
       throw new Error('Order not found');
     }
 
-    const packages = order.packages.map((pkg) => ({
-      packageId: pkg.packageId,
-      packageCode: pkg.packageCode,
-      packageName: pkg.packageName,
-      quantity: pkg.quantity,
-      partCount: pkg.productionPackageParts.length,
-    }));
+    const packages = order.packages.map((pkg) => {
+      // Рассчитываем сколько упаковок уже закрыли (выполнили)
+      const completedPackagesCount = pkg.packingTasks.reduce(
+        (sum, task) => sum + Number(task.completedQuantity || 0),
+        0
+      );
+
+      return {
+        packageId: pkg.packageId,
+        packageCode: pkg.packageCode,
+        packageName: pkg.packageName,
+        quantity: pkg.quantity,
+        partCount: pkg.productionPackageParts.length,
+        completedPackagesCount, // Расчетное поле: сколько упаковок закрыли
+      };
+    });
 
     const partsMap = new Map();
     order.packages.forEach((pkg) => {
