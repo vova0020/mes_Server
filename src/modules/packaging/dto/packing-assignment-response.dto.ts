@@ -78,6 +78,8 @@ export interface PackingAssignmentListResponseDto {
 // Расширенный DTO для задания с данными о частичной обработке
 export interface PackingAssignmentWithProgressDto extends PackingAssignmentResponseDto {
   remainingQuantity: number;
+  assembledQuantity: number;
+  availableToComplete: number;
 }
 
 // DTO для ответа с заданиями по станку и сводкой

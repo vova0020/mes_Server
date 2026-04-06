@@ -33,155 +33,160 @@ export class PackagePartsService {
       },
     });
 
-
-
     if (!packageInfo) {
       throw new NotFoundException(`Упаковка с ID ${packageId} не найдена`);
     }
-    // 2) получаем все PackingTask по этому же packageId
-    const tasks = await this.prisma.packingTask.findMany({
-      where: { packageId: packageInfo.packageId },
-      include: {
-        machine: true,
-        assignedUser: true,
+
+    // Получаем детали из packageComposition (там есть quantityPerPackage)
+    const compositionRaw = await this.prisma.packageComposition.findMany({
+      where: { packageId },
+      orderBy: { partCode: 'asc' },
+      select: {
+        partCode: true,
+        partName: true,
+        partSize: true,
+        quantity: true,
+        quantityPerPackage: true,
+        materialName: true,
+        materialSku: true,
+        thickness: true,
+        thicknessWithEdging: true,
+        finishedLength: true,
+        finishedWidth: true,
+        groove: true,
+        edgingNameL1: true,
+        edgingNameL2: true,
+        edgingNameW1: true,
+        edgingNameW2: true,
+        route: {
+          select: {
+            routeId: true,
+            routeName: true,
+          },
+        },
       },
     });
 
-    // Строим условие фильтрации для деталей
-    let whereClause: any = {
-      packageId,
-    };
+    // Получаем детали из справочника для substackLocation
+    const detailsFromDirectory = await this.prisma.detailDirectory.findMany({
+      where: {
+        partSku: {
+          in: compositionRaw.map(c => c.partCode),
+        },
+      },
+      select: {
+        partSku: true,
+        conveyorPosition: true,
+      },
+    });
 
-    // Добавляем фильтр по статусу детали, если указан
-    if (query?.status) {
-      whereClause.part = {
-        status: query.status,
-      };
-    }
+    const substackLocationMap = new Map(
+      detailsFromDirectory.map(d => [d.partSku, d.conveyorPosition])
+    );
 
-    // Получаем детали с пагинацией
-    const { page = 1, limit = 10 } = query || {};
-
-    const productionPackagePartsRaw =
-      await this.prisma.productionPackagePart.findMany({
-        where: whereClause,
-        orderBy: { partId: 'asc' },
-        select: {
-          quantity: true,
-          part: {
-            select: {
-              partId: true,
-              partCode: true,
-              partName: true,
-              status: true,
-              totalQuantity: true,
-              isSubassembly: true,
-              readyForMainFlow: true,
-              size: true,
-              material: {
-                select: {
-                  materialId: true,
-                  materialName: true,
-                  article: true,
-                  unit: true,
-                },
-              },
-              route: {
-                select: {
-                  routeId: true,
-                  routeName: true,
-                },
-              },
-              pallets: {
-                select: {
-                  palletId: true,
-                  palletName: true,
-                },
-              },
-              partRouteProgress: {
-                select: {
-                  routeStageId: true,
-                  status: true,
-                  completedAt: true,
-                  routeStage: {
-                    select: {
-                      stage: {
-                        select: {
-                          stageName: true,
-                        },
-                      },
-                    },
+    // Получаем Part для каждой детали (для статуса и других данных)
+    const partsData = await this.prisma.part.findMany({
+      where: {
+        partCode: {
+          in: compositionRaw.map(c => c.partCode),
+        },
+      },
+      select: {
+        partId: true,
+        partCode: true,
+        status: true,
+        isSubassembly: true,
+        readyForMainFlow: true,
+        material: {
+          select: {
+            materialId: true,
+            materialName: true,
+            article: true,
+            unit: true,
+          },
+        },
+        pallets: {
+          select: {
+            palletId: true,
+            palletName: true,
+          },
+        },
+        partRouteProgress: {
+          select: {
+            routeStageId: true,
+            status: true,
+            completedAt: true,
+            routeStage: {
+              select: {
+                stage: {
+                  select: {
+                    stageName: true,
                   },
-                },
-                orderBy: {
-                  routeStageId: 'asc',
                 },
               },
             },
           },
+          orderBy: {
+            routeStageId: 'asc',
+          },
         },
-      });
-
-    // Получаем общее количество деталей для пагинации
-    const totalParts = await this.prisma.productionPackagePart.count({
-      where: whereClause,
+      },
     });
 
-    // Вычисляем готовность деталей (процент деталей готовых к финальному этапу)
-    const readyParts = productionPackagePartsRaw.filter((ppp) => {
-      // Проверяем, что все нефинальные этапы завершены
-      const completedStages = ppp.part.partRouteProgress.filter(
+    const partsMap = new Map(partsData.map(p => [p.partCode, p]));
+
+    // Вычисляем готовность деталей
+    const readyParts = partsData.filter((part) => {
+      const completedStages = part.partRouteProgress.filter(
         progress => progress.status === 'COMPLETED'
       );
-      const totalStages = ppp.part.partRouteProgress.length;
-      
-      // Деталь готова если все этапы кроме последнего (финального) завершены
+      const totalStages = part.partRouteProgress.length;
       return totalStages > 0 && completedStages.length >= totalStages - 1;
     });
     
-    const readiness = productionPackagePartsRaw.length > 0 
-      ? Math.round((readyParts.length / productionPackagePartsRaw.length) * 100)
+    const readiness = partsData.length > 0 
+      ? Math.round((readyParts.length / partsData.length) * 100)
       : 0;
 
     // Преобразуем данные
-    const parts: PackagePartDetailDto[] = productionPackagePartsRaw.map(
-      (ppp) => ({
-        partId: ppp.part.partId,
-        partCode: ppp.part.partCode,
-        partName: ppp.part.partName,
-        status: ppp.part.status as string,
-        totalQuantity: ppp.quantity.toNumber(),
-        requiredQuantity: ppp.quantity.toNumber(),
-        isSubassembly: ppp.part.isSubassembly,
-        readyForMainFlow: ppp.part.readyForMainFlow,
-        size: ppp.part.size,
-        material: ppp.part.material ? {
-          materialId: ppp.part.material.materialId,
-          materialName: ppp.part.material.materialName,
-          article: ppp.part.material.article,
-          unit: ppp.part.material.unit,
-        } : {
+    const parts: PackagePartDetailDto[] = compositionRaw.map((comp) => {
+      const part = partsMap.get(comp.partCode);
+      const substackLocation = substackLocationMap.get(comp.partCode);
+
+      return {
+        partId: part?.partId || 0,
+        partCode: comp.partCode,
+        partName: comp.partName,
+        status: part?.status || 'PENDING',
+        totalQuantity: comp.quantity.toNumber(),
+        requiredQuantity: comp.quantity.toNumber(),
+        quantityPerPackage: comp.quantityPerPackage.toNumber(),
+        substackLocation: substackLocation || undefined,
+        isSubassembly: part?.isSubassembly || false,
+        readyForMainFlow: part?.readyForMainFlow || false,
+        size: comp.partSize,
+        material: {
           materialId: 0,
-          materialName: 'Не указан',
-          article: 'Не указан',
+          materialName: comp.materialName,
+          article: comp.materialSku,
           unit: 'шт',
         },
         route: {
-          routeId: ppp.part.route.routeId,
-          routeName: ppp.part.route.routeName,
+          routeId: comp.route.routeId,
+          routeName: comp.route.routeName,
         },
-        pallets: ppp.part.pallets.map((pallet) => ({
+        pallets: part?.pallets.map((pallet) => ({
           palletId: pallet.palletId,
           palletName: pallet.palletName,
-        })),
-        routeProgress: ppp.part.partRouteProgress.map((progress) => ({
+        })) || [],
+        routeProgress: part?.partRouteProgress.map((progress) => ({
           routeStageId: progress.routeStageId,
           stageName: progress.routeStage.stage.stageName,
           status: progress.status as string,
           completedAt: progress.completedAt,
-        })),
-      }),
-    );
+        })) || [],
+      };
+    });
 
     return {
       packageInfo: {
@@ -199,10 +204,10 @@ export class PackagePartsService {
       partsCount: parts.length,
       parts,
       pagination: {
-        page,
-        limit,
-        total: totalParts,
-        totalPages: Math.ceil(totalParts / limit),
+        page: query?.page || 1,
+        limit: query?.limit || 10,
+        total: parts.length,
+        totalPages: Math.ceil(parts.length / (query?.limit || 10)),
       },
     };
   }
@@ -212,104 +217,118 @@ export class PackagePartsService {
     packageId: number,
     partId: number,
   ): Promise<PackagePartDetailDto> {
-    const productionPackagePartRaw =
-      await this.prisma.productionPackagePart.findFirst({
-        where: {
-          packageId,
-          partId,
+    // Получаем деталь из Part
+    const part = await this.prisma.part.findUnique({
+      where: { partId },
+      select: {
+        partId: true,
+        partCode: true,
+        partName: true,
+        status: true,
+        isSubassembly: true,
+        readyForMainFlow: true,
+        size: true,
+        material: {
+          select: {
+            materialId: true,
+            materialName: true,
+            article: true,
+            unit: true,
+          },
         },
-        select: {
-          quantity: true,
-          part: {
-            select: {
-              partId: true,
-              partCode: true,
-              partName: true,
-              status: true,
-              totalQuantity: true,
-              isSubassembly: true,
-              readyForMainFlow: true,
-              size: true,
-              material: {
-                select: {
-                  materialId: true,
-                  materialName: true,
-                  article: true,
-                  unit: true,
-                },
-              },
-              route: {
-                select: {
-                  routeId: true,
-                  routeName: true,
-                },
-              },
-              pallets: {
-                select: {
-                  palletId: true,
-                  palletName: true,
-                },
-              },
-              partRouteProgress: {
-                select: {
-                  routeStageId: true,
-                  status: true,
-                  completedAt: true,
-                  routeStage: {
-                    select: {
-                      stage: {
-                        select: {
-                          stageName: true,
-                        },
-                      },
-                    },
+        route: {
+          select: {
+            routeId: true,
+            routeName: true,
+          },
+        },
+        pallets: {
+          select: {
+            palletId: true,
+            palletName: true,
+          },
+        },
+        partRouteProgress: {
+          select: {
+            routeStageId: true,
+            status: true,
+            completedAt: true,
+            routeStage: {
+              select: {
+                stage: {
+                  select: {
+                    stageName: true,
                   },
-                },
-                orderBy: {
-                  routeStageId: 'asc',
                 },
               },
             },
           },
+          orderBy: {
+            routeStageId: 'asc',
+          },
         },
-      });
+      },
+    });
 
-    if (!productionPackagePartRaw) {
+    if (!part) {
+      throw new NotFoundException(
+        `Деталь с ID ${partId} не найдена`,
+      );
+    }
+
+    // Получаем данные из packageComposition
+    const composition = await this.prisma.packageComposition.findFirst({
+      where: {
+        packageId,
+        partCode: part.partCode,
+      },
+      select: {
+        quantity: true,
+        quantityPerPackage: true,
+        materialName: true,
+        materialSku: true,
+      },
+    });
+
+    if (!composition) {
       throw new NotFoundException(
         `Деталь с ID ${partId} не найдена в упаковке с ID ${packageId}`,
       );
     }
 
+    // Получаем substackLocation из справочника
+    const detailFromDirectory = await this.prisma.detailDirectory.findUnique({
+      where: { partSku: part.partCode },
+      select: { conveyorPosition: true },
+    });
+
     return {
-      partId: productionPackagePartRaw.part.partId,
-      partCode: productionPackagePartRaw.part.partCode,
-      partName: productionPackagePartRaw.part.partName,
-      status: productionPackagePartRaw.part.status as string,
-      totalQuantity: productionPackagePartRaw.quantity.toNumber(),
-      requiredQuantity: productionPackagePartRaw.quantity.toNumber(),
-      isSubassembly: productionPackagePartRaw.part.isSubassembly,
-      readyForMainFlow: productionPackagePartRaw.part.readyForMainFlow,
-      size: productionPackagePartRaw.part.size,
-      material: productionPackagePartRaw.part.material ? {
-        materialId: productionPackagePartRaw.part.material.materialId,
-        materialName: productionPackagePartRaw.part.material.materialName,
-        article: productionPackagePartRaw.part.material.article,
-        unit: productionPackagePartRaw.part.material.unit,
-      } : {
+      partId: part.partId,
+      partCode: part.partCode,
+      partName: part.partName,
+      status: part.status as string,
+      totalQuantity: composition.quantity.toNumber(),
+      requiredQuantity: composition.quantity.toNumber(),
+      quantityPerPackage: composition.quantityPerPackage.toNumber(),
+      substackLocation: detailFromDirectory?.conveyorPosition || undefined,
+      isSubassembly: part.isSubassembly,
+      readyForMainFlow: part.readyForMainFlow,
+      size: part.size,
+      material: {
         materialId: 0,
-        materialName: 'Не указан',
-        article: 'Не указан',
+        materialName: composition.materialName,
+        article: composition.materialSku,
         unit: 'шт',
       },
       route: {
-        routeId: productionPackagePartRaw.part.route.routeId,
-        routeName: productionPackagePartRaw.part.route.routeName,
+        routeId: part.route.routeId,
+        routeName: part.route.routeName,
       },
-      pallets: productionPackagePartRaw.part.pallets.map((pallet) => ({
+      pallets: part.pallets.map((pallet) => ({
         palletId: pallet.palletId,
         palletName: pallet.palletName,
       })),
-      routeProgress: productionPackagePartRaw.part.partRouteProgress.map(
+      routeProgress: part.partRouteProgress.map(
         (progress) => ({
           routeStageId: progress.routeStageId,
           stageName: progress.routeStage.stage.stageName,

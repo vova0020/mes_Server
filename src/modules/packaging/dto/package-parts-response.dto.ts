@@ -5,6 +5,8 @@ export interface PackagePartDetailDto {
   status: string;
   totalQuantity: number;
   requiredQuantity: number;
+  quantityPerPackage: number; // ← ДОБАВЛЕНО
+  substackLocation?: string; // ← ДОБАВЛЕНО (подстопное место)
   isSubassembly: boolean;
   readyForMainFlow: boolean;
   size: string;

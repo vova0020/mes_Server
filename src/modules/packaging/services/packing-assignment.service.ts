@@ -510,11 +510,92 @@ export class PackingAssignmentService {
       orderBy: [{ priority: 'desc' }, { assignedAt: 'asc' }],
     });
 
-    return tasks.map((task) => ({
-      ...this.mapToResponseDto(task),
-      // Добавляем данные о частичной обработке для каждого задания
-      remainingQuantity: task.assignedQuantity.toNumber() - task.completedQuantity.toNumber(),
-    }));
+    // Получаем assembledQuantity для каждой задачи
+    const tasksWithProgress = await Promise.all(
+      tasks.map(async (task) => {
+        const remainingQuantity = task.assignedQuantity.toNumber() - task.completedQuantity.toNumber();
+        const assembledQuantity = await this.calculateAssembledQuantity(task.packageId);
+        const availableToComplete = Math.min(remainingQuantity, assembledQuantity);
+
+        return {
+          ...this.mapToResponseDto(task),
+          remainingQuantity,
+          assembledQuantity,
+          availableToComplete,
+        };
+      }),
+    );
+
+    return tasksWithProgress;
+  }
+
+  // Расчет скомплектованного количества для упаковки
+  private async calculateAssembledQuantity(packageId: number): Promise<number> {
+    const pkg = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: {
+        quantity: true,
+        orderId: true,
+      },
+    });
+
+    if (!pkg) return 0;
+
+    const totalPackages = pkg.quantity.toNumber();
+
+    // Получаем состав упаковки
+    const composition = await this.prisma.packageComposition.findMany({
+      where: { packageId },
+    });
+
+    let minAssembledPackages = Infinity;
+
+    for (const comp of composition) {
+      const requiredPerPackage = comp.quantityPerPackage.toNumber();
+
+      // Получаем назначения поддонов на данную упаковку для этой детали
+      const assignments = await this.prisma.palletPackageAssignment.findMany({
+        where: {
+          packageId,
+          pallet: {
+            part: {
+              partCode: comp.partCode,
+            },
+          },
+        },
+        include: {
+          pallet: {
+            select: {
+              quantity: true,
+              packageAssignments: {
+                select: {
+                  usedQuantity: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Считаем доступное количество с учетом общего использования поддона
+      const availableQuantity = assignments.reduce((sum, assignment) => {
+        const palletTotalQuantity = assignment.pallet.quantity.toNumber();
+        const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
+          (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
+          0,
+        );
+        const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
+        const assignedToThisPackage = assignment.quantity.toNumber();
+
+        // Берем минимум из назначенного на упаковку и доступного с поддона
+        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+      }, 0);
+
+      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
+      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
+    }
+
+    return minAssembledPackages === Infinity ? 0 : minAssembledPackages;
   }
 
   // Метод для обновления статуса упаковки на основе статусов задач

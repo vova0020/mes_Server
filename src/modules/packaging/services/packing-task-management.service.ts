@@ -46,11 +46,9 @@ export class PackingTaskManagementService {
       );
     }
 
-    // Проверяем наличие достаточного количества деталей на поддонах
-    await this.checkAvailablePartsForTask(
-      existingTask.packageId,
-      existingTask.assignedQuantity.toNumber(),
-    );
+    // УБРАНА ПРОВЕРКА checkAvailablePartsForTask при переводе в IN_PROGRESS
+    // Оператор может начать работу с тем количеством, которое скомплектовано
+    // Проверка будет только при завершении (COMPLETED/PARTIALLY_COMPLETED)
 
     const updatedTask = await this.prisma.packingTask.update({
       where: { taskId },
@@ -453,32 +451,10 @@ export class PackingTaskManagementService {
       status: dto.status,
     };
 
-    // Обрабатываем completedQuantity если передано
-    if (dto.completedQuantity !== undefined) {
-      const newCompletedQuantity =
-        existingTask.completedQuantity.toNumber() + dto.completedQuantity;
-      if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
-        throw new BadRequestException(
-          `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
-        );
-      }
-      updateData.completedQuantity = newCompletedQuantity;
-    }
+    // Обработка completedQuantity перенесена в блок COMPLETED ниже
 
-    // Если статус меняется на IN_PROGRESS, проверяем наличие деталей
-    if (
-      dto.status === PackingTaskStatus.IN_PROGRESS &&
-      existingTask.status !== PackingTaskStatus.IN_PROGRESS
-    ) {
-      // Проверяем только оставшееся количество для выполнения
-      const remainingQuantity =
-        existingTask.assignedQuantity.toNumber() -
-        existingTask.completedQuantity.toNumber();
-      await this.checkAvailablePartsForTask(
-        existingTask.packageId,
-        remainingQuantity,
-      );
-    }
+    // Если статус меняется на IN_PROGRESS, НЕ проверяем наличие деталей
+    // Оператор может начать работу с тем количеством, которое скомплектовано
 
     // Если статус меняется на COMPLETED, устанавливаем время завершения и вычитаем запасы
     if (
@@ -486,19 +462,41 @@ export class PackingTaskManagementService {
       existingTask.status !== PackingTaskStatus.COMPLETED
     ) {
       updateData.completedAt = new Date();
-      // Если не указано completedQuantity, считаем что выполнено полностью
-      if (dto.completedQuantity === undefined) {
+      
+      // Вычисляем количество для завершения
+      let quantityToComplete: number;
+      
+      if (dto.completedQuantity !== undefined) {
+        // completedQuantity - это ДОПОЛНИТЕЛЬНОЕ количество к уже выполненному
+        quantityToComplete = dto.completedQuantity;
+        const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+        
+        if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
+          throw new BadRequestException(
+            `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
+          );
+        }
+        
+        updateData.completedQuantity = newCompletedQuantity;
+      } else {
+        // Если не указано completedQuantity, завершаем весь остаток
+        quantityToComplete = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
         updateData.completedQuantity = existingTask.assignedQuantity.toNumber();
       }
 
-      // Проверяем наличие достаточного количества деталей для выполнения
-      const completedQty =
-        dto.completedQuantity ??
-        existingTask.assignedQuantity.toNumber() -
-          existingTask.completedQuantity.toNumber();
+      // ПРОВЕРЯЕМ СКОЛЬКО РЕАЛЬНО СКОМПЛЕКТОВАНО
+      const assembledQuantity = await this.calculateAssembledQuantity(existingTask.packageId);
+      
+      if (quantityToComplete > assembledQuantity) {
+        throw new BadRequestException(
+          `Недостаточно скомплектованных деталей для завершения. Требуется: ${quantityToComplete}, скомплектовано: ${assembledQuantity}`,
+        );
+      }
+
+      // ВСЕГДА проверяем наличие достаточного количества деталей для выполнения
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
-        completedQty,
+        quantityToComplete,
       );
     }
 
@@ -1176,6 +1174,75 @@ export class PackingTaskManagementService {
         counterResetAt: new Date(),
       },
     });
+  }
+
+  // Расчет скомплектованного количества для упаковки
+  private async calculateAssembledQuantity(packageId: number): Promise<number> {
+    const pkg = await this.prisma.package.findUnique({
+      where: { packageId },
+      select: {
+        quantity: true,
+        orderId: true,
+      },
+    });
+
+    if (!pkg) return 0;
+
+    const totalPackages = pkg.quantity.toNumber();
+
+    // Получаем состав упаковки
+    const composition = await this.prisma.packageComposition.findMany({
+      where: { packageId },
+    });
+
+    let minAssembledPackages = Infinity;
+
+    for (const comp of composition) {
+      const requiredPerPackage = comp.quantityPerPackage.toNumber();
+
+      // Получаем назначения поддонов на данную упаковку для этой детали
+      const assignments = await this.prisma.palletPackageAssignment.findMany({
+        where: {
+          packageId,
+          pallet: {
+            part: {
+              partCode: comp.partCode,
+            },
+          },
+        },
+        include: {
+          pallet: {
+            select: {
+              quantity: true,
+              packageAssignments: {
+                select: {
+                  usedQuantity: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Считаем доступное количество с учетом общего использования поддона
+      const availableQuantity = assignments.reduce((sum, assignment) => {
+        const palletTotalQuantity = assignment.pallet.quantity.toNumber();
+        const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
+          (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
+          0,
+        );
+        const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
+        const assignedToThisPackage = assignment.quantity.toNumber();
+
+        // Берем минимум из назначенного на упаковку и доступного с поддона
+        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+      }, 0);
+
+      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
+      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
+    }
+
+    return minAssembledPackages === Infinity ? 0 : minAssembledPackages;
   }
 
   // Вспомогательный метод для преобразования данных в DTO ответа
