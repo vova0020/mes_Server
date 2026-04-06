@@ -39,6 +39,7 @@ export interface PalletDetailDto {
   availableQuantity: number;
   status: string;
   assignedToPackage: boolean;
+  readyForPackaging: boolean; // Расчетное поле: прошел ли поддон все этапы перед финальным
   currentCell?: BufferCellInfoDto;
   placedAt?: Date;
   machineAssignments: {

@@ -56,6 +56,18 @@ export class PartPalletsService {
           select: {
             routeId: true,
             routeName: true,
+            routeStages: {
+              select: {
+                routeStageId: true,
+                sequenceNumber: true,
+                stage: {
+                  select: {
+                    finalStage: true,
+                  },
+                },
+              },
+              orderBy: { sequenceNumber: 'asc' },
+            },
           },
         },
       },
@@ -64,6 +76,12 @@ export class PartPalletsService {
     if (!partInfo) {
       throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
     }
+
+    // Получаем все нефинальные этапы маршрута
+    const nonFinalStages = partInfo.route.routeStages.filter(
+      (stage) => !stage.stage.finalStage,
+    );
+    const nonFinalStageIds = nonFinalStages.map((s) => s.routeStageId);
 
     // Строим условие фильтрации для поддонов
     let whereClause: any = {
@@ -207,6 +225,15 @@ export class PartPalletsService {
       const availableQuantity = pallet.quantity.toNumber() - totalUsed;
       const displayQuantity = availableQuantity;
 
+      // Проверяем готовность к упаковке: все нефинальные этапы должны быть завершены
+      const completedStageIds = pallet.palletStageProgress
+        .filter((progress) => progress.status === 'COMPLETED')
+        .map((progress) => progress.routeStageId);
+
+      const readyForPackaging =
+        nonFinalStageIds.length === 0 ||
+        nonFinalStageIds.every((stageId) => completedStageIds.includes(stageId));
+
       return {
         palletId: pallet.palletId,
         palletName: pallet.palletName,
@@ -218,6 +245,7 @@ export class PartPalletsService {
         assignedToPackage: packageAssignment
           ? true
           : pallet.packageAssignments.length > 0,
+        readyForPackaging, // Расчетное поле
         currentCell: currentBufferCell
           ? {
               cellId: currentBufferCell.cell.cellId,
@@ -300,6 +328,22 @@ export class PartPalletsService {
         part: {
           select: {
             status: true,
+            route: {
+              select: {
+                routeStages: {
+                  select: {
+                    routeStageId: true,
+                    sequenceNumber: true,
+                    stage: {
+                      select: {
+                        finalStage: true,
+                      },
+                    },
+                  },
+                  orderBy: { sequenceNumber: 'asc' },
+                },
+              },
+            },
           },
         },
         packageAssignments: {
@@ -390,6 +434,20 @@ export class PartPalletsService {
     );
     const availableQuantity = palletRaw.quantity.toNumber() - totalUsed;
 
+    // Проверяем готовность к упаковке
+    const nonFinalStages = palletRaw.part.route.routeStages.filter(
+      (stage) => !stage.stage.finalStage,
+    );
+    const nonFinalStageIds = nonFinalStages.map((s) => s.routeStageId);
+
+    const completedStageIds = palletRaw.palletStageProgress
+      .filter((progress) => progress.status === 'COMPLETED')
+      .map((progress) => progress.routeStageId);
+
+    const readyForPackaging =
+      nonFinalStageIds.length === 0 ||
+      nonFinalStageIds.every((stageId) => completedStageIds.includes(stageId));
+
     return {
       palletId: palletRaw.palletId,
       palletName: palletRaw.palletName,
@@ -397,6 +455,7 @@ export class PartPalletsService {
       availableQuantity: availableQuantity,
       status: palletRaw.part.status as string,
       assignedToPackage: palletRaw.packageAssignments.length > 0,
+      readyForPackaging, // Расчетное поле
       currentCell: currentBufferCell
         ? {
             cellId: currentBufferCell.cell.cellId,
