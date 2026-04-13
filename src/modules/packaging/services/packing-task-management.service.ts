@@ -451,9 +451,27 @@ export class PackingTaskManagementService {
       status: dto.status,
     };
 
-    // Обработка completedQuantity перенесена в блок COMPLETED ниже
+    // Обработка completedQuantity для статуса IN_PROGRESS
+    if (dto.status === PackingTaskStatus.IN_PROGRESS && dto.completedQuantity !== undefined) {
+      // completedQuantity - это ДОПОЛНИТЕЛЬНОЕ количество к уже выполненному
+      const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+      
+      if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
+        throw new BadRequestException(
+          `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
+        );
+      }
+      
+      updateData.completedQuantity = newCompletedQuantity;
+      
+      // Проверяем наличие достаточного количества деталей для выполнения
+      await this.checkAvailablePartsForTask(
+        existingTask.packageId,
+        dto.completedQuantity,
+      );
+    }
 
-    // Если статус меняется на IN_PROGRESS, НЕ проверяем наличие деталей
+    // Если статус меняется на IN_PROGRESS без completedQuantity, НЕ проверяем наличие деталей
     // Оператор может начать работу с тем количеством, которое скомплектовано
 
     // Если статус меняется на COMPLETED, устанавливаем время завершения и вычитаем запасы

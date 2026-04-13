@@ -105,10 +105,33 @@ export class PackagePartsService {
             unit: true,
           },
         },
+        route: {
+          select: {
+            routeStages: {
+              select: {
+                routeStageId: true,
+                stage: {
+                  select: {
+                    finalStage: true,
+                  },
+                },
+              },
+              orderBy: { sequenceNumber: 'asc' },
+            },
+          },
+        },
         pallets: {
+          where: { isActive: true },
           select: {
             palletId: true,
             palletName: true,
+            quantity: true,
+            palletStageProgress: {
+              select: {
+                routeStageId: true,
+                status: true,
+              },
+            },
           },
         },
         partRouteProgress: {
@@ -153,6 +176,34 @@ export class PackagePartsService {
       const part = partsMap.get(comp.partCode);
       const substackLocation = substackLocationMap.get(comp.partCode);
 
+      // Рассчитываем totalOnPallets и availableForPackaging
+      let totalOnPallets = 0;
+      let availableForPackaging = 0;
+
+      if (part?.pallets) {
+        // Получаем нефинальные этапы маршрута
+        const nonFinalStageIds = part.route.routeStages
+          .filter(stage => !stage.stage.finalStage)
+          .map(stage => stage.routeStageId);
+
+        part.pallets.forEach(pallet => {
+          const palletQuantity = pallet.quantity.toNumber();
+          totalOnPallets += palletQuantity;
+
+          // Проверяем готовность поддона к упаковке
+          const completedStageIds = pallet.palletStageProgress
+            .filter(progress => progress.status === 'COMPLETED')
+            .map(progress => progress.routeStageId);
+
+          const readyForPackaging = nonFinalStageIds.length === 0 ||
+            nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
+
+          if (readyForPackaging) {
+            availableForPackaging += palletQuantity;
+          }
+        });
+      }
+
       return {
         partId: part?.partId || 0,
         partCode: comp.partCode,
@@ -165,6 +216,8 @@ export class PackagePartsService {
         isSubassembly: part?.isSubassembly || false,
         readyForMainFlow: part?.readyForMainFlow || false,
         size: comp.partSize,
+        totalOnPallets,
+        availableForPackaging,
         material: {
           materialId: 0,
           materialName: comp.materialName,
@@ -240,12 +293,31 @@ export class PackagePartsService {
           select: {
             routeId: true,
             routeName: true,
+            routeStages: {
+              select: {
+                routeStageId: true,
+                stage: {
+                  select: {
+                    finalStage: true,
+                  },
+                },
+              },
+              orderBy: { sequenceNumber: 'asc' },
+            },
           },
         },
         pallets: {
+          where: { isActive: true },
           select: {
             palletId: true,
             palletName: true,
+            quantity: true,
+            palletStageProgress: {
+              select: {
+                routeStageId: true,
+                status: true,
+              },
+            },
           },
         },
         partRouteProgress: {
@@ -302,6 +374,30 @@ export class PackagePartsService {
       select: { conveyorPosition: true },
     });
 
+    // Рассчитываем totalOnPallets и availableForPackaging
+    let totalOnPallets = 0;
+    let availableForPackaging = 0;
+
+    const nonFinalStageIds = part.route.routeStages
+      .filter(stage => !stage.stage.finalStage)
+      .map(stage => stage.routeStageId);
+
+    part.pallets.forEach(pallet => {
+      const palletQuantity = pallet.quantity.toNumber();
+      totalOnPallets += palletQuantity;
+
+      const completedStageIds = pallet.palletStageProgress
+        .filter(progress => progress.status === 'COMPLETED')
+        .map(progress => progress.routeStageId);
+
+      const readyForPackaging = nonFinalStageIds.length === 0 ||
+        nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
+
+      if (readyForPackaging) {
+        availableForPackaging += palletQuantity;
+      }
+    });
+
     return {
       partId: part.partId,
       partCode: part.partCode,
@@ -314,6 +410,8 @@ export class PackagePartsService {
       isSubassembly: part.isSubassembly,
       readyForMainFlow: part.readyForMainFlow,
       size: part.size,
+      totalOnPallets,
+      availableForPackaging,
       material: {
         materialId: 0,
         materialName: composition.materialName,

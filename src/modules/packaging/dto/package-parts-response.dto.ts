@@ -10,6 +10,8 @@ export interface PackagePartDetailDto {
   isSubassembly: boolean;
   readyForMainFlow: boolean;
   size: string;
+  totalOnPallets: number; // ← Общее количество деталей на всех поддонах
+  availableForPackaging: number; // ← Количество деталей на поддонах, готовых к упаковке
   material: {
     materialId: number;
     materialName: string;
