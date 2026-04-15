@@ -180,12 +180,37 @@ export class PackagePartsService {
         // Рассчитываем totalOnPallets и availableForPackaging
         let totalOnPallets = 0;
         let availableForPackaging = 0;
+        let totalDefected = 0;
+        let totalReturned = 0;
 
         if (part?.pallets) {
           // Получаем нефинальные этапы маршрута
           const nonFinalStageIds = part.route.routeStages
             .filter(stage => !stage.stage.finalStage)
             .map(stage => stage.routeStageId);
+
+          // Получаем статистику по отбраковке и возврату для всех поддонов детали
+          const palletIds = part.pallets.map(p => p.palletId);
+          
+          const defectMovements = await this.prisma.inventoryMovement.aggregate({
+            where: {
+              palletId: { in: palletIds },
+              reason: 'DEFECT',
+            },
+            _sum: { deltaQuantity: true },
+          });
+          
+          const returnMovements = await this.prisma.inventoryMovement.aggregate({
+            where: {
+              palletId: { in: palletIds },
+              reason: 'RETURN_FROM_RECLAMATION',
+            },
+            _sum: { deltaQuantity: true },
+          });
+          
+          // deltaQuantity для DEFECT отрицательное, поэтому берем абсолютное значение
+          totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+          totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
           for (const pallet of part.pallets) {
             // Получаем общее использованное количество с поддона
@@ -227,6 +252,8 @@ export class PackagePartsService {
           size: comp.partSize,
           totalOnPallets,
           availableForPackaging,
+          totalDefected,
+          totalReturned,
           material: {
             materialId: 0,
             materialName: comp.materialName,
@@ -387,10 +414,34 @@ export class PackagePartsService {
     // Рассчитываем totalOnPallets и availableForPackaging
     let totalOnPallets = 0;
     let availableForPackaging = 0;
+    let totalDefected = 0;
+    let totalReturned = 0;
 
     const nonFinalStageIds = part.route.routeStages
       .filter(stage => !stage.stage.finalStage)
       .map(stage => stage.routeStageId);
+
+    // Получаем статистику по отбраковке и возврату
+    const palletIds = part.pallets.map(p => p.palletId);
+    
+    const defectMovements = await this.prisma.inventoryMovement.aggregate({
+      where: {
+        palletId: { in: palletIds },
+        reason: 'DEFECT',
+      },
+      _sum: { deltaQuantity: true },
+    });
+    
+    const returnMovements = await this.prisma.inventoryMovement.aggregate({
+      where: {
+        palletId: { in: palletIds },
+        reason: 'RETURN_FROM_RECLAMATION',
+      },
+      _sum: { deltaQuantity: true },
+    });
+    
+    totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+    totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
     for (const pallet of part.pallets) {
       // Получаем общее использованное количество с поддона
@@ -430,6 +481,8 @@ export class PackagePartsService {
       size: part.size,
       totalOnPallets,
       availableForPackaging,
+      totalDefected,
+      totalReturned,
       material: {
         materialId: 0,
         materialName: composition.materialName,

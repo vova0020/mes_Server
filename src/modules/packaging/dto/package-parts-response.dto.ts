@@ -12,6 +12,8 @@ export interface PackagePartDetailDto {
   size: string;
   totalOnPallets: number; // ← Общее количество деталей на всех поддонах
   availableForPackaging: number; // ← Количество деталей на поддонах, готовых к упаковке
+  totalDefected: number; // ← Общее количество отбракованных деталей
+  totalReturned: number; // ← Общее количество возвращенных деталей
   material: {
     materialId: number;
     materialName: string;

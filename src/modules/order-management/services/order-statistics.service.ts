@@ -201,14 +201,16 @@ export class OrderStatisticsService {
             totalQuantity: part.totalQuantity,
             packages: [],
             stages: [],
+            totalDefected: 0,
+            totalReturned: 0,
           });
         }
         partsMap.get(part.partId).packages.push(pkg.packageName);
       });
     });
 
-    order.packages.forEach((pkg) => {
-      pkg.productionPackageParts.forEach((ppp) => {
+    for (const pkg of order.packages) {
+      for (const ppp of pkg.productionPackageParts) {
         const part = ppp.part;
         if (partsMap.has(part.partId)) {
           const partData = partsMap.get(part.partId);
@@ -309,9 +311,33 @@ export class OrderStatisticsService {
               finalStage: rs.stage.finalStage,
             };
           });
+
+          // Рассчитываем отбраковку и возврат для детали
+          const palletIds = part.pallets.map(p => p.palletId);
+          
+          // Получаем статистику по отбраковке
+          const defectMovements = await this.prisma.inventoryMovement.aggregate({
+            where: {
+              palletId: { in: palletIds },
+              reason: 'DEFECT',
+            },
+            _sum: { deltaQuantity: true },
+          });
+          
+          // Получаем статистику по возврату
+          const returnMovements = await this.prisma.inventoryMovement.aggregate({
+            where: {
+              palletId: { in: palletIds },
+              reason: 'RETURN_FROM_RECLAMATION',
+            },
+            _sum: { deltaQuantity: true },
+          });
+          
+          partData.totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+          partData.totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
         }
-      });
-    });
+      }
+    }
 
     // Считаем общий процент выполнения заказа
     const orderProgress = this.calculateOrderProgress(
