@@ -469,6 +469,12 @@ export class PackingTaskManagementService {
         existingTask.packageId,
         dto.completedQuantity,
       );
+
+      // АВТОМАТИЧЕСКИ переводим в COMPLETED, если задание полностью выполнено
+      if (newCompletedQuantity >= existingTask.assignedQuantity.toNumber()) {
+        updateData.status = PackingTaskStatus.COMPLETED;
+        updateData.completedAt = new Date();
+      }
     }
 
     // Если статус меняется на IN_PROGRESS без completedQuantity, НЕ проверяем наличие деталей
