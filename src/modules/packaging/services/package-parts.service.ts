@@ -172,74 +172,84 @@ export class PackagePartsService {
       : 0;
 
     // Преобразуем данные
-    const parts: PackagePartDetailDto[] = compositionRaw.map((comp) => {
-      const part = partsMap.get(comp.partCode);
-      const substackLocation = substackLocationMap.get(comp.partCode);
+    const parts: PackagePartDetailDto[] = await Promise.all(
+      compositionRaw.map(async (comp) => {
+        const part = partsMap.get(comp.partCode);
+        const substackLocation = substackLocationMap.get(comp.partCode);
 
-      // Рассчитываем totalOnPallets и availableForPackaging
-      let totalOnPallets = 0;
-      let availableForPackaging = 0;
+        // Рассчитываем totalOnPallets и availableForPackaging
+        let totalOnPallets = 0;
+        let availableForPackaging = 0;
 
-      if (part?.pallets) {
-        // Получаем нефинальные этапы маршрута
-        const nonFinalStageIds = part.route.routeStages
-          .filter(stage => !stage.stage.finalStage)
-          .map(stage => stage.routeStageId);
+        if (part?.pallets) {
+          // Получаем нефинальные этапы маршрута
+          const nonFinalStageIds = part.route.routeStages
+            .filter(stage => !stage.stage.finalStage)
+            .map(stage => stage.routeStageId);
 
-        part.pallets.forEach(pallet => {
-          const palletQuantity = pallet.quantity.toNumber();
-          totalOnPallets += palletQuantity;
+          for (const pallet of part.pallets) {
+            // Получаем общее использованное количество с поддона
+            const totalUsed = await this.prisma.palletPackageAssignment.aggregate({
+              where: { palletId: pallet.palletId },
+              _sum: { usedQuantity: true },
+            });
+            
+            const usedQuantity = totalUsed._sum.usedQuantity?.toNumber() || 0;
+            const availableOnPallet = pallet.quantity.toNumber() - usedQuantity;
+            
+            totalOnPallets += availableOnPallet;
 
-          // Проверяем готовность поддона к упаковке
-          const completedStageIds = pallet.palletStageProgress
-            .filter(progress => progress.status === 'COMPLETED')
-            .map(progress => progress.routeStageId);
+            // Проверяем готовность поддона к упаковке
+            const completedStageIds = pallet.palletStageProgress
+              .filter(progress => progress.status === 'COMPLETED')
+              .map(progress => progress.routeStageId);
 
-          const readyForPackaging = nonFinalStageIds.length === 0 ||
-            nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
+            const readyForPackaging = nonFinalStageIds.length === 0 ||
+              nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
 
-          if (readyForPackaging) {
-            availableForPackaging += palletQuantity;
+            if (readyForPackaging) {
+              availableForPackaging += availableOnPallet;
+            }
           }
-        });
-      }
+        }
 
-      return {
-        partId: part?.partId || 0,
-        partCode: comp.partCode,
-        partName: comp.partName,
-        status: part?.status || 'PENDING',
-        totalQuantity: comp.quantity.toNumber(),
-        requiredQuantity: comp.quantity.toNumber(),
-        quantityPerPackage: comp.quantityPerPackage.toNumber(),
-        substackLocation: substackLocation || undefined,
-        isSubassembly: part?.isSubassembly || false,
-        readyForMainFlow: part?.readyForMainFlow || false,
-        size: comp.partSize,
-        totalOnPallets,
-        availableForPackaging,
-        material: {
-          materialId: 0,
-          materialName: comp.materialName,
-          article: comp.materialSku,
-          unit: 'шт',
-        },
-        route: {
-          routeId: comp.route.routeId,
-          routeName: comp.route.routeName,
-        },
-        pallets: part?.pallets.map((pallet) => ({
-          palletId: pallet.palletId,
-          palletName: pallet.palletName,
-        })) || [],
-        routeProgress: part?.partRouteProgress.map((progress) => ({
-          routeStageId: progress.routeStageId,
-          stageName: progress.routeStage.stage.stageName,
-          status: progress.status as string,
-          completedAt: progress.completedAt,
-        })) || [],
-      };
-    });
+        return {
+          partId: part?.partId || 0,
+          partCode: comp.partCode,
+          partName: comp.partName,
+          status: part?.status || 'PENDING',
+          totalQuantity: comp.quantity.toNumber(),
+          requiredQuantity: comp.quantity.toNumber(),
+          quantityPerPackage: comp.quantityPerPackage.toNumber(),
+          substackLocation: substackLocation || undefined,
+          isSubassembly: part?.isSubassembly || false,
+          readyForMainFlow: part?.readyForMainFlow || false,
+          size: comp.partSize,
+          totalOnPallets,
+          availableForPackaging,
+          material: {
+            materialId: 0,
+            materialName: comp.materialName,
+            article: comp.materialSku,
+            unit: 'шт',
+          },
+          route: {
+            routeId: comp.route.routeId,
+            routeName: comp.route.routeName,
+          },
+          pallets: part?.pallets.map((pallet) => ({
+            palletId: pallet.palletId,
+            palletName: pallet.palletName,
+          })) || [],
+          routeProgress: part?.partRouteProgress.map((progress) => ({
+            routeStageId: progress.routeStageId,
+            stageName: progress.routeStage.stage.stageName,
+            status: progress.status as string,
+            completedAt: progress.completedAt,
+          })) || [],
+        };
+      }),
+    );
 
     return {
       packageInfo: {
@@ -382,9 +392,17 @@ export class PackagePartsService {
       .filter(stage => !stage.stage.finalStage)
       .map(stage => stage.routeStageId);
 
-    part.pallets.forEach(pallet => {
-      const palletQuantity = pallet.quantity.toNumber();
-      totalOnPallets += palletQuantity;
+    for (const pallet of part.pallets) {
+      // Получаем общее использованное количество с поддона
+      const totalUsed = await this.prisma.palletPackageAssignment.aggregate({
+        where: { palletId: pallet.palletId },
+        _sum: { usedQuantity: true },
+      });
+      
+      const usedQuantity = totalUsed._sum.usedQuantity?.toNumber() || 0;
+      const availableOnPallet = pallet.quantity.toNumber() - usedQuantity;
+      
+      totalOnPallets += availableOnPallet;
 
       const completedStageIds = pallet.palletStageProgress
         .filter(progress => progress.status === 'COMPLETED')
@@ -394,9 +412,9 @@ export class PackagePartsService {
         nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
 
       if (readyForPackaging) {
-        availableForPackaging += palletQuantity;
+        availableForPackaging += availableOnPallet;
       }
-    });
+    }
 
     return {
       partId: part.partId,
