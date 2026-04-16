@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { PackageQueryDto } from '../dto/package-query.dto';
 
 @Injectable()
 export class PackagingService {
+  private readonly logger = new Logger(PackagingService.name);
+  
   constructor(private readonly prisma: PrismaService) {}
 
   // Получение упаковок по ID заказа
@@ -306,6 +308,11 @@ export class PackagingService {
     totalPackages: number,
     orderId: number,
   ) {
+    // Логирование для заказа 54
+    if (orderId === 54) {
+      this.logger.log(`\n=== calculatePackageStatistics для заказа 54, упаковка ${packageId} ===`);
+    }
+
     // Получаем состав упаковки из package_composition
     const composition = await this.prisma.packageComposition.findMany({
       where: { packageId },
@@ -322,6 +329,10 @@ export class PackagingService {
         }
       }
     });
+
+    if (orderId === 54) {
+      this.logger.log(`Детали в составе: ${composition.map(c => c.partCode).join(', ')}`);
+    }
 
     let minReadyPackages = Infinity;
 
@@ -341,6 +352,13 @@ export class PackagingService {
 
       // Получаем поддоны по partCode, которые завершили ВСЕ этапы маршрута
       const allNonFinalStageIds = nonFinalStages.map(rs => rs.routeStageId);
+      
+      if (orderId === 54) {
+        this.logger.log(`\nДеталь ${comp.partCode}:`);
+        this.logger.log(`  - Всего требуется: ${totalRequired}`);
+        this.logger.log(`  - На упаковку: ${requiredPerPackage}`);
+        this.logger.log(`  - Нефинальные этапы: ${JSON.stringify(allNonFinalStageIds)}`);
+      }
       
       const completedPallets = await this.prisma.pallet.findMany({
         where: {
@@ -380,6 +398,11 @@ export class PackagingService {
         }
       });
       
+      if (orderId === 54) {
+        this.logger.log(`  - Найдено поддонов (до фильтрации): ${completedPallets.length}`);
+        this.logger.log(`  - Поддоны: ${JSON.stringify(completedPallets.map(p => ({ id: p.palletId, qty: p.quantity.toNumber(), progress: p.palletStageProgress.map(ps => ({ stage: ps.routeStageId, status: ps.status })) })))}`);
+      }
+      
       // Фильтруем поддоны, которые действительно завершили все этапы
       const fullyCompletedPallets = completedPallets.filter(pallet => {
         const completedStages = pallet.palletStageProgress
@@ -391,16 +414,33 @@ export class PackagingService {
         );
       });
 
+      if (orderId === 54) {
+        this.logger.log(`  - Полностью завершенных поддонов: ${fullyCompletedPallets.length}`);
+      }
+
       const totalCompletedQuantity = fullyCompletedPallets.reduce(
         (sum, pallet) => sum + pallet.quantity.toNumber(),
         0,
       );
 
+      if (orderId === 54) {
+        this.logger.log(`  - Общее количество на завершенных поддонах: ${totalCompletedQuantity}`);
+      }
+
       const possiblePackages = Math.floor(totalCompletedQuantity / requiredPerPackage);
+      
+      if (orderId === 54) {
+        this.logger.log(`  - Возможно упаковок: ${possiblePackages}`);
+      }
+      
       minReadyPackages = Math.min(minReadyPackages, possiblePackages);
     }
 
     let baseReadyForPackaging = minReadyPackages === Infinity ? 0 : Math.min(minReadyPackages, totalPackages);
+
+    if (orderId === 54) {
+      this.logger.log(`\nbaseReadyForPackaging: ${baseReadyForPackaging}`);
+    }
 
     // Подсчитываем сколько упаковок реально скомплектовано
     let minAssembledPackages = Infinity;
@@ -421,6 +461,7 @@ export class PackagingService {
         include: {
           pallet: {
             select: {
+              palletId: true,
               quantity: true,
               packageAssignments: {
                 select: {
@@ -432,6 +473,12 @@ export class PackagingService {
         }
       });
 
+      if (orderId === 54) {
+        this.logger.log(`\nДеталь ${comp.partCode} (назначения):`);
+        this.logger.log(`  - Требуется на упаковку: ${requiredPerPackage}`);
+        this.logger.log(`  - Назначений: ${assignments.length}`);
+      }
+
       // Считаем доступное количество с учетом общего использования поддона
       const availableQuantity = assignments.reduce((sum, assignment) => {
         const palletTotalQuantity = assignment.pallet.quantity.toNumber();
@@ -442,15 +489,33 @@ export class PackagingService {
         const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
         const assignedToThisPackage = assignment.quantity.toNumber();
         
+        if (orderId === 54) {
+          this.logger.log(`    Поддон ${assignment.pallet.palletId}: всего=${palletTotalQuantity}, использовано=${totalUsedFromPallet}, доступно=${availableFromPallet}, назначено=${assignedToThisPackage}`);
+        }
+        
         // Берем минимум из назначенного на упаковку и доступного с поддона
         return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
       }, 0);
 
+      if (orderId === 54) {
+        this.logger.log(`  - Доступно всего: ${availableQuantity}`);
+      }
+
       const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
+      
+      if (orderId === 54) {
+        this.logger.log(`  - Скомплектовано упаковок: ${assembledForThisPart}`);
+      }
+      
       minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
     }
 
     const assembled = minAssembledPackages === Infinity ? 0 : minAssembledPackages;
+
+    if (orderId === 54) {
+      this.logger.log(`\nassembled: ${assembled}`);
+      this.logger.log(`=== КОНЕЦ calculatePackageStatistics ===\n`);
+    }
 
     return {
       baseReadyForPackaging,
