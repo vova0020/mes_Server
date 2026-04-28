@@ -236,7 +236,7 @@ export class PackagePartsService {
           
           const defectMovements = await this.prisma.inventoryMovement.aggregate({
             where: {
-              palletId: { in: palletIds },
+              partId: part.partId,
               reason: 'DEFECT',
             },
             _sum: { deltaQuantity: true },
@@ -244,7 +244,7 @@ export class PackagePartsService {
           
           const returnMovements = await this.prisma.inventoryMovement.aggregate({
             where: {
-              palletId: { in: palletIds },
+              partId: part.partId,
               reason: 'RETURN_FROM_RECLAMATION',
             },
             _sum: { deltaQuantity: true },
@@ -504,7 +504,7 @@ export class PackagePartsService {
     
     const defectMovements = await this.prisma.inventoryMovement.aggregate({
       where: {
-        palletId: { in: palletIds },
+        partId: part.partId,
         reason: 'DEFECT',
       },
       _sum: { deltaQuantity: true },
@@ -512,7 +512,7 @@ export class PackagePartsService {
     
     const returnMovements = await this.prisma.inventoryMovement.aggregate({
       where: {
-        palletId: { in: palletIds },
+        partId: part.partId,
         reason: 'RETURN_FROM_RECLAMATION',
       },
       _sum: { deltaQuantity: true },
