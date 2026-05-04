@@ -313,12 +313,10 @@ export class OrderStatisticsService {
           });
 
           // Рассчитываем отбраковку и возврат для детали
-          const palletIds = part.pallets.map(p => p.palletId);
-          
           // Получаем статистику по отбраковке
           const defectMovements = await this.prisma.inventoryMovement.aggregate({
             where: {
-              palletId: { in: palletIds },
+              partId: part.partId,
               reason: 'DEFECT',
             },
             _sum: { deltaQuantity: true },
@@ -327,7 +325,7 @@ export class OrderStatisticsService {
           // Получаем статистику по возврату
           const returnMovements = await this.prisma.inventoryMovement.aggregate({
             where: {
-              palletId: { in: palletIds },
+              partId: part.partId,
               reason: 'RETURN_FROM_RECLAMATION',
             },
             _sum: { deltaQuantity: true },
