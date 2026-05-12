@@ -6,6 +6,7 @@ import {
   UnitOfMeasurement,
   DateRangeType,
   GetDefectStatsDto,
+  GetMachineProductionDto,
 } from '../dto';
 
 export interface DataPoint {
@@ -96,6 +97,77 @@ export interface DefectDetail {
   confirmedByName: string | null;
   // Все события возврата детали в производство (пустой массив если не возвращали)
   returnEvents: DefectReturnEvent[];
+}
+
+/**
+ * Одна запись операции на станке (для учёта выпуска продукции)
+ */
+export interface MachineProductionRecord {
+  // Идентификатор операции
+  operationId: number;
+  // Станок
+  machineId: number;
+  machineName: string;
+  machineLoadUnit: string;
+  // Деталь
+  partId: number;
+  partCode: string;
+  partName: string;
+  partSize: string;
+  // Материал детали
+  materialId: number | null;
+  materialName: string | null;
+  materialSku: string | null;
+  // Поддон
+  palletId: number;
+  palletName: string;
+  // Этап маршрута
+  routeStageId: number;
+  stageId: number;
+  stageName: string;
+  // Количество обработанных деталей
+  quantityProcessed: number;
+  // Время начала и завершения операции
+  startedAt: Date;
+  completedAt: Date;
+  // Длительность операции в секундах
+  durationSeconds: number;
+  // Оператор (если указан)
+  operatorId: number | null;
+  operatorName: string | null;
+  // Заказы и упаковки, к которым относится деталь
+  packages: Array<{
+    packageId: number;
+    packageCode: string;
+    packageName: string;
+    orderId: number;
+    orderBatchNumber: string;
+    orderName: string;
+  }>;
+}
+
+/**
+ * Интерфейс для данных фильтров страницы статистики брака
+ */
+export interface FilterOptions {
+  orders: Array<{
+    orderId: number;
+    batchNumber: string;
+    orderName: string;
+  }>;
+  materials: Array<{
+    materialId: number;
+    materialName: string;
+    article: string;
+  }>;
+  machines: Array<{
+    machineId: number;
+    machineName: string;
+  }>;
+  stages: Array<{
+    stageId: number;
+    stageName: string;
+  }>;
 }
 
 @Injectable()
@@ -856,5 +928,192 @@ export class StatisticsService {
     });
 
     return defectDetails;
+  }
+
+  /**
+   * Получить данные для фильтров страницы статистики брака:
+   * - список заказов
+   * - список материалов
+   * - список станков (рабочих мест)
+   * - список этапов производства (ProductionStageLevel1)
+   */
+  async getFilterOptions(): Promise<FilterOptions> {
+    const [orders, materials, machines, stages] = await Promise.all([
+      // Заказы: id, номер партии, название
+      this.prisma.order.findMany({
+        select: {
+          orderId: true,
+          batchNumber: true,
+          orderName: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      // Материалы: id, название, артикул
+      this.prisma.material.findMany({
+        select: {
+          materialId: true,
+          materialName: true,
+          article: true,
+        },
+        orderBy: { materialName: 'asc' },
+      }),
+
+      // Станки: id, название
+      this.prisma.machine.findMany({
+        select: {
+          machineId: true,
+          machineName: true,
+        },
+        orderBy: { machineName: 'asc' },
+      }),
+
+      // Этапы производства 1-го уровня: id, название
+      this.prisma.productionStageLevel1.findMany({
+        select: {
+          stageId: true,
+          stageName: true,
+        },
+        orderBy: { stageName: 'asc' },
+      }),
+    ]);
+
+    return { orders, materials, machines, stages };
+  }
+
+  /**
+   * Получить данные учёта выпуска продукции по рабочим местам (станкам).
+   * Источник данных — таблица MachineOperationHistory (история завершённых операций).
+   * Фильтры: период (startDate/endDate), конкретный станок (machineId).
+   */
+  async getMachineProduction(dto: GetMachineProductionDto): Promise<MachineProductionRecord[]> {
+    // Строим условие WHERE
+    const where: {
+      machineId?: number;
+      completedAt?: { gte?: Date; lte?: Date };
+    } = {};
+
+    if (dto.machineId) {
+      where.machineId = dto.machineId;
+    }
+
+    if (dto.startDate || dto.endDate) {
+      where.completedAt = {};
+      if (dto.startDate) {
+        where.completedAt.gte = new Date(dto.startDate);
+      }
+      if (dto.endDate) {
+        const endDate = new Date(dto.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        where.completedAt.lte = endDate;
+      }
+    }
+
+    const operations = await this.prisma.machineOperationHistory.findMany({
+      where,
+      include: {
+        machine: {
+          select: {
+            machineId: true,
+            machineName: true,
+            loadUnit: true,
+          },
+        },
+        part: {
+          include: {
+            material: {
+              select: {
+                materialId: true,
+                materialName: true,
+                article: true,
+              },
+            },
+            productionPackageParts: {
+              include: {
+                package: {
+                  include: {
+                    order: {
+                      select: {
+                        orderId: true,
+                        batchNumber: true,
+                        orderName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        pallet: {
+          select: {
+            palletId: true,
+            palletName: true,
+          },
+        },
+        routeStage: {
+          include: {
+            stage: {
+              select: {
+                stageId: true,
+                stageName: true,
+              },
+            },
+          },
+        },
+        operator: {
+          include: {
+            userDetail: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { completedAt: 'desc' },
+    });
+
+    return operations.map((op) => {
+      const packages = op.part.productionPackageParts.map((ppp) => ({
+        packageId: ppp.packageId,
+        packageCode: ppp.package.packageCode,
+        packageName: ppp.package.packageName,
+        orderId: ppp.package.orderId,
+        orderBatchNumber: ppp.package.order.batchNumber,
+        orderName: ppp.package.order.orderName,
+      }));
+
+      const operatorName = op.operator
+        ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() || null
+        : null;
+
+      return {
+        operationId: op.operationId,
+        machineId: op.machine.machineId,
+        machineName: op.machine.machineName,
+        machineLoadUnit: op.machine.loadUnit,
+        partId: op.part.partId,
+        partCode: op.part.partCode,
+        partName: op.part.partName,
+        partSize: op.part.size,
+        materialId: op.part.material?.materialId ?? null,
+        materialName: op.part.material?.materialName ?? null,
+        materialSku: op.part.material?.article ?? null,
+        palletId: op.pallet.palletId,
+        palletName: op.pallet.palletName,
+        routeStageId: op.routeStageId,
+        stageId: op.routeStage.stage.stageId,
+        stageName: op.routeStage.stage.stageName,
+        quantityProcessed: Number(op.quantityProcessed),
+        startedAt: op.startedAt,
+        completedAt: op.completedAt,
+        durationSeconds: op.duration,
+        operatorId: op.operatorId,
+        operatorName,
+        packages,
+      };
+    });
   }
 }
