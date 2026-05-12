@@ -5,6 +5,7 @@ import {
   GetStageStatsDto,
   UnitOfMeasurement,
   DateRangeType,
+  GetDefectStatsDto,
 } from '../dto';
 
 export interface DataPoint {
@@ -26,6 +27,75 @@ export interface MachineStats {
   totalValue: number;
   unit: string; // Единица измерения станка
   dataPoints: DataPoint[]; // Данные по датам для диаграммы
+}
+
+/**
+ * Интерфейс для одного события возврата детали в производство.
+ * Каждая запись соответствует одному вызову POST /master/return-parts.
+ */
+export interface DefectReturnEvent {
+  movementId: number;
+  returnedAt: Date;
+  returnedQuantity: number;
+  // Этап маршрута (RouteStage) куда вернули
+  returnToRouteStageId: number;
+  // Название этапа производства (ProductionStageLevel1)
+  returnToStageName: string | null;
+  // Станок куда вернули (опционально)
+  returnToMachineId: number | null;
+  returnToMachineName: string | null;
+  // Поддон на который вернули
+  returnPalletId: number | null;
+  returnPalletName: string | null;
+  // Кто выполнил возврат
+  returnedByUserId: number | null;
+}
+
+/**
+ * Интерфейс для детальной информации об отбракованной детали
+ */
+export interface DefectDetail {
+  reclamationId: number;
+  partId: number;
+  partCode: string;
+  partName: string;
+  // Количество отбракованных деталей по данной рекламации
+  defectQuantity: number;
+  // Суммарное количество возвращённых деталей по данной детали (все возвраты)
+  totalReturnedQuantity: number;
+  defectTypes: string[];
+  detectedAt: Date;
+  processedAt: Date | null;
+  status: string;
+  qualityAction: string | null;
+  note: string | null;
+  // Информация о месте обнаружения брака
+  stageId: number;
+  stageName: string;
+  machineId: number | null;
+  machineName: string | null;
+  palletId: number | null;
+  palletName: string | null;
+  // Все упаковки и заказы, к которым привязана деталь
+  packages: Array<{
+    packageId: number;
+    packageCode: string;
+    packageName: string;
+    orderId: number;
+    orderBatchNumber: string;
+    orderName: string;
+  }>;
+  // Информация о материале
+  materialId: number | null;
+  materialName: string | null;
+  materialSku: string | null;
+  // Информация о работнике
+  reportedById: number | null;
+  reportedByName: string | null;
+  confirmedById: number | null;
+  confirmedByName: string | null;
+  // Все события возврата детали в производство (пустой массив если не возвращали)
+  returnEvents: DefectReturnEvent[];
 }
 
 @Injectable()
@@ -556,5 +626,235 @@ export class StatisticsService {
         lineType: true,
       },
     });
+  }
+
+  /**
+   * Получить детальную статистику по отбракованным деталям с фильтрами.
+   *
+   * Логика возврата:
+   * При вызове POST /master/return-parts сервис создаёт запись InventoryMovement с:
+   *   reason = 'RETURN_FROM_RECLAMATION', deltaQuantity > 0, returnToStageId = routeStageId этапа возврата
+   * sourceReclamationId НЕ заполняется, поэтому возвраты ищем по partId + reason.
+   */
+  async getDefectStats(dto: GetDefectStatsDto): Promise<DefectDetail[]> {
+    // Строим условия WHERE для рекламаций
+    const reclamationWhere: {
+      createdAt?: { gte?: Date; lte?: Date };
+      routeStage?: { stageId: number };
+      reportedById?: number;
+    } = {};
+
+    if (dto.startDate || dto.endDate) {
+      reclamationWhere.createdAt = {};
+      if (dto.startDate) {
+        reclamationWhere.createdAt.gte = new Date(dto.startDate);
+      }
+      if (dto.endDate) {
+        const endDate = new Date(dto.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        reclamationWhere.createdAt.lte = endDate;
+      }
+    }
+
+    if (dto.stageId) {
+      reclamationWhere.routeStage = { stageId: dto.stageId };
+    }
+
+    if (dto.workerId) {
+      reclamationWhere.reportedById = dto.workerId;
+    }
+
+    // Получаем рекламации с полной информацией
+    const reclamations = await this.prisma.reclamation.findMany({
+      where: reclamationWhere,
+      include: {
+        part: {
+          include: {
+            material: true,
+            productionPackageParts: {
+              include: {
+                package: {
+                  include: {
+                    order: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Этап маршрута где обнаружен брак → включаем ProductionStageLevel1
+        routeStage: {
+          include: {
+            stage: true,
+          },
+        },
+        machine: true,
+        pallet: true,
+        reportedBy: {
+          include: {
+            userDetail: true,
+          },
+        },
+        confirmedBy: {
+          include: {
+            userDetail: true,
+          },
+        },
+        defects: {
+          include: {
+            defectType: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Фильтруем по заказу, материалу и цвету на уровне приложения
+    let filteredReclamations = reclamations;
+
+    if (dto.orderId) {
+      filteredReclamations = filteredReclamations.filter((rec) =>
+        rec.part.productionPackageParts.some(
+          (ppp) => ppp.package.orderId === dto.orderId,
+        ),
+      );
+    }
+
+    if (dto.materialId) {
+      filteredReclamations = filteredReclamations.filter(
+        (rec) => rec.part.materialId === dto.materialId,
+      );
+    }
+
+    if (dto.color) {
+      filteredReclamations = filteredReclamations.filter((rec) =>
+        rec.part.material?.materialName
+          .toLowerCase()
+          .includes(dto.color!.toLowerCase()),
+      );
+    }
+
+    // Собираем уникальные partId для пакетного запроса возвратов
+    const partIds = [...new Set(filteredReclamations.map((r) => r.partId))];
+
+    // Получаем ВСЕ возвраты по этим деталям одним запросом.
+    // При вызове POST /master/return-parts создаётся InventoryMovement с:
+    //   reason = 'RETURN_FROM_RECLAMATION', deltaQuantity > 0
+    // sourceReclamationId не заполняется, поэтому ищем по partId + reason.
+    const returnMovements =
+      partIds.length > 0
+        ? await this.prisma.inventoryMovement.findMany({
+            where: {
+              partId: { in: partIds },
+              reason: 'RETURN_FROM_RECLAMATION',
+              deltaQuantity: { gt: 0 },
+            },
+            include: {
+              // returnToStage — RouteStage, включаем ProductionStageLevel1 для stageName
+              returnToStage: {
+                include: {
+                  stage: true,
+                },
+              },
+              returnToMachine: true,
+              pallet: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          })
+        : [];
+
+    // Группируем ВСЕ возвраты по partId → массив событий
+    const returnEventsByPartId = new Map<
+      number,
+      (typeof returnMovements)
+    >();
+    for (const mv of returnMovements) {
+      if (!returnEventsByPartId.has(mv.partId)) {
+        returnEventsByPartId.set(mv.partId, []);
+      }
+      returnEventsByPartId.get(mv.partId)!.push(mv);
+    }
+
+    // Формируем результат
+    const defectDetails: DefectDetail[] = filteredReclamations.map((rec) => {
+      const partReturns = returnEventsByPartId.get(rec.partId) ?? [];
+
+      // Преобразуем каждое движение в DefectReturnEvent
+      const returnEvents: DefectReturnEvent[] = partReturns
+        .filter((mv) => mv.returnToStageId !== null)
+        .map((mv) => ({
+          movementId: mv.movementId,
+          returnedAt: mv.createdAt,
+          returnedQuantity: Number(mv.deltaQuantity),
+          returnToRouteStageId: mv.returnToStageId!,
+          returnToStageName: mv.returnToStage?.stage?.stageName ?? null,
+          returnToMachineId: mv.returnToMachineId,
+          returnToMachineName: mv.returnToMachine?.machineName ?? null,
+          returnPalletId: mv.palletId,
+          returnPalletName: mv.pallet?.palletName ?? null,
+          returnedByUserId: mv.userId,
+        }));
+
+      // Суммарное количество возвращённых деталей по всем событиям
+      const totalReturnedQuantity = partReturns.reduce(
+        (sum, mv) => sum + Number(mv.deltaQuantity),
+        0,
+      );
+
+      // Все упаковки и заказы, к которым привязана деталь
+      const packages = rec.part.productionPackageParts.map((ppp) => ({
+        packageId: ppp.packageId,
+        packageCode: ppp.package.packageCode,
+        packageName: ppp.package.packageName,
+        orderId: ppp.package.orderId,
+        orderBatchNumber: ppp.package.order.batchNumber,
+        orderName: ppp.package.order.orderName,
+      }));
+
+      return {
+        reclamationId: rec.reclamationId,
+        partId: rec.partId,
+        partCode: rec.part.partCode,
+        partName: rec.part.partName,
+        defectQuantity: Number(rec.quantity),
+        totalReturnedQuantity,
+        defectTypes: rec.defects.map((d) => d.defectType.name),
+        detectedAt: rec.createdAt,
+        processedAt: rec.processedAt,
+        status: rec.status,
+        qualityAction: rec.qualityAction,
+        note: rec.note,
+        // Место обнаружения брака
+        stageId: rec.routeStage.stageId,
+        stageName: rec.routeStage.stage.stageName,
+        machineId: rec.machineId,
+        machineName: rec.machine?.machineName ?? null,
+        palletId: rec.palletId,
+        palletName: rec.pallet?.palletName ?? null,
+        // Все упаковки и заказы (может быть несколько)
+        packages,
+        // Материал
+        materialId: rec.part.materialId,
+        materialName: rec.part.material?.materialName ?? null,
+        materialSku: rec.part.material?.article ?? null,
+        // Работники
+        reportedById: rec.reportedById,
+        reportedByName: rec.reportedBy
+          ? `${rec.reportedBy.userDetail?.firstName ?? ''} ${rec.reportedBy.userDetail?.lastName ?? ''}`.trim()
+          : null,
+        confirmedById: rec.confirmedById,
+        confirmedByName: rec.confirmedBy
+          ? `${rec.confirmedBy.userDetail?.firstName ?? ''} ${rec.confirmedBy.userDetail?.lastName ?? ''}`.trim()
+          : null,
+        // Все события возврата (пустой массив если не возвращали)
+        returnEvents,
+      };
+    });
+
+    return defectDetails;
   }
 }

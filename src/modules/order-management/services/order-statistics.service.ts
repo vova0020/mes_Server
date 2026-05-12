@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
+import { SocketService } from '../../websocket/services/socket.service';
 
 @Injectable()
 export class OrderStatisticsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private socketService: SocketService,
+  ) {}
 
   async getAllOrders() {
     const orders = await this.prisma.order.findMany({
@@ -353,6 +357,52 @@ export class OrderStatisticsService {
       packingProgress: orderProgress.packingProgress,
       packages,
       parts: Array.from(partsMap.values()),
+    };
+  }
+
+  async forceCompleteOrder(orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Заказ с ID ${orderId} не найден`);
+    }
+
+    // Принудительно переводим заказ в статус COMPLETED
+    const updatedOrder = await this.prisma.order.update({
+      where: { orderId },
+      data: {
+        status: 'COMPLETED',
+        isCompleted: true,
+        completedAt: new Date(),
+      },
+    });
+
+    // Отправляем WebSocket уведомление во все комнаты
+    this.socketService.emitToMultipleRooms(
+      [
+        'room:masterceh',
+        'room:machines',
+        'room:machinesnosmen',
+        'room:technologist',
+        'room:masterypack',
+        'room:director',
+      ],
+      'order:event',
+      { status: 'updated' },
+    );
+    this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+
+    return {
+      orderId: updatedOrder.orderId,
+      status: updatedOrder.status,
+      isCompleted: updatedOrder.isCompleted,
+      completedAt: updatedOrder.completedAt,
     };
   }
 
