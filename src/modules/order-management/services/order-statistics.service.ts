@@ -317,13 +317,12 @@ export class OrderStatisticsService {
           });
 
           // Рассчитываем отбраковку и возврат для детали
-          // Получаем статистику по отбраковке
-          const defectMovements = await this.prisma.inventoryMovement.aggregate({
+          // Получаем статистику по отбраковке из таблицы reclamations
+          const defectReclamations = await this.prisma.reclamation.aggregate({
             where: {
               partId: part.partId,
-              reason: 'DEFECT',
             },
-            _sum: { deltaQuantity: true },
+            _sum: { quantity: true },
           });
           
           // Получаем статистику по возврату
@@ -331,11 +330,12 @@ export class OrderStatisticsService {
             where: {
               partId: part.partId,
               reason: 'RETURN_FROM_RECLAMATION',
+              deltaQuantity: { gt: 0 },
             },
             _sum: { deltaQuantity: true },
           });
           
-          partData.totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+          partData.totalDefected = defectReclamations._sum.quantity?.toNumber() || 0;
           partData.totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
         }
       }
