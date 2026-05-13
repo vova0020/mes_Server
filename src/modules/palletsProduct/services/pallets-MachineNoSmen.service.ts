@@ -1693,9 +1693,10 @@ export class PalletMachineNoSmenService {
       let sourcePalletDeleted = false;
 
       if (remainingQuantity === 0) {
-        // Удаляем исходный поддон, если он пустой
-        await prisma.pallet.delete({
+        // Деактивируем поддон вместо удаления (soft delete)
+        await prisma.pallet.update({
           where: { palletId: sourcePalletId },
+          data: { isActive: false, quantity: 0 },
         });
         sourcePalletDeleted = true;
       } else {

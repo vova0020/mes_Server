@@ -1,0 +1,6 @@
+@echo off
+set DATABASE_URL=
+set PORT=
+echo Clearing environment variables...
+echo Starting server...
+npm run start:dev

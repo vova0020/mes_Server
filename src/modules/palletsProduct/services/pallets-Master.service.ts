@@ -1396,9 +1396,12 @@ export class PalletsMasterService {
         data: { quantity: { decrement: quantity } },
       });
 
-      // Удаляем поддон, если на нем не осталось деталей
+      // Деактивируем поддон, если на нем не осталось деталей (soft delete)
       if (Number(updatedPallet.quantity) === 0) {
-        await prisma.pallet.delete({ where: { palletId } });
+        await prisma.pallet.update({
+          where: { palletId },
+          data: { isActive: false },
+        });
       }
 
       // Отправляем WebSocket уведомление о событии поддона
@@ -1531,7 +1534,11 @@ export class PalletsMasterService {
       let sourcePalletDeleted = false;
 
       if (remainingQuantity === 0) {
-        await prisma.pallet.delete({ where: { palletId: sourcePalletId } });
+        // Деактивируем поддон вместо удаления (soft delete)
+        await prisma.pallet.update({
+          where: { palletId: sourcePalletId },
+          data: { isActive: false, quantity: 0 },
+        });
         sourcePalletDeleted = true;
       } else {
         await prisma.pallet.update({

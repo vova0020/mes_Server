@@ -1,3 +1,5 @@
+import * as dotenv from 'dotenv';
+dotenv.config({ override: true });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -48,6 +50,7 @@ async function bootstrap() {
 
   await app.listen(PORT, '0.0.0.0');
   console.log(`🚀 Server listening on http://0.0.0.0:${PORT}`);
+  console.log(`🗄️  Database: ${process.env.DATABASE_URL}`);
 }
 
 bootstrap();
