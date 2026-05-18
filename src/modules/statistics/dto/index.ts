@@ -3,3 +3,4 @@ export * from './get-stage-stats.dto';
 export * from './machine-uptime-stats.dto';
 export * from './get-defect-stats.dto';
 export * from './get-machine-production.dto';
+export * from './get-unreturned-defects.dto';

@@ -6,12 +6,15 @@ import {
   DefectDetail,
   FilterOptions,
   MachineProductionRecord,
+  UnreturnedDefectsFilterOptions,
+  UnreturnedDefectRecord,
 } from '../services/statistics.service';
 import {
   GetProductionLineStatsDto,
   GetStageStatsDto,
   GetDefectStatsDto,
   GetMachineProductionDto,
+  GetUnreturnedDefectsDto,
 } from '../dto';
 
 @Controller('statistics')
@@ -53,12 +56,32 @@ export class StatisticsController {
 
   /**
    * Получить данные учёта выпуска продукции по рабочим местам (станкам).
-   * Фильтры: startDate, endDate, machineId (все опциональны).
+   * Фильтры: startDate, endDate, machineId, orderId, stageId (все опциональны).
    */
   @Get('machine-production')
   async getMachineProduction(
     @Query() dto: GetMachineProductionDto,
   ): Promise<MachineProductionRecord[]> {
     return this.statisticsService.getMachineProduction(dto);
+  }
+
+  /**
+   * Получить фильтры для страницы невозвращенных деталей из брака.
+   * Возвращает списки заказов и упаковок с невозвращенными деталями.
+   */
+  @Get('unreturned-defects/filter-options')
+  async getUnreturnedDefectsFilterOptions(): Promise<UnreturnedDefectsFilterOptions> {
+    return this.statisticsService.getUnreturnedDefectsFilterOptions();
+  }
+
+  /**
+   * Получить данные по невозвращенным деталям из брака.
+   * Фильтры: orderId, packageId (опциональны).
+   */
+  @Get('unreturned-defects')
+  async getUnreturnedDefects(
+    @Query() dto: GetUnreturnedDefectsDto,
+  ): Promise<UnreturnedDefectRecord[]> {
+    return this.statisticsService.getUnreturnedDefects(dto);
   }
 }
