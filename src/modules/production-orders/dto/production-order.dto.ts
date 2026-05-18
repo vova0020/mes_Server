@@ -72,7 +72,8 @@ export class CreateProductionOrderDto {
   status?: OrderStatus;
 
   @ApiProperty({
-    description: 'Упаковки в заказе (детали будут автоматически добавлены из справочника)',
+    description:
+      'Упаковки в заказе (детали будут автоматически добавлены из справочника)',
     type: [CreatePackageDto],
   })
   @IsArray()
@@ -140,7 +141,8 @@ export class UpdateProductionOrderDto {
   isCompleted?: boolean;
 
   @ApiProperty({
-    description: 'Упаковки в заказе (если указано, то полностью заменит существующие упаковки)',
+    description:
+      'Упаковки в заказе (если указано, то полностью заменит существующие упаковки)',
     type: [CreatePackageDto],
     required: false,
   })
@@ -153,7 +155,8 @@ export class UpdateProductionOrderDto {
 
 export class UpdateOrderPriorityDto {
   @ApiProperty({
-    description: 'Новый приоритет заказа (чем больше число, тем выше приоритет)',
+    description:
+      'Новый приоритет заказа (чем больше число, тем выше приоритет)',
     example: 1,
   })
   @IsInt()

@@ -11,7 +11,9 @@ export class CreatePickerDto {
 }
 
 export class UpdatePickerDto {
-  @ApiPropertyOptional({ description: 'ID пользователя для обновления привязки' })
+  @ApiPropertyOptional({
+    description: 'ID пользователя для обновления привязки',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -49,9 +51,9 @@ export class CreatePickerWithRoleDto {
   @Type(() => Number)
   userId: number;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'Автоматически назначить роль orderPicker',
-    default: true 
+    default: true,
   })
   @IsOptional()
   assignRole?: boolean = true;
@@ -61,7 +63,9 @@ export class PickerWithRoleResponseDto {
   @ApiProperty({ description: 'Информация о созданном комплектовщике' })
   picker: PickerResponseDto;
 
-  @ApiProperty({ description: 'ID созданной привязки роли (если была создана)' })
+  @ApiProperty({
+    description: 'ID созданной привязки роли (если была создана)',
+  })
   roleBindingId?: number;
 
   @ApiProperty({ description: 'Сообщение о результате операции' })

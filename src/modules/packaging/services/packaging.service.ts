@@ -5,7 +5,7 @@ import { PackageQueryDto } from '../dto/package-query.dto';
 @Injectable()
 export class PackagingService {
   private readonly logger = new Logger(PackagingService.name);
-  
+
   constructor(private readonly prisma: PrismaService) {}
 
   // Получение упаковок по ID заказа
@@ -95,8 +95,13 @@ export class PackagingService {
             totalQuantity,
             pkg.orderId,
           );
-        
-        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed - packingStats.completed);
+
+        const readyForPackaging = Math.max(
+          0,
+          baseReadyForPackaging -
+            packingStats.distributed -
+            packingStats.completed,
+        );
 
         return {
           id: pkg.packageId,
@@ -232,8 +237,13 @@ export class PackagingService {
             totalQuantity,
             pkg.orderId,
           );
-        
-        const readyForPackaging = Math.max(0, baseReadyForPackaging - packingStats.distributed - packingStats.completed);
+
+        const readyForPackaging = Math.max(
+          0,
+          baseReadyForPackaging -
+            packingStats.distributed -
+            packingStats.completed,
+        );
 
         return {
           id: pkg.packageId,
@@ -310,7 +320,9 @@ export class PackagingService {
   ) {
     // Логирование для заказа 54
     if (orderId === 54) {
-      this.logger.log(`\n=== calculatePackageStatistics для заказа 54, упаковка ${packageId} ===`);
+      this.logger.log(
+        `\n=== calculatePackageStatistics для заказа 54, упаковка ${packageId} ===`,
+      );
     }
 
     // Получаем состав упаковки из package_composition
@@ -321,17 +333,19 @@ export class PackagingService {
           include: {
             routeStages: {
               include: {
-                stage: true
+                stage: true,
               },
-              orderBy: { sequenceNumber: 'asc' }
-            }
-          }
-        }
-      }
+              orderBy: { sequenceNumber: 'asc' },
+            },
+          },
+        },
+      },
     });
 
     if (orderId === 54) {
-      this.logger.log(`Детали в составе: ${composition.map(c => c.partCode).join(', ')}`);
+      this.logger.log(
+        `Детали в составе: ${composition.map((c) => c.partCode).join(', ')}`,
+      );
     }
 
     let minReadyPackages = Infinity;
@@ -351,15 +365,17 @@ export class PackagingService {
       if (!lastNonFinalStage) continue;
 
       // Получаем поддоны по partCode, которые завершили ВСЕ этапы маршрута
-      const allNonFinalStageIds = nonFinalStages.map(rs => rs.routeStageId);
-      
+      const allNonFinalStageIds = nonFinalStages.map((rs) => rs.routeStageId);
+
       if (orderId === 54) {
         this.logger.log(`\nДеталь ${comp.partCode}:`);
         this.logger.log(`  - Всего требуется: ${totalRequired}`);
         this.logger.log(`  - На упаковку: ${requiredPerPackage}`);
-        this.logger.log(`  - Нефинальные этапы: ${JSON.stringify(allNonFinalStageIds)}`);
+        this.logger.log(
+          `  - Нефинальные этапы: ${JSON.stringify(allNonFinalStageIds)}`,
+        );
       }
-      
+
       const completedPallets = await this.prisma.pallet.findMany({
         where: {
           part: {
@@ -367,55 +383,61 @@ export class PackagingService {
             productionPackageParts: {
               some: {
                 package: {
-                  orderId
-                }
-              }
-            }
+                  orderId,
+                },
+              },
+            },
           },
           // Проверяем, что поддон завершил ВСЕ не-финальные этапы
           palletStageProgress: {
             every: {
               OR: [
                 {
-                  routeStageId: { notIn: allNonFinalStageIds }
+                  routeStageId: { notIn: allNonFinalStageIds },
                 },
                 {
                   AND: [
                     { routeStageId: { in: allNonFinalStageIds } },
-                    { status: 'COMPLETED' }
-                  ]
-                }
-              ]
-            }
-          }
+                    { status: 'COMPLETED' },
+                  ],
+                },
+              ],
+            },
+          },
         },
         include: {
           palletStageProgress: {
             where: {
-              routeStageId: { in: allNonFinalStageIds }
-            }
-          }
-        }
+              routeStageId: { in: allNonFinalStageIds },
+            },
+          },
+        },
       });
-      
+
       if (orderId === 54) {
-        this.logger.log(`  - Найдено поддонов (до фильтрации): ${completedPallets.length}`);
-        this.logger.log(`  - Поддоны: ${JSON.stringify(completedPallets.map(p => ({ id: p.palletId, qty: p.quantity.toNumber(), progress: p.palletStageProgress.map(ps => ({ stage: ps.routeStageId, status: ps.status })) })))}`);
+        this.logger.log(
+          `  - Найдено поддонов (до фильтрации): ${completedPallets.length}`,
+        );
+        this.logger.log(
+          `  - Поддоны: ${JSON.stringify(completedPallets.map((p) => ({ id: p.palletId, qty: p.quantity.toNumber(), progress: p.palletStageProgress.map((ps) => ({ stage: ps.routeStageId, status: ps.status })) })))}`,
+        );
       }
-      
+
       // Фильтруем поддоны, которые действительно завершили все этапы
-      const fullyCompletedPallets = completedPallets.filter(pallet => {
+      const fullyCompletedPallets = completedPallets.filter((pallet) => {
         const completedStages = pallet.palletStageProgress
-          .filter(progress => progress.status === 'COMPLETED')
-          .map(progress => progress.routeStageId);
-        
-        return allNonFinalStageIds.every(stageId => 
-          completedStages.includes(stageId)
+          .filter((progress) => progress.status === 'COMPLETED')
+          .map((progress) => progress.routeStageId);
+
+        return allNonFinalStageIds.every((stageId) =>
+          completedStages.includes(stageId),
         );
       });
 
       if (orderId === 54) {
-        this.logger.log(`  - Полностью завершенных поддонов: ${fullyCompletedPallets.length}`);
+        this.logger.log(
+          `  - Полностью завершенных поддонов: ${fullyCompletedPallets.length}`,
+        );
       }
 
       const totalCompletedQuantity = fullyCompletedPallets.reduce(
@@ -424,19 +446,26 @@ export class PackagingService {
       );
 
       if (orderId === 54) {
-        this.logger.log(`  - Общее количество на завершенных поддонах: ${totalCompletedQuantity}`);
+        this.logger.log(
+          `  - Общее количество на завершенных поддонах: ${totalCompletedQuantity}`,
+        );
       }
 
-      const possiblePackages = Math.floor(totalCompletedQuantity / requiredPerPackage);
-      
+      const possiblePackages = Math.floor(
+        totalCompletedQuantity / requiredPerPackage,
+      );
+
       if (orderId === 54) {
         this.logger.log(`  - Возможно упаковок: ${possiblePackages}`);
       }
-      
+
       minReadyPackages = Math.min(minReadyPackages, possiblePackages);
     }
 
-    let baseReadyForPackaging = minReadyPackages === Infinity ? 0 : Math.min(minReadyPackages, totalPackages);
+    let baseReadyForPackaging =
+      minReadyPackages === Infinity
+        ? 0
+        : Math.min(minReadyPackages, totalPackages);
 
     if (orderId === 54) {
       this.logger.log(`\nbaseReadyForPackaging: ${baseReadyForPackaging}`);
@@ -454,9 +483,9 @@ export class PackagingService {
           packageId,
           pallet: {
             part: {
-              partCode: comp.partCode
-            }
-          }
+              partCode: comp.partCode,
+            },
+          },
         },
         include: {
           pallet: {
@@ -465,12 +494,12 @@ export class PackagingService {
               quantity: true,
               packageAssignments: {
                 select: {
-                  usedQuantity: true
-                }
-              }
-            }
-          }
-        }
+                  usedQuantity: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (orderId === 54) {
@@ -484,33 +513,44 @@ export class PackagingService {
         const palletTotalQuantity = assignment.pallet.quantity.toNumber();
         const totalUsedFromPallet = assignment.pallet.packageAssignments.reduce(
           (usedSum, pa) => usedSum + pa.usedQuantity.toNumber(),
-          0
+          0,
         );
         const availableFromPallet = palletTotalQuantity - totalUsedFromPallet;
         const assignedToThisPackage = assignment.quantity.toNumber();
-        
+
         if (orderId === 54) {
-          this.logger.log(`    Поддон ${assignment.pallet.palletId}: всего=${palletTotalQuantity}, использовано=${totalUsedFromPallet}, доступно=${availableFromPallet}, назначено=${assignedToThisPackage}`);
+          this.logger.log(
+            `    Поддон ${assignment.pallet.palletId}: всего=${palletTotalQuantity}, использовано=${totalUsedFromPallet}, доступно=${availableFromPallet}, назначено=${assignedToThisPackage}`,
+          );
         }
-        
+
         // Берем минимум из назначенного на упаковку и доступного с поддона
-        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+        return (
+          sum +
+          Math.max(0, Math.min(assignedToThisPackage, availableFromPallet))
+        );
       }, 0);
 
       if (orderId === 54) {
         this.logger.log(`  - Доступно всего: ${availableQuantity}`);
       }
 
-      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
-      
+      const assembledForThisPart = Math.floor(
+        availableQuantity / requiredPerPackage,
+      );
+
       if (orderId === 54) {
         this.logger.log(`  - Скомплектовано упаковок: ${assembledForThisPart}`);
       }
-      
-      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
+
+      minAssembledPackages = Math.min(
+        minAssembledPackages,
+        assembledForThisPart,
+      );
     }
 
-    const assembled = minAssembledPackages === Infinity ? 0 : minAssembledPackages;
+    const assembled =
+      minAssembledPackages === Infinity ? 0 : minAssembledPackages;
 
     if (orderId === 54) {
       this.logger.log(`\nassembled: ${assembled}`);
@@ -537,7 +577,9 @@ export class PackagingService {
 
     // Считаем распределенное количество как назначенное минус выполненное
     const distributed = packingTasks.reduce(
-      (sum, task) => sum + (task.assignedQuantity.toNumber() - task.completedQuantity.toNumber()),
+      (sum, task) =>
+        sum +
+        (task.assignedQuantity.toNumber() - task.completedQuantity.toNumber()),
       0,
     );
 

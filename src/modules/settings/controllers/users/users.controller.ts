@@ -253,7 +253,9 @@ export class UsersController {
   }
 
   @Post('pickers/with-role')
-  @ApiOperation({ summary: 'Создать комплектовщика с автоматическим назначением роли' })
+  @ApiOperation({
+    summary: 'Создать комплектовщика с автоматическим назначением роли',
+  })
   @ApiResponse({
     status: 201,
     description: 'Комплектовщик создан с ролью',
@@ -271,7 +273,9 @@ export class UsersController {
     this.logger.log(
       `REST: Создание комплектовщика с ролью для пользователя ID: ${createPickerWithRoleDto.userId}`,
     );
-    return await this.usersService.createPickerWithRole(createPickerWithRoleDto);
+    return await this.usersService.createPickerWithRole(
+      createPickerWithRoleDto,
+    );
   }
 
   @Get('pickers')
@@ -314,7 +318,9 @@ export class UsersController {
   async getPickerByUserId(
     @Param('userId', ParseIntPipe) userId: number,
   ): Promise<PickerResponseDto> {
-    this.logger.log(`REST: Получение комплектовщика по ID пользователя: ${userId}`);
+    this.logger.log(
+      `REST: Получение комплектовщика по ID пользователя: ${userId}`,
+    );
     return await this.usersService.getPickerByUserId(userId);
   }
 

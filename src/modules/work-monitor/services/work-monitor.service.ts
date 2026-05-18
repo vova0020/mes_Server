@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
-import { StreamDto, StageProgressDto, MachineWorkplaceDto } from '../dto/work-monitor.dto';
+import {
+  StreamDto,
+  StageProgressDto,
+  MachineWorkplaceDto,
+} from '../dto/work-monitor.dto';
 import { MachineStatus } from '@prisma/client';
 
 @Injectable()
@@ -15,7 +19,7 @@ export class WorkMonitorService {
       },
     });
 
-    return lines.map(line => ({
+    return lines.map((line) => ({
       streamId: line.lineId,
       streamName: line.lineName,
     }));
@@ -40,11 +44,12 @@ export class WorkMonitorService {
     const stageProgress: StageProgressDto[] = [];
 
     for (const stage of stages) {
-      const machines = stage.machinesStages.map(ms => ms.machine);
-      
+      const machines = stage.machinesStages.map((ms) => ms.machine);
+
       // Норма смены - сумма норм всех станков этапа
-      const shiftNorm = machines.reduce((sum, machine) => 
-        sum + Number(machine.recommendedLoad), 0
+      const shiftNorm = machines.reduce(
+        (sum, machine) => sum + Number(machine.recommendedLoad),
+        0,
       );
 
       // Выполнено - сумма выполненного на всех станках с учетом сброса
@@ -68,7 +73,10 @@ export class WorkMonitorService {
           },
         });
 
-        const machineCompleted = this.calculateCompletedQuantity(machine, assignments);
+        const machineCompleted = this.calculateCompletedQuantity(
+          machine,
+          assignments,
+        );
         completed += machineCompleted;
       }
 
@@ -105,10 +113,14 @@ export class WorkMonitorService {
 
       // Считаем квадратные метры готовых к обработке поддонов
       const readyForProcessing = readyPallets.reduce((sum, pallet) => {
-        return sum + this.calculateSquareMeters(pallet.part, Number(pallet.quantity));
+        return (
+          sum + this.calculateSquareMeters(pallet.part, Number(pallet.quantity))
+        );
       }, 0);
 
-      const activeMachines = machines.filter(m => m.status === MachineStatus.ACTIVE).length;
+      const activeMachines = machines.filter(
+        (m) => m.status === MachineStatus.ACTIVE,
+      ).length;
 
       stageProgress.push({
         stageId: stage.stageId,
@@ -124,7 +136,10 @@ export class WorkMonitorService {
     return stageProgress;
   }
 
-  async getStageWorkplaces(streamId: number, stageId: number): Promise<MachineWorkplaceDto[]> {
+  async getStageWorkplaces(
+    streamId: number,
+    stageId: number,
+  ): Promise<MachineWorkplaceDto[]> {
     const machines = await this.prisma.machine.findMany({
       where: {
         machinesStages: {
@@ -170,7 +185,7 @@ export class WorkMonitorService {
   }
 
   private calculateCompletedQuantity(machine: any, assignments: any[]): number {
-    const filteredAssignments = assignments.filter(assignment => {
+    const filteredAssignments = assignments.filter((assignment) => {
       return machine.counterResetAt && assignment.completedAt
         ? assignment.completedAt > machine.counterResetAt
         : true;
@@ -222,7 +237,15 @@ export class WorkMonitorService {
     const length = part.finishedLength;
     const width = part.finishedWidth;
     const thickness = part.thickness;
-    if (!length || !width || !thickness || length <= 0 || width <= 0 || thickness <= 0) return 0;
+    if (
+      !length ||
+      !width ||
+      !thickness ||
+      length <= 0 ||
+      width <= 0 ||
+      thickness <= 0
+    )
+      return 0;
     return (length * width * thickness * quantity) / 1000000000;
   }
 

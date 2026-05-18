@@ -1,4 +1,14 @@
-import { IsArray, IsInt, IsString, IsOptional, IsNumber, IsBoolean, Min, ValidateNested, Allow } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  Min,
+  ValidateNested,
+  Allow,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class DetailFromFileDto {
@@ -120,7 +130,7 @@ export class DetailFromFileDto {
   // Служебные поля (игнорируются при сохранении, используются только для отображения)
   @Allow()
   availableRoutes?: { routeId: number; routeName: string }[];
-  
+
   @Allow()
   currentRouteId?: number;
 }

@@ -50,8 +50,6 @@ export class PackingAssignmentController {
     );
   }
 
-
-
   // Создание нового назначения задания на станок упаковки
   @Post()
   @HttpCode(HttpStatus.CREATED)

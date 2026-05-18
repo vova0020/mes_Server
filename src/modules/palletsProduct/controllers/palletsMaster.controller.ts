@@ -66,7 +66,7 @@ export class PalletsMasterController {
     @Param('detailId', ParseIntPipe) detailId: number,
     @Param('stageid', ParseIntPipe) stageid: number,
   ): Promise<PalletsResponseDto> {
-    return this.palletOperationsService.getPalletsByDetailId(detailId,stageid);
+    return this.palletOperationsService.getPalletsByDetailId(detailId, stageid);
   }
 
   @Post('assign-to-machine')
@@ -201,7 +201,9 @@ export class PalletsMasterController {
     status: 400,
     description: 'Недостаточно деталей для создания поддона',
   })
-  async createPallet(@Body() createDto: CreatePalletDto): Promise<CreatePalletResponseDto> {
+  async createPallet(
+    @Body() createDto: CreatePalletDto,
+  ): Promise<CreatePalletResponseDto> {
     this.logger.log(
       `Получен запрос на создание поддона для детали ${createDto.partId} с количеством ${createDto.quantity}`,
     );
@@ -221,9 +223,7 @@ export class PalletsMasterController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(
-        `Ошибка при создании поддона: ${error.message}`,
-      );
+      this.logger.error(`Ошибка при создании поддона: ${error.message}`);
       throw new InternalServerErrorException(
         'Произошла ошибка при создании поддона',
       );
@@ -232,16 +232,24 @@ export class PalletsMasterController {
 
   @Post('create-pallet-by-part')
   @ApiOperation({ summary: 'Создать новый поддон по ID детали' })
-  @ApiBody({ 
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
         partId: { type: 'number', description: 'ID детали', example: 1 },
-        quantity: { type: 'number', description: 'Количество деталей на поддоне', example: 100 },
-        palletName: { type: 'string', description: 'Название поддона (опционально)', example: 'Поддон-001' }
+        quantity: {
+          type: 'number',
+          description: 'Количество деталей на поддоне',
+          example: 100,
+        },
+        palletName: {
+          type: 'string',
+          description: 'Название поддона (опционально)',
+          example: 'Поддон-001',
+        },
       },
-      required: ['partId', 'quantity']
-    }
+      required: ['partId', 'quantity'],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -256,7 +264,9 @@ export class PalletsMasterController {
     status: 400,
     description: 'Недостаточно деталей для создания поддона',
   })
-  async createPalletByPartId(@Body() body: { partId: number; quantity: number; palletName?: string }): Promise<CreatePalletResponseDto> {
+  async createPalletByPartId(
+    @Body() body: { partId: number; quantity: number; palletName?: string },
+  ): Promise<CreatePalletResponseDto> {
     this.logger.log(
       `Получен запрос на создание поддона для детали ${body.partId} с количеством ${body.quantity}`,
     );
@@ -276,9 +286,7 @@ export class PalletsMasterController {
         throw new BadRequestException(error.message);
       }
 
-      this.logger.error(
-        `Ошибка при создании поддона: ${error.message}`,
-      );
+      this.logger.error(`Ошибка при создании поддона: ${error.message}`);
       throw new InternalServerErrorException(
         'Произошла ошибка при создании поддона',
       );
@@ -302,7 +310,10 @@ export class PalletsMasterController {
     this.logger.log(
       `Запрос на получение заданий для станка с ID: ${query.machineId}, этап: ${query.stageId}`,
     );
-    return this.palletOperationsService.getMachineTasksById(query.machineId, query.stageId);
+    return this.palletOperationsService.getMachineTasksById(
+      query.machineId,
+      query.stageId,
+    );
   }
 
   @Post('defect-parts')
@@ -346,7 +357,9 @@ export class PalletsMasterController {
     description: 'Детали успешно перераспределены',
     type: RedistributePalletPartsResponseDto,
   })
-  async redistributePalletParts(@Body() redistributeDto: RedistributePalletPartsDto): Promise<RedistributePalletPartsResponseDto> {
+  async redistributePalletParts(
+    @Body() redistributeDto: RedistributePalletPartsDto,
+  ): Promise<RedistributePalletPartsResponseDto> {
     this.logger.log(
       `Перераспределение деталей с поддона ${redistributeDto.sourcePalletId}`,
     );
@@ -364,7 +377,9 @@ export class PalletsMasterController {
         throw new BadRequestException(error.message);
       }
       this.logger.error(`Ошибка при перераспределении: ${error.message}`);
-      throw new InternalServerErrorException('Ошибка при перераспределении деталей');
+      throw new InternalServerErrorException(
+        'Ошибка при перераспределении деталей',
+      );
     }
   }
 
@@ -396,7 +411,9 @@ export class PalletsMasterController {
         throw new BadRequestException(error.message);
       }
       this.logger.error(`Ошибка при возврате деталей: ${error.message}`);
-      throw new InternalServerErrorException('Ошибка при возврате деталей на производство');
+      throw new InternalServerErrorException(
+        'Ошибка при возврате деталей на производство',
+      );
     }
   }
 }

@@ -28,7 +28,7 @@ export class MachineSchedulerService {
     const minute = parseInt(minuteStr, 10);
 
     // Переводим из МСК (UTC+3) в UTC
-    hour = ((hour - 3) + 24) % 24;
+    hour = (hour - 3 + 24) % 24;
 
     return `${minute} ${hour} * * *`;
   }

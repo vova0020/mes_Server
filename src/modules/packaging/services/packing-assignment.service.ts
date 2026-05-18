@@ -26,7 +26,7 @@ export class PackingAssignmentService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   /**
    * Получить все станки упаковки по ID участка с дополнительной информацией
@@ -84,7 +84,7 @@ export class PackingAssignmentService {
 
       // Группируем выполненное количество по станкам с учетом времени сброса счетчика
       const completedByMachine = {};
-      
+
       for (const machine of machines) {
         // Получаем завершенные задачи после сброса счетчика
         const completedTasks = await this.prisma.packingTask.findMany({
@@ -98,7 +98,7 @@ export class PackingAssignmentService {
             status: 'COMPLETED',
           },
         });
-        
+
         // Получаем частично выполненные задачи после сброса счетчика
         const partialTasks = await this.prisma.packingTask.findMany({
           where: {
@@ -112,21 +112,22 @@ export class PackingAssignmentService {
             completedQuantity: { gt: 0 },
           },
         });
-        
+
         const completedAmount = completedTasks.reduce(
           (sum, task) => sum + task.completedQuantity.toNumber(),
           0,
         );
-        
+
         const partialAmount = partialTasks.reduce(
           (sum, task) => sum + task.completedQuantity.toNumber(),
           0,
         );
-        
+
         // Также учитываем сохраненное частично выполненное количество
         const savedPartialAmount = machine.partiallyCompleted?.toNumber() || 0;
-        
-        completedByMachine[machine.machineId] = completedAmount + partialAmount + savedPartialAmount;
+
+        completedByMachine[machine.machineId] =
+          completedAmount + partialAmount + savedPartialAmount;
       }
 
       // Формируем ответ
@@ -137,13 +138,20 @@ export class PackingAssignmentService {
         );
 
         const completedQuantity = completedByMachine[machine.machineId] || 0;
-        
+
         // Вычитаем выполненное из назначенного
         const inProgressCompletedQty = machine.packingTasks
-          .filter(task => task.status === 'IN_PROGRESS' || task.status === 'PARTIALLY_COMPLETED')
+          .filter(
+            (task) =>
+              task.status === 'IN_PROGRESS' ||
+              task.status === 'PARTIALLY_COMPLETED',
+          )
           .reduce((sum, task) => sum + task.completedQuantity.toNumber(), 0);
-        
-        const plannedQuantity = Math.max(0, assignedQuantity - inProgressCompletedQty);
+
+        const plannedQuantity = Math.max(
+          0,
+          assignedQuantity - inProgressCompletedQty,
+        );
 
         return {
           id: machine.machineId,
@@ -168,8 +176,6 @@ export class PackingAssignmentService {
       throw error;
     }
   }
-
-
 
   // Создание нового назначения задания на станок упаковки или обновление существующего
   async createAssignment(
@@ -237,12 +243,14 @@ export class PackingAssignmentService {
       },
     });
 
-    const requestedQuantity = dto.assignedQuantity ?? productionPackage.quantity.toNumber();
+    const requestedQuantity =
+      dto.assignedQuantity ?? productionPackage.quantity.toNumber();
 
     if (existingTaskOnMachine) {
       // Обновляем существующее задание - прибавляем количество
-      const newAssignedQuantity = existingTaskOnMachine.assignedQuantity.toNumber() + requestedQuantity;
-      
+      const newAssignedQuantity =
+        existingTaskOnMachine.assignedQuantity.toNumber() + requestedQuantity;
+
       // Проверяем общий лимит
       const allTasks = await this.prisma.packingTask.findMany({
         where: {
@@ -258,13 +266,16 @@ export class PackingAssignmentService {
           },
         },
       });
-      
+
       const otherTasksTotal = allTasks.reduce(
         (sum, task) => sum + task.assignedQuantity.toNumber(),
         0,
       );
-      
-      if (otherTasksTotal + newAssignedQuantity > productionPackage.quantity.toNumber()) {
+
+      if (
+        otherTasksTotal + newAssignedQuantity >
+        productionPackage.quantity.toNumber()
+      ) {
         throw new BadRequestException(
           `Превышено количество упаковки. Уже назначено на другие станки: ${otherTasksTotal}, на данном станке: ${existingTaskOnMachine.assignedQuantity.toNumber()}, запрашивается добавить: ${requestedQuantity}, доступно: ${productionPackage.quantity.toNumber()}`,
         );
@@ -318,14 +329,18 @@ export class PackingAssignmentService {
         0,
       );
 
-      if (totalAssigned + requestedQuantity > productionPackage.quantity.toNumber()) {
+      if (
+        totalAssigned + requestedQuantity >
+        productionPackage.quantity.toNumber()
+      ) {
         throw new BadRequestException(
           `Превышено количество упаковки. Уже назначено: ${totalAssigned}, запрашивается: ${requestedQuantity}, доступно: ${productionPackage.quantity.toNumber()}`,
         );
       }
 
       // Создаем новое задание
-      const assignedQty = dto.assignedQuantity ?? productionPackage.quantity.toNumber();
+      const assignedQty =
+        dto.assignedQuantity ?? productionPackage.quantity.toNumber();
       const newTask = await this.prisma.packingTask.create({
         data: {
           packageId: dto.packageId,
@@ -480,7 +495,9 @@ export class PackingAssignmentService {
   }
 
   // Получение заданий по станку с данными о частичной обработке
-  async getAssignmentsByMachine(machineId: number): Promise<PackingAssignmentResponseDto[]> {
+  async getAssignmentsByMachine(
+    machineId: number,
+  ): Promise<PackingAssignmentResponseDto[]> {
     const machine = await this.prisma.machine.findUnique({
       where: { machineId },
     });
@@ -513,9 +530,15 @@ export class PackingAssignmentService {
     // Получаем assembledQuantity для каждой задачи
     const tasksWithProgress = await Promise.all(
       tasks.map(async (task) => {
-        const remainingQuantity = task.assignedQuantity.toNumber() - task.completedQuantity.toNumber();
-        const assembledQuantity = await this.calculateAssembledQuantity(task.packageId);
-        const availableToComplete = Math.min(remainingQuantity, assembledQuantity);
+        const remainingQuantity =
+          task.assignedQuantity.toNumber() - task.completedQuantity.toNumber();
+        const assembledQuantity = await this.calculateAssembledQuantity(
+          task.packageId,
+        );
+        const availableToComplete = Math.min(
+          remainingQuantity,
+          assembledQuantity,
+        );
 
         return {
           ...this.mapToResponseDto(task),
@@ -588,11 +611,19 @@ export class PackingAssignmentService {
         const assignedToThisPackage = assignment.quantity.toNumber();
 
         // Берем минимум из назначенного на упаковку и доступного с поддона
-        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+        return (
+          sum +
+          Math.max(0, Math.min(assignedToThisPackage, availableFromPallet))
+        );
       }, 0);
 
-      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
-      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
+      const assembledForThisPart = Math.floor(
+        availableQuantity / requiredPerPackage,
+      );
+      minAssembledPackages = Math.min(
+        minAssembledPackages,
+        assembledForThisPart,
+      );
     }
 
     return minAssembledPackages === Infinity ? 0 : minAssembledPackages;
@@ -783,7 +814,10 @@ export class PackingAssignmentService {
    * @param machineId ID станка
    * @param additionalQuantity Дополнительное количество для добавления
    */
-  async updateMachinePartialProgress(machineId: number, additionalQuantity: number): Promise<void> {
+  async updateMachinePartialProgress(
+    machineId: number,
+    additionalQuantity: number,
+  ): Promise<void> {
     await this.prisma.machine.update({
       where: { machineId },
       data: {
@@ -851,11 +885,11 @@ export class PackingAssignmentService {
       },
       assignedUser: task.assignedUser
         ? {
-          userId: task.assignedUser.userId,
-          login: task.assignedUser.login,
-          firstName: task.assignedUser.userDetail?.firstName,
-          lastName: task.assignedUser.userDetail?.lastName,
-        }
+            userId: task.assignedUser.userId,
+            login: task.assignedUser.login,
+            firstName: task.assignedUser.userDetail?.firstName,
+            lastName: task.assignedUser.userDetail?.lastName,
+          }
         : undefined,
       productionPackage: productionPackageInfo,
     };

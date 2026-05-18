@@ -39,7 +39,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly pickersService: PickersService,
     private readonly socketService: SocketService,
-  ) { }
+  ) {}
 
   // ========================================
   // CRUD операции с пользователями
@@ -288,7 +288,6 @@ export class UsersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка удаления пользователя ID ${userId}: ${error.message}`,
@@ -353,7 +352,6 @@ export class UsersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка назначения глобальной роли: ${error.message}`,
@@ -390,7 +388,9 @@ export class UsersService {
         where: {
           userId: createRoleBindingDto.userId,
           roleId: role.roleId,
-          contextType: this.mapDtoContextTypeToPrisma(createRoleBindingDto.contextType),
+          contextType: this.mapDtoContextTypeToPrisma(
+            createRoleBindingDto.contextType,
+          ),
           contextId: createRoleBindingDto.contextId,
         },
       });
@@ -404,7 +404,9 @@ export class UsersService {
         data: {
           userId: createRoleBindingDto.userId,
           roleId: role.roleId,
-          contextType: this.mapDtoContextTypeToPrisma(createRoleBindingDto.contextType),
+          contextType: this.mapDtoContextTypeToPrisma(
+            createRoleBindingDto.contextType,
+          ),
           contextId: createRoleBindingDto.contextId,
         },
       });
@@ -420,7 +422,9 @@ export class UsersService {
         where: {
           userId: createRoleBindingDto.userId,
           roleId: role.roleId,
-          contextType: this.mapDtoContextTypeToPrisma(createRoleBindingDto.contextType),
+          contextType: this.mapDtoContextTypeToPrisma(
+            createRoleBindingDto.contextType,
+          ),
           contextId: createRoleBindingDto.contextId,
         },
       });
@@ -442,7 +446,6 @@ export class UsersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка создания контекстной привязки: ${error.message}`,
@@ -540,7 +543,6 @@ export class UsersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка удаления глобальной роли: ${error.message}`,
@@ -587,7 +589,6 @@ export class UsersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка удаления контекстной привязки: ${error.message}`,
@@ -601,7 +602,9 @@ export class UsersService {
   // Методы для получения списков объектов привязки
   // ========================================
 
-  async getMachinesForBinding(): Promise<{ machines: Array<{ machineId: number; machineName: string }> }> {
+  async getMachinesForBinding(): Promise<{
+    machines: Array<{ machineId: number; machineName: string }>;
+  }> {
     this.logger.log('Получение списка станков для привязки');
 
     try {
@@ -624,7 +627,9 @@ export class UsersService {
     }
   }
 
-  async getStagesForBinding(): Promise<{ stages: Array<{ stageId: number; stageName: string }> }> {
+  async getStagesForBinding(): Promise<{
+    stages: Array<{ stageId: number; stageName: string }>;
+  }> {
     this.logger.log('Получение списка этапов для привязки');
 
     try {
@@ -647,8 +652,12 @@ export class UsersService {
     }
   }
 
-  async getPickersForBinding(): Promise<{ pickers: Array<{ pickerId: number; pickerName: string }> }> {
-    this.logger.log('Получение списка комплектовщиков для привязки - делегирование в PickersService');
+  async getPickersForBinding(): Promise<{
+    pickers: Array<{ pickerId: number; pickerName: string }>;
+  }> {
+    this.logger.log(
+      'Получение списка комплектовщиков для привязки - делегирование в PickersService',
+    );
     return await this.pickersService.getPickersForBinding();
   }
 
@@ -656,30 +665,44 @@ export class UsersService {
   // Методы для работы с комплектовщиками (делегирование в PickersService)
   // ========================================
 
-  async createPicker(createPickerDto: CreatePickerDto): Promise<PickerResponseDto> {
-    this.logger.log(`Создание комплектовщика через UsersService - делегирование в PickersService`);
+  async createPicker(
+    createPickerDto: CreatePickerDto,
+  ): Promise<PickerResponseDto> {
+    this.logger.log(
+      `Создание комплектовщика через UsersService - делегирование в PickersService`,
+    );
     return await this.pickersService.createPicker(createPickerDto);
   }
 
   async createPickerWithRole(
     createPickerWithRoleDto: CreatePickerWithRoleDto,
   ): Promise<PickerWithRoleResponseDto> {
-    this.logger.log(`Создание комплектовщика с ролью через UsersService - делегирование в PickersService`);
-    return await this.pickersService.createPickerWithRole(createPickerWithRoleDto);
+    this.logger.log(
+      `Создание комплектовщика с ролью через UsersService - делегирование в PickersService`,
+    );
+    return await this.pickersService.createPickerWithRole(
+      createPickerWithRoleDto,
+    );
   }
 
   async getAllPickers(): Promise<PickerResponseDto[]> {
-    this.logger.log('Получение всех комплектовщиков через UsersService - делегирование в PickersService');
+    this.logger.log(
+      'Получение всех комплектовщиков через UsersService - делегирование в PickersService',
+    );
     return await this.pickersService.getAllPickers();
   }
 
   async getPickerById(pickerId: number): Promise<PickerResponseDto> {
-    this.logger.log(`Получение комплектовщика по ID через UsersService - делегирование в PickersService`);
+    this.logger.log(
+      `Получение комплектовщика по ID через UsersService - делегирование в PickersService`,
+    );
     return await this.pickersService.getPickerById(pickerId);
   }
 
   async getPickerByUserId(userId: number): Promise<PickerResponseDto> {
-    this.logger.log(`Получение комплектовщика по userId через UsersService - делегирование в PickersService`);
+    this.logger.log(
+      `Получение комплектовщика по userId через UsersService - делегирование в PickersService`,
+    );
     return await this.pickersService.getPickerByUserId(userId);
   }
 
@@ -687,12 +710,16 @@ export class UsersService {
     pickerId: number,
     updatePickerDto: UpdatePickerDto,
   ): Promise<PickerResponseDto> {
-    this.logger.log(`Обновление комплектовщика через UsersService - делегирование в PickersService`);
+    this.logger.log(
+      `Обновление комплектовщика через UsersService - делегирование в PickersService`,
+    );
     return await this.pickersService.updatePicker(pickerId, updatePickerDto);
   }
 
   async deletePicker(pickerId: number): Promise<void> {
-    this.logger.log(`Удаление комплектовщика через UsersService - делегирование в PickersService`);
+    this.logger.log(
+      `Удаление комплектовщика через UsersService - делегирование в PickersService`,
+    );
     return await this.pickersService.deletePicker(pickerId);
   }
 
@@ -700,7 +727,9 @@ export class UsersService {
   // Вспомогательные методы
   // ========================================
 
-  private getChangesFromUpdateDto(updateDto: UpdateUserDto): Record<string, boolean> {
+  private getChangesFromUpdateDto(
+    updateDto: UpdateUserDto,
+  ): Record<string, boolean> {
     const changes: Record<string, boolean> = {};
 
     if (updateDto.login !== undefined) changes.login = true;
@@ -722,12 +751,12 @@ export class UsersService {
       updatedAt: user.updatedAt,
       userDetail: user.userDetail
         ? {
-          firstName: user.userDetail.firstName,
-          lastName: user.userDetail.lastName,
-          phone: user.userDetail.phone,
-          position: user.userDetail.position,
-          salary: user.userDetail.salary,
-        }
+            firstName: user.userDetail.firstName,
+            lastName: user.userDetail.lastName,
+            phone: user.userDetail.phone,
+            position: user.userDetail.position,
+            salary: user.userDetail.salary,
+          }
         : undefined,
     };
   }
@@ -773,7 +802,7 @@ export class UsersService {
     if (!allowedRoles[contextType].includes(role)) {
       throw new BadRequestException(
         `Роль "${role}" не может быть привязана к контексту "${contextType}". ` +
-        `Допустимые роли: ${allowedRoles[contextType].join(', ')}`,
+          `Допустимые роли: ${allowedRoles[contextType].join(', ')}`,
       );
     }
   }

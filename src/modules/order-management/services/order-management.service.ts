@@ -18,7 +18,7 @@ export class OrderManagementService {
   constructor(
     private readonly prismaService: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   /**
    * Получить все заказы с базовой информацией
@@ -405,7 +405,10 @@ export class OrderManagementService {
             edgingNameW2: comp.edgingNameW2 ?? null,
             totalQuantity: Math.ceil(Number(comp.quantity)),
             packages: [
-              { packageId: pkg.packageId, quantity: Math.ceil(Number(comp.quantity)) },
+              {
+                packageId: pkg.packageId,
+                quantity: Math.ceil(Number(comp.quantity)),
+              },
             ],
           });
         }

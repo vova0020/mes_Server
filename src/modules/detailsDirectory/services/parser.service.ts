@@ -13,10 +13,10 @@ export class ParserService {
     'Артикул материала': 'materialSku',
     'Толщина детали': 'thickness',
     'Толщина с учетом облицовки пласти': 'thicknessWithEdging',
-    'Количество': 'quantity',
+    Количество: 'quantity',
     'Готовая деталь [L]': 'finishedLength',
     'Готовая деталь [W]': 'finishedWidth',
-    'Паз': 'groove',
+    Паз: 'groove',
     'Артикул облицовки кромки [L1]': 'edgingSkuL1',
     'Обозначение облицовки кромки [L1]': 'edgingNameL1',
     'Артикул облицовки кромки [L2]': 'edgingSkuL2',
@@ -29,12 +29,12 @@ export class ParserService {
     'Пластик (лицевая) артикул': 'plasticFaceSku',
     'Пластик (нелицевая)': 'plasticBack',
     'Пластик (нелицевая) артикул': 'plasticBackSku',
-    'ПФ': 'pf',
+    ПФ: 'pf',
     'Артикул ПФ (для детали)': 'pfSku',
     'СБ деталь': 'sbPart',
     'ПФ СБ': 'pfSb',
     'Артикул СБ детали (для ПФ СБ)': 'sbPartSku',
-    'Упаковка': 'packaging',
+    Упаковка: 'packaging',
     'Артикул упаковки': 'packagingSku',
     'Подстопное место на конвейере': 'conveyorPosition',
   };
@@ -72,16 +72,19 @@ export class ParserService {
         (cell || '').toString().trim().toLowerCase(),
       );
       // Ищем строку с максимальным количеством совпадений
-      const matches = wantedLower.filter(want => row.includes(want)).length;
-      if (matches > 0 && (headerRowIdx === null || matches > wantedLower.filter(want => headerRow.includes(want)).length)) {
+      const matches = wantedLower.filter((want) => row.includes(want)).length;
+      if (
+        matches > 0 &&
+        (headerRowIdx === null ||
+          matches >
+            wantedLower.filter((want) => headerRow.includes(want)).length)
+      ) {
         headerRowIdx = i;
         headerRow = row;
       }
     }
     if (headerRowIdx === null) {
-      throw new BadRequestException(
-        'Не найдена строка с заголовками',
-      );
+      throw new BadRequestException('Не найдена строка с заголовками');
     }
 
     // 4. Строим карту «lowercase‑заголовок → индекс»
@@ -89,13 +92,15 @@ export class ParserService {
     headerRow.forEach((h, idx) => {
       if (h) colIndexMap[h] = idx;
     });
-    
+
     // Проверяем какие колонки отсутствуют (для информации)
-    const missingColumns = this.wantedColumns.filter(col => 
-      !colIndexMap.hasOwnProperty(col.toLowerCase())
+    const missingColumns = this.wantedColumns.filter(
+      (col) => !colIndexMap.hasOwnProperty(col.toLowerCase()),
     );
     if (missingColumns.length > 0) {
-      console.warn(`Отсутствующие колонки (будут заполнены пустыми значениями): ${missingColumns.join(', ')}`);
+      console.warn(
+        `Отсутствующие колонки (будут заполнены пустыми значениями): ${missingColumns.join(', ')}`,
+      );
     }
 
     // 5. Парсим строки до первой полностью пустой
@@ -120,11 +125,12 @@ export class ParserService {
       const obj: Record<string, any> = {};
       for (const [rusName, engName] of Object.entries(this.columnMap)) {
         const idx = colIndexMap[rusName.toLowerCase()];
-        let value = (idx !== undefined && row[idx] !== undefined) ? row[idx] : null;
-        
+        let value =
+          idx !== undefined && row[idx] !== undefined ? row[idx] : null;
+
         // Преобразуем типы данных
         value = this.convertValue(engName, value);
-        
+
         obj[engName] = value;
       }
       result.push(obj);
@@ -144,14 +150,23 @@ export class ParserService {
       const str = String(value).toLowerCase().trim();
       return str === 'true' || str === '1' || str === 'да' || str === 'yes';
     }
-    
+
     // Преобразуем числовые поля
-    if (['thickness', 'thicknessWithEdging', 'finishedLength', 'finishedWidth', 'quantity', 'routeId'].includes(fieldName)) {
+    if (
+      [
+        'thickness',
+        'thicknessWithEdging',
+        'finishedLength',
+        'finishedWidth',
+        'quantity',
+        'routeId',
+      ].includes(fieldName)
+    ) {
       if (value === null || value === undefined || value === '') return 0;
       const num = Number(value);
       return isNaN(num) ? 0 : num;
     }
-    
+
     // Все остальные поля как строки
     if (value === null || value === undefined || value === '') return '';
     return String(value).trim();

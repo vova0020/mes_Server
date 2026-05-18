@@ -22,7 +22,7 @@ export class MachinMasterService {
     private readonly prisma: PrismaService,
     private socketService: SocketService,
     private auditService: AuditService,
-  ) { }
+  ) {}
 
   // Получение списка станков с включением связанных данных
   async getMachines(stageId?: number) {
@@ -90,7 +90,7 @@ export class MachinMasterService {
         where: { stageId: stageId },
       });
 
-      if (!stage) { 
+      if (!stage) {
         throw new NotFoundException(`Участок с ID ${stageId} не найден`);
       }
 
@@ -227,7 +227,14 @@ export class MachinMasterService {
           .reduce((total, assignment) => {
             const quantityInPieces = Number(assignment.processedQuantity);
             const part = assignment.pallet.part;
-            return total + this.calculateQuantityByUnit(machine.loadUnit, part, quantityInPieces);
+            return (
+              total +
+              this.calculateQuantityByUnit(
+                machine.loadUnit,
+                part,
+                quantityInPieces,
+              )
+            );
           }, 0);
 
         function getPlannedQuantity(plannedQuantity, machine) {
@@ -503,7 +510,11 @@ export class MachinMasterService {
    * @param quantity Количество деталей
    * @returns Количество в соответствующей единице измерения
    */
-  private calculateQuantityByUnit(loadUnit: string, part: any, quantity: number): number {
+  private calculateQuantityByUnit(
+    loadUnit: string,
+    part: any,
+    quantity: number,
+  ): number {
     if (loadUnit === 'м²') {
       return this.calculateSquareMeters(part, quantity);
     } else if (loadUnit === 'м³') {
@@ -682,7 +693,7 @@ export class MachinMasterService {
             partId: assignment.pallet.part.partId,
           },
         });
-        
+
         // создаем новую запись для нового станка
         await tx.partMachineAssignment.upsert({
           where: {
@@ -711,7 +722,10 @@ export class MachinMasterService {
         undefined,
         { machineId: oldMachineId },
         { machineId: targetMachineId },
-        { palletId: assignment.palletId, partId: assignment.pallet.part.partId },
+        {
+          palletId: assignment.palletId,
+          partId: assignment.pallet.part.partId,
+        },
       );
 
       // Отправляем WebSocket уведомление о событии

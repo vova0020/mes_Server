@@ -38,7 +38,8 @@ export class RouteListController {
     this.logger.log(`Получен запрос на данные поддона: ${palletId}`);
 
     try {
-      const palletData = await this.routeListService.getPalletRouteData(palletId);
+      const palletData =
+        await this.routeListService.getPalletRouteData(palletId);
 
       if (!palletData) {
         this.logger.warn(`Поддон с ID ${palletId} не найден`);
@@ -52,7 +53,9 @@ export class RouteListController {
         throw error;
       }
 
-      this.logger.error(`Ошибка при получении данных поддона: ${error.message}`);
+      this.logger.error(
+        `Ошибка при получении данных поддона: ${error.message}`,
+      );
       throw new InternalServerErrorException(
         'Произошла ошибка при получении данных поддона',
       );

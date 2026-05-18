@@ -452,18 +452,22 @@ export class PackingTaskManagementService {
     };
 
     // Обработка completedQuantity для статуса IN_PROGRESS
-    if (dto.status === PackingTaskStatus.IN_PROGRESS && dto.completedQuantity !== undefined) {
+    if (
+      dto.status === PackingTaskStatus.IN_PROGRESS &&
+      dto.completedQuantity !== undefined
+    ) {
       // completedQuantity - это ДОПОЛНИТЕЛЬНОЕ количество к уже выполненному
-      const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
-      
+      const newCompletedQuantity =
+        existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+
       if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
         throw new BadRequestException(
           `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
         );
       }
-      
+
       updateData.completedQuantity = newCompletedQuantity;
-      
+
       // Проверяем наличие достаточного количества деталей для выполнения
       await this.checkAvailablePartsForTask(
         existingTask.packageId,
@@ -486,31 +490,36 @@ export class PackingTaskManagementService {
       existingTask.status !== PackingTaskStatus.COMPLETED
     ) {
       updateData.completedAt = new Date();
-      
+
       // Вычисляем количество для завершения
       let quantityToComplete: number;
-      
+
       if (dto.completedQuantity !== undefined) {
         // completedQuantity - это ДОПОЛНИТЕЛЬНОЕ количество к уже выполненному
         quantityToComplete = dto.completedQuantity;
-        const newCompletedQuantity = existingTask.completedQuantity.toNumber() + dto.completedQuantity;
-        
+        const newCompletedQuantity =
+          existingTask.completedQuantity.toNumber() + dto.completedQuantity;
+
         if (newCompletedQuantity > existingTask.assignedQuantity.toNumber()) {
           throw new BadRequestException(
             `Общее выполненное количество (${newCompletedQuantity}) не может превышать назначенное (${existingTask.assignedQuantity.toNumber()})`,
           );
         }
-        
+
         updateData.completedQuantity = newCompletedQuantity;
       } else {
         // Если не указано completedQuantity, завершаем весь остаток
-        quantityToComplete = existingTask.assignedQuantity.toNumber() - existingTask.completedQuantity.toNumber();
+        quantityToComplete =
+          existingTask.assignedQuantity.toNumber() -
+          existingTask.completedQuantity.toNumber();
         updateData.completedQuantity = existingTask.assignedQuantity.toNumber();
       }
 
       // ПРОВЕРЯЕМ СКОЛЬКО РЕАЛЬНО СКОМПЛЕКТОВАНО
-      const assembledQuantity = await this.calculateAssembledQuantity(existingTask.packageId);
-      
+      const assembledQuantity = await this.calculateAssembledQuantity(
+        existingTask.packageId,
+      );
+
       if (quantityToComplete > assembledQuantity) {
         throw new BadRequestException(
           `Недостаточно скомплектованных деталей для завершения. Требуется: ${quantityToComplete}, скомплектовано: ${assembledQuantity}`,
@@ -647,7 +656,7 @@ export class PackingTaskManagementService {
           ['room:statisticks'],
           'statisticks:event',
           { status: 'updated' },
-        ); 
+        );
 
         return this.mapToResponseDto(updatedTask);
       });
@@ -1259,11 +1268,19 @@ export class PackingTaskManagementService {
         const assignedToThisPackage = assignment.quantity.toNumber();
 
         // Берем минимум из назначенного на упаковку и доступного с поддона
-        return sum + Math.max(0, Math.min(assignedToThisPackage, availableFromPallet));
+        return (
+          sum +
+          Math.max(0, Math.min(assignedToThisPackage, availableFromPallet))
+        );
       }, 0);
 
-      const assembledForThisPart = Math.floor(availableQuantity / requiredPerPackage);
-      minAssembledPackages = Math.min(minAssembledPackages, assembledForThisPart);
+      const assembledForThisPart = Math.floor(
+        availableQuantity / requiredPerPackage,
+      );
+      minAssembledPackages = Math.min(
+        minAssembledPackages,
+        assembledForThisPart,
+      );
     }
 
     return minAssembledPackages === Infinity ? 0 : minAssembledPackages;

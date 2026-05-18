@@ -18,7 +18,7 @@ export class CreatePackingAssignmentDto {
   assignedTo?: number; // ID пользователя, которому назначается задача
 
   @IsOptional()
-  @Transform(({ value }) => value !== undefined ? parseFloat(value) : 0)
+  @Transform(({ value }) => (value !== undefined ? parseFloat(value) : 0))
   @IsNumber({}, { message: 'Приоритет должен быть числом' })
   @Min(0, { message: 'Приоритет не может быть отрицательным' })
   priority?: number = 0; // Приоритет задачи (по умолчанию 0)

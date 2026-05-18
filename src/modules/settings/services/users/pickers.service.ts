@@ -23,7 +23,7 @@ export class PickersService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   // ========================================
   // CRUD операции с комплектовщиками
@@ -80,7 +80,6 @@ export class PickersService {
         'user:event',
         { status: 'updated' },
       );
-
 
       return this.formatPickerResponse(picker);
     } catch (error) {
@@ -177,9 +176,7 @@ export class PickersService {
           { status: 'updated' },
         );
 
-
         // Если была создана привязка роли, отправляем дополнительное уведомление
-
 
         return result;
       });
@@ -357,7 +354,6 @@ export class PickersService {
         'user:event',
         { status: 'updated' },
       );
-
     } catch (error) {
       this.logger.error(
         `Ошибка удаления комплектовщика ID ${pickerId}: ${error.message}`,
@@ -421,11 +417,11 @@ export class PickersService {
         login: picker.user.login,
         userDetail: picker.user.userDetail
           ? {
-            firstName: picker.user.userDetail.firstName,
-            lastName: picker.user.userDetail.lastName,
-            phone: picker.user.userDetail.phone,
-            position: picker.user.userDetail.position,
-          }
+              firstName: picker.user.userDetail.firstName,
+              lastName: picker.user.userDetail.lastName,
+              phone: picker.user.userDetail.phone,
+              position: picker.user.userDetail.position,
+            }
           : undefined,
       },
       createdAt: picker.user.createdAt,
@@ -494,7 +490,9 @@ export class PickersService {
       : `Комплектовщик ${picker.pickerId}`;
   }
 
-  private getChangesFromUpdateDto(updateDto: UpdatePickerDto): Record<string, boolean> {
+  private getChangesFromUpdateDto(
+    updateDto: UpdatePickerDto,
+  ): Record<string, boolean> {
     const changes: Record<string, boolean> = {};
 
     if (updateDto.userId !== undefined) {

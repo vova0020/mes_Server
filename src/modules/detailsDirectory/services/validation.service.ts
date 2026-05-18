@@ -61,8 +61,8 @@ export class ValidationService {
    * Проверяет каждый объект по partSku, находит в БД, собирает пакеты и diff’ы.
    */
   async checkAndEnhance(
-    items: ValidatedPart[], 
-    packageId?: number, 
+    items: ValidatedPart[],
+    packageId?: number,
     // quantity?: number
   ): Promise<ValidatedPart[]> {
     // Если указан packageId, проверяем существование упаковки
@@ -80,7 +80,7 @@ export class ValidationService {
           where: { partSku: parsed.partSku },
           include: {
             packageDetails: {
-              include: { 
+              include: {
                 package: true,
                 route: true,
               },
@@ -89,7 +89,9 @@ export class ValidationService {
         });
 
         // Получаем доступные маршруты на основе материала
-        const availableRoutes = await this.getAvailableRoutes(parsed.materialSku);
+        const availableRoutes = await this.getAvailableRoutes(
+          parsed.materialSku,
+        );
 
         if (!dbDetail) {
           // Детали нет в каталоге
@@ -114,7 +116,7 @@ export class ValidationService {
         let hasPackageConnection = false;
         if (packageId) {
           hasPackageConnection = dbDetail.packageDetails.some(
-            (pd) => pd.packageId === packageId
+            (pd) => pd.packageId === packageId,
           );
         }
 
@@ -165,8 +167,13 @@ export class ValidationService {
         // Если нет связи с указанной упаковкой - берем из первой найденной
         let currentRouteId: number | undefined;
         if (packageId) {
-          const packageConnection = dbDetail.packageDetails.find(pd => pd.packageId === packageId);
-          currentRouteId = packageConnection?.routeId ?? dbDetail.packageDetails[0]?.routeId ?? undefined;
+          const packageConnection = dbDetail.packageDetails.find(
+            (pd) => pd.packageId === packageId,
+          );
+          currentRouteId =
+            packageConnection?.routeId ??
+            dbDetail.packageDetails[0]?.routeId ??
+            undefined;
         } else {
           currentRouteId = dbDetail.packageDetails[0]?.routeId ?? undefined;
         }
@@ -190,7 +197,9 @@ export class ValidationService {
    * Получает доступные маршруты для детали на основе материала
    * Материал → Линия → Маршруты
    */
-  private async getAvailableRoutes(materialSku?: string): Promise<{ routeId: number; routeName: string }[]> {
+  private async getAvailableRoutes(
+    materialSku?: string,
+  ): Promise<{ routeId: number; routeName: string }[]> {
     if (!materialSku) {
       return [];
     }

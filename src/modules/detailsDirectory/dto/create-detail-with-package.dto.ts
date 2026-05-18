@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class CreateDetailWithPackageDto {
   @IsString()

@@ -57,9 +57,10 @@ export class ProductionOrdersController {
   }
 
   @Get('package-directory')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Получить список упаковок из справочника',
-    description: 'Возвращает все доступные упаковки из справочника с их деталями для создания производственных заказов'
+    description:
+      'Возвращает все доступные упаковки из справочника с их деталями для создания производственных заказов',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -170,7 +171,10 @@ export class ProductionOrdersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePriorityDto: UpdateOrderPriorityDto,
   ): Promise<ProductionOrderResponseDto> {
-    return this.productionOrdersService.updatePriority(id, updatePriorityDto.priority);
+    return this.productionOrdersService.updatePriority(
+      id,
+      updatePriorityDto.priority,
+    );
   }
 
   @Delete(':id')

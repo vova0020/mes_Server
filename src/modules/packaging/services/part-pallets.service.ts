@@ -232,7 +232,9 @@ export class PartPalletsService {
 
       const readyForPackaging =
         nonFinalStageIds.length === 0 ||
-        nonFinalStageIds.every((stageId) => completedStageIds.includes(stageId));
+        nonFinalStageIds.every((stageId) =>
+          completedStageIds.includes(stageId),
+        );
 
       return {
         palletId: pallet.palletId,

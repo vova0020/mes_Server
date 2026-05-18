@@ -7,7 +7,12 @@ import {
   Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { unlink } from 'fs/promises';
@@ -130,7 +135,8 @@ export class OrderParserController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Ошибка создания заказа (упаковки не найдены или другие ошибки)',
+    description:
+      'Ошибка создания заказа (упаковки не найдены или другие ошибки)',
   })
   async saveOrder(@Body() dto: SaveOrderFromFileDto) {
     return this.orderFromFileService.saveOrder(dto);

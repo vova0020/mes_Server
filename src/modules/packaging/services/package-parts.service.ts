@@ -9,8 +9,8 @@ import {
 @Injectable()
 export class PackagePartsService {
   private readonly logger = new Logger(PackagePartsService.name);
-  
-  constructor(private readonly prisma: PrismaService) { }
+
+  constructor(private readonly prisma: PrismaService) {}
 
   // Получение деталей по ID упаковки
   async getPartsByPackageId(
@@ -73,7 +73,7 @@ export class PackagePartsService {
     const detailsFromDirectory = await this.prisma.detailDirectory.findMany({
       where: {
         partSku: {
-          in: compositionRaw.map(c => c.partCode),
+          in: compositionRaw.map((c) => c.partCode),
         },
       },
       select: {
@@ -85,11 +85,13 @@ export class PackagePartsService {
     // Логирование для заказа 54
     if (packageInfo.order.orderId === 54) {
       this.logger.log(`\n=== ЗАКАЗ 54, УПАКОВКА ${packageId} ===`);
-      this.logger.log(`Детали из composition: ${compositionRaw.map(c => `${c.partCode}`).join(', ')}`);
+      this.logger.log(
+        `Детали из composition: ${compositionRaw.map((c) => `${c.partCode}`).join(', ')}`,
+      );
     }
 
     const substackLocationMap = new Map(
-      detailsFromDirectory.map(d => [d.partSku, d.conveyorPosition])
+      detailsFromDirectory.map((d) => [d.partSku, d.conveyorPosition]),
     );
 
     // Получаем детали из productionPackageParts (там правильные partId)
@@ -171,32 +173,41 @@ export class PackagePartsService {
     });
 
     // Создаем Map по partCode для быстрого доступа
-    const partsMap = new Map(productionParts.map(pp => [pp.part.partCode, pp.part]));
+    const partsMap = new Map(
+      productionParts.map((pp) => [pp.part.partCode, pp.part]),
+    );
 
     // Логирование для заказа 54
     if (packageInfo.order.orderId === 54) {
-      this.logger.log(`Детали из productionPackageParts: ${productionParts.map(pp => `${pp.part.partCode} (id: ${pp.part.partId}, поддонов: ${pp.part.pallets.length})`).join(', ')}`);
-      const part1223 = productionParts.find(pp => pp.part.partId === 1223);
+      this.logger.log(
+        `Детали из productionPackageParts: ${productionParts.map((pp) => `${pp.part.partCode} (id: ${pp.part.partId}, поддонов: ${pp.part.pallets.length})`).join(', ')}`,
+      );
+      const part1223 = productionParts.find((pp) => pp.part.partId === 1223);
       if (part1223) {
         this.logger.log(`\nДеталь 1223 найдена:`);
         this.logger.log(`  - partCode: ${part1223.part.partCode}`);
-        this.logger.log(`  - Количество поддонов: ${part1223.part.pallets.length}`);
-        this.logger.log(`  - Поддоны: ${JSON.stringify(part1223.part.pallets.map(p => ({ id: p.palletId, name: p.palletName, qty: p.quantity.toNumber() })))}`);
+        this.logger.log(
+          `  - Количество поддонов: ${part1223.part.pallets.length}`,
+        );
+        this.logger.log(
+          `  - Поддоны: ${JSON.stringify(part1223.part.pallets.map((p) => ({ id: p.palletId, name: p.palletName, qty: p.quantity.toNumber() })))}`,
+        );
       }
     }
 
     // Вычисляем готовность деталей
     const readyParts = productionParts.filter((pp) => {
       const completedStages = pp.part.partRouteProgress.filter(
-        progress => progress.status === 'COMPLETED'
+        (progress) => progress.status === 'COMPLETED',
       );
       const totalStages = pp.part.partRouteProgress.length;
       return totalStages > 0 && completedStages.length >= totalStages - 1;
     });
-    
-    const readiness = productionParts.length > 0 
-      ? Math.round((readyParts.length / productionParts.length) * 100)
-      : 0;
+
+    const readiness =
+      productionParts.length > 0
+        ? Math.round((readyParts.length / productionParts.length) * 100)
+        : 0;
 
     // Преобразуем данные
     const parts: PackagePartDetailDto[] = await Promise.all(
@@ -220,74 +231,98 @@ export class PackagePartsService {
         if (part?.pallets) {
           // Получаем нефинальные этапы маршрута
           const nonFinalStageIds = part.route.routeStages
-            .filter(stage => !stage.stage.finalStage)
-            .map(stage => stage.routeStageId);
+            .filter((stage) => !stage.stage.finalStage)
+            .map((stage) => stage.routeStageId);
 
           if (part.partId === 1223) {
-            this.logger.log(`Нефинальные этапы: ${JSON.stringify(nonFinalStageIds)}`);
+            this.logger.log(
+              `Нефинальные этапы: ${JSON.stringify(nonFinalStageIds)}`,
+            );
           }
 
           // Получаем статистику по отбраковке и возврату для всех поддонов детали
-          const palletIds = part.pallets.map(p => p.palletId);
-          
+          const palletIds = part.pallets.map((p) => p.palletId);
+
           if (part.partId === 1223) {
             this.logger.log(`ID поддонов: ${JSON.stringify(palletIds)}`);
           }
-          
-          const defectMovements = await this.prisma.inventoryMovement.aggregate({
-            where: {
-              partId: part.partId,
-              reason: 'DEFECT',
+
+          const defectMovements = await this.prisma.inventoryMovement.aggregate(
+            {
+              where: {
+                partId: part.partId,
+                reason: 'DEFECT',
+              },
+              _sum: { deltaQuantity: true },
             },
-            _sum: { deltaQuantity: true },
-          });
-          
-          const returnMovements = await this.prisma.inventoryMovement.aggregate({
-            where: {
-              partId: part.partId,
-              reason: 'RETURN_FROM_RECLAMATION',
+          );
+
+          const returnMovements = await this.prisma.inventoryMovement.aggregate(
+            {
+              where: {
+                partId: part.partId,
+                reason: 'RETURN_FROM_RECLAMATION',
+              },
+              _sum: { deltaQuantity: true },
             },
-            _sum: { deltaQuantity: true },
-          });
-          
+          );
+
           // deltaQuantity для DEFECT отрицательное, поэтому берем абсолютное значение
-          totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+          totalDefected = Math.abs(
+            defectMovements._sum.deltaQuantity?.toNumber() || 0,
+          );
           totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
           if (part.partId === 1223) {
-            this.logger.log(`Отбраковано: ${totalDefected}, Возвращено: ${totalReturned}`);
+            this.logger.log(
+              `Отбраковано: ${totalDefected}, Возвращено: ${totalReturned}`,
+            );
           }
 
           for (const pallet of part.pallets) {
             // Получаем общее использованное количество с поддона
-            const totalUsed = await this.prisma.palletPackageAssignment.aggregate({
-              where: { palletId: pallet.palletId },
-              _sum: { usedQuantity: true },
-            });
-            
+            const totalUsed =
+              await this.prisma.palletPackageAssignment.aggregate({
+                where: { palletId: pallet.palletId },
+                _sum: { usedQuantity: true },
+              });
+
             const usedQuantity = totalUsed._sum.usedQuantity?.toNumber() || 0;
             const availableOnPallet = pallet.quantity.toNumber() - usedQuantity;
-            
+
             if (part.partId === 1223) {
-              this.logger.log(`\nПоддон ${pallet.palletId} (${pallet.palletName}):`);
-              this.logger.log(`  - Количество на поддоне: ${pallet.quantity.toNumber()}`);
-              this.logger.log(`  - Использовано (usedQuantity): ${usedQuantity}`);
+              this.logger.log(
+                `\nПоддон ${pallet.palletId} (${pallet.palletName}):`,
+              );
+              this.logger.log(
+                `  - Количество на поддоне: ${pallet.quantity.toNumber()}`,
+              );
+              this.logger.log(
+                `  - Использовано (usedQuantity): ${usedQuantity}`,
+              );
               this.logger.log(`  - Доступно: ${availableOnPallet}`);
-              this.logger.log(`  - Прогресс этапов: ${JSON.stringify(pallet.palletStageProgress.map(p => ({ routeStageId: p.routeStageId, status: p.status })))}`);
+              this.logger.log(
+                `  - Прогресс этапов: ${JSON.stringify(pallet.palletStageProgress.map((p) => ({ routeStageId: p.routeStageId, status: p.status })))}`,
+              );
             }
-            
+
             totalOnPallets += availableOnPallet;
 
             // Проверяем готовность поддона к упаковке
             const completedStageIds = pallet.palletStageProgress
-              .filter(progress => progress.status === 'COMPLETED')
-              .map(progress => progress.routeStageId);
+              .filter((progress) => progress.status === 'COMPLETED')
+              .map((progress) => progress.routeStageId);
 
-            const readyForPackaging = nonFinalStageIds.length === 0 ||
-              nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
+            const readyForPackaging =
+              nonFinalStageIds.length === 0 ||
+              nonFinalStageIds.every((stageId) =>
+                completedStageIds.includes(stageId),
+              );
 
             if (part.partId === 1223) {
-              this.logger.log(`  - Завершенные этапы: ${JSON.stringify(completedStageIds)}`);
+              this.logger.log(
+                `  - Завершенные этапы: ${JSON.stringify(completedStageIds)}`,
+              );
               this.logger.log(`  - Готов к упаковке: ${readyForPackaging}`);
             }
 
@@ -300,7 +335,9 @@ export class PackagePartsService {
         if (part?.partId === 1223) {
           this.logger.log(`\nИТОГО для детали 1223:`);
           this.logger.log(`  - totalOnPallets: ${totalOnPallets}`);
-          this.logger.log(`  - availableForPackaging: ${availableForPackaging}`);
+          this.logger.log(
+            `  - availableForPackaging: ${availableForPackaging}`,
+          );
           this.logger.log(`=== КОНЕЦ ДЕТАЛИ 1223 ===\n`);
         }
 
@@ -330,16 +367,18 @@ export class PackagePartsService {
             routeId: comp.route.routeId,
             routeName: comp.route.routeName,
           },
-          pallets: part?.pallets.map((pallet) => ({
-            palletId: pallet.palletId,
-            palletName: pallet.palletName,
-          })) || [],
-          routeProgress: part?.partRouteProgress.map((progress) => ({
-            routeStageId: progress.routeStageId,
-            stageName: progress.routeStage.stage.stageName,
-            status: progress.status as string,
-            completedAt: progress.completedAt,
-          })) || [],
+          pallets:
+            part?.pallets.map((pallet) => ({
+              palletId: pallet.palletId,
+              palletName: pallet.palletName,
+            })) || [],
+          routeProgress:
+            part?.partRouteProgress.map((progress) => ({
+              routeStageId: progress.routeStageId,
+              stageName: progress.routeStage.stage.stageName,
+              status: progress.status as string,
+              completedAt: progress.completedAt,
+            })) || [],
         };
       }),
     );
@@ -446,9 +485,7 @@ export class PackagePartsService {
     });
 
     if (!part) {
-      throw new NotFoundException(
-        `Деталь с ID ${partId} не найдена`,
-      );
+      throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
     }
 
     // Получаем данные из packageComposition
@@ -484,8 +521,8 @@ export class PackagePartsService {
     let totalReturned = 0;
 
     const nonFinalStageIds = part.route.routeStages
-      .filter(stage => !stage.stage.finalStage)
-      .map(stage => stage.routeStageId);
+      .filter((stage) => !stage.stage.finalStage)
+      .map((stage) => stage.routeStageId);
 
     // Логирование для детали 1223
     if (part.partId === 1223) {
@@ -496,12 +533,12 @@ export class PackagePartsService {
     }
 
     // Получаем статистику по отбраковке и возврату
-    const palletIds = part.pallets.map(p => p.palletId);
-    
+    const palletIds = part.pallets.map((p) => p.palletId);
+
     if (part.partId === 1223) {
       this.logger.log(`ID поддонов: ${JSON.stringify(palletIds)}`);
     }
-    
+
     const defectMovements = await this.prisma.inventoryMovement.aggregate({
       where: {
         partId: part.partId,
@@ -509,7 +546,7 @@ export class PackagePartsService {
       },
       _sum: { deltaQuantity: true },
     });
-    
+
     const returnMovements = await this.prisma.inventoryMovement.aggregate({
       where: {
         partId: part.partId,
@@ -517,12 +554,16 @@ export class PackagePartsService {
       },
       _sum: { deltaQuantity: true },
     });
-    
-    totalDefected = Math.abs(defectMovements._sum.deltaQuantity?.toNumber() || 0);
+
+    totalDefected = Math.abs(
+      defectMovements._sum.deltaQuantity?.toNumber() || 0,
+    );
     totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
     if (part.partId === 1223) {
-      this.logger.log(`Отбраковано: ${totalDefected}, Возвращено: ${totalReturned}`);
+      this.logger.log(
+        `Отбраковано: ${totalDefected}, Возвращено: ${totalReturned}`,
+      );
     }
 
     for (const pallet of part.pallets) {
@@ -531,29 +572,38 @@ export class PackagePartsService {
         where: { palletId: pallet.palletId },
         _sum: { usedQuantity: true },
       });
-      
+
       const usedQuantity = totalUsed._sum.usedQuantity?.toNumber() || 0;
       const availableOnPallet = pallet.quantity.toNumber() - usedQuantity;
-      
+
       if (part.partId === 1223) {
         this.logger.log(`\nПоддон ${pallet.palletId} (${pallet.palletName}):`);
-        this.logger.log(`  - Количество на поддоне: ${pallet.quantity.toNumber()}`);
+        this.logger.log(
+          `  - Количество на поддоне: ${pallet.quantity.toNumber()}`,
+        );
         this.logger.log(`  - Использовано (usedQuantity): ${usedQuantity}`);
         this.logger.log(`  - Доступно: ${availableOnPallet}`);
-        this.logger.log(`  - Прогресс этапов: ${JSON.stringify(pallet.palletStageProgress.map(p => ({ routeStageId: p.routeStageId, status: p.status })))}`);
+        this.logger.log(
+          `  - Прогресс этапов: ${JSON.stringify(pallet.palletStageProgress.map((p) => ({ routeStageId: p.routeStageId, status: p.status })))}`,
+        );
       }
-      
+
       totalOnPallets += availableOnPallet;
 
       const completedStageIds = pallet.palletStageProgress
-        .filter(progress => progress.status === 'COMPLETED')
-        .map(progress => progress.routeStageId);
+        .filter((progress) => progress.status === 'COMPLETED')
+        .map((progress) => progress.routeStageId);
 
-      const readyForPackaging = nonFinalStageIds.length === 0 ||
-        nonFinalStageIds.every(stageId => completedStageIds.includes(stageId));
+      const readyForPackaging =
+        nonFinalStageIds.length === 0 ||
+        nonFinalStageIds.every((stageId) =>
+          completedStageIds.includes(stageId),
+        );
 
       if (part.partId === 1223) {
-        this.logger.log(`  - Завершенные этапы: ${JSON.stringify(completedStageIds)}`);
+        this.logger.log(
+          `  - Завершенные этапы: ${JSON.stringify(completedStageIds)}`,
+        );
         this.logger.log(`  - Готов к упаковке: ${readyForPackaging}`);
       }
 
@@ -599,14 +649,12 @@ export class PackagePartsService {
         palletId: pallet.palletId,
         palletName: pallet.palletName,
       })),
-      routeProgress: part.partRouteProgress.map(
-        (progress) => ({
-          routeStageId: progress.routeStageId,
-          stageName: progress.routeStage.stage.stageName,
-          status: progress.status as string,
-          completedAt: progress.completedAt,
-        }),
-      ),
+      routeProgress: part.partRouteProgress.map((progress) => ({
+        routeStageId: progress.routeStageId,
+        stageName: progress.routeStage.stage.stageName,
+        status: progress.status as string,
+        completedAt: progress.completedAt,
+      })),
     };
   }
 

@@ -20,7 +20,7 @@ export class BufferCellsService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   // ================================
   // CRUD операции для ячеек буфера
@@ -483,11 +483,11 @@ export class BufferCellsService {
         utilizationPercentage:
           Number(totalCapacity._sum.capacity) > 0
             ? Math.round(
-              (Number(totalCurrentLoad._sum.currentLoad) /
-                Number(totalCapacity._sum.capacity)) *
-              100 *
-              100,
-            ) / 100
+                (Number(totalCurrentLoad._sum.currentLoad) /
+                  Number(totalCapacity._sum.capacity)) *
+                  100 *
+                  100,
+              ) / 100
             : 0,
       };
 

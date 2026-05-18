@@ -49,7 +49,7 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
     WorkMonitorModule,
     AuditModule,
     StatisticsModule,
-    
+
     // MachinNoSmenModule,
     // MachinModule,
     // YpakModule,

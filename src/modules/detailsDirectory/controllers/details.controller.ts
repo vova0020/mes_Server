@@ -84,10 +84,13 @@ export class DetailsController {
     @Param('id', ParseIntPipe) id: number,
     @Param('packageId', ParseIntPipe) packageId: number,
   ) {
-    const result = await this.detailsService.deleteDetailFromPackage(id, packageId);
+    const result = await this.detailsService.deleteDetailFromPackage(
+      id,
+      packageId,
+    );
     return {
-      message: result.detailDeleted 
-        ? 'Деталь полностью удалена' 
+      message: result.detailDeleted
+        ? 'Деталь полностью удалена'
         : 'Связь детали с упаковкой удалена',
       data: result,
     };

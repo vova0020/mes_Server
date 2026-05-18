@@ -3,7 +3,9 @@ import { OrderStatisticsService } from '../services/order-statistics.service';
 
 @Controller('order-statistics')
 export class OrderStatisticsController {
-  constructor(private readonly orderStatisticsService: OrderStatisticsService) {}
+  constructor(
+    private readonly orderStatisticsService: OrderStatisticsService,
+  ) {}
 
   @Get()
   async getAllOrders() {

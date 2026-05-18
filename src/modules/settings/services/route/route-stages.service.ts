@@ -20,7 +20,7 @@ export class RouteStagesService {
   constructor(
     private prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   // ================================
   // CRUD операции для этапов маршрута
@@ -214,7 +214,8 @@ export class RouteStagesService {
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Создан этап маршрута ID: ${routeStage.routeStageId} для маршрута "${route.routeName}", этап: "${stage.stageName}"${routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
+        `Создан этап маршрута ID: ${routeStage.routeStageId} для маршрута "${route.routeName}", этап: "${stage.stageName}"${
+          routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
         }, позиция: ${sequenceNumber} за ${executionTime}ms`,
       );
 
@@ -351,8 +352,10 @@ export class RouteStagesService {
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Обновлен этап маршрута ID: ${routeStageId} для маршрута "${routeStage.route.routeName}" с "${oldStageName}${oldSubstageName ? ` > ${oldSubstageName}` : ''
-        }" на "${newStageName}${newSubstageName ? ` > ${newSubstageName}` : ''
+        `Обновлен этап маршрута ID: ${routeStageId} для маршрута "${routeStage.route.routeName}" с "${oldStageName}${
+          oldSubstageName ? ` > ${oldSubstageName}` : ''
+        }" на "${newStageName}${
+          newSubstageName ? ` > ${newSubstageName}` : ''
         }" за ${executionTime}ms`,
       );
 
@@ -449,7 +452,8 @@ export class RouteStagesService {
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
-        `Этап "${routeStage.stage.stageName}"${routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
+        `Этап "${routeStage.stage.stageName}"${
+          routeStage.substage ? ` > "${routeStage.substage.substageName}"` : ''
         } успешно удален из маршрута "${route.routeName}" за ${executionTime}ms`,
       );
 
@@ -526,9 +530,10 @@ export class RouteStagesService {
         if (usageCount > 0) {
           totalUsageCount += usageCount;
           usageDetails.push(
-            `"${routeStage.stage.stageName}${routeStage.substage
-              ? ` > ${routeStage.substage.substageName}`
-              : ''
+            `"${routeStage.stage.stageName}${
+              routeStage.substage
+                ? ` > ${routeStage.substage.substageName}`
+                : ''
             }" (${usageCount} записей)`,
           );
         }

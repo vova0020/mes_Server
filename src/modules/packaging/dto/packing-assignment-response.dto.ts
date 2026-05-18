@@ -54,12 +54,12 @@ export interface PackingAssignmentResponseDto {
   completedAt?: Date;
   assignedQuantity: number;
   completedQuantity: number;
-  
+
   // Связанные данные
   package: PackageInfo;
   machine: MachineInfo;
   assignedUser?: AssignedUserInfo;
-  
+
   // Данные о заказе и упаковочной единице (если есть связь)
   productionPackage?: ProductionPackageInfo;
 }

@@ -16,7 +16,9 @@ export interface PackageValidationResult {
 export class PackageValidationService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async validatePackages(packages: Array<{ code: string; name: string }>): Promise<PackageValidationResult[]> {
+  async validatePackages(
+    packages: Array<{ code: string; name: string }>,
+  ): Promise<PackageValidationResult[]> {
     const results: PackageValidationResult[] = [];
 
     for (const pkg of packages) {

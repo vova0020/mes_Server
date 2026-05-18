@@ -1,4 +1,3 @@
-
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNumber, IsOptional, IsInt } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -25,7 +24,8 @@ export class UpdateTaskPriorityDto {
   operationId: number;
 
   @ApiProperty({
-    description: 'Новый приоритет задания (чем меньше число, тем выше приоритет)',
+    description:
+      'Новый приоритет задания (чем меньше число, тем выше приоритет)',
     example: 1,
   })
   @IsInt()
@@ -72,7 +72,6 @@ export class MachineTaskResponseDto {
     example: 1,
     nullable: true,
   })
-
   @ApiProperty({
     description: 'ID заказа',
     example: 1,
@@ -127,7 +126,7 @@ export class MachineTaskResponseDto {
     enum: ['ON_MACHINE', 'IN_PROGRESS', 'COMPLETED', 'BUFFERED'],
   })
   status: string;
-  
+
   @ApiProperty({
     description: 'Статус выполнения',
     example: 'COMPLETED',

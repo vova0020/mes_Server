@@ -1,7 +1,7 @@
 // DTO для структурированного ответа на запрос авторизации
 export class LoginResponseDto {
   token: string;
-  
+
   user: {
     id: number;
     login: string;
@@ -12,14 +12,14 @@ export class LoginResponseDto {
     lastName?: string;
     position?: string;
   };
-  
+
   assignments: {
     stages?: {
       id: number;
       name: string;
       finalStage: boolean;
     }[];
-    
+
     machines?: {
       id: number;
       name: string;

@@ -57,4 +57,12 @@ export class GetDefectStatsDto {
   @Type(() => Number)
   @IsInt()
   stageId?: number;
+
+  /**
+   * ID станка (фильтр по станку)
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  machineId?: number;
 }

@@ -20,8 +20,6 @@ export class OrderInfoDto {
     nullable: true,
   })
   progress: number | null;
-
-
 }
 
 export class DetailInfoDto {

@@ -11,7 +11,6 @@ import {
 } from '../../dto/line/production-stage-level1.dto';
 import { SocketService } from '../../../websocket/services/socket.service';
 
-
 @Injectable()
 export class ProductionStagesLevel1Service {
   constructor(
@@ -66,7 +65,6 @@ export class ProductionStagesLevel1Service {
       'stage1:event',
       { status: 'updated' },
     );
-   
 
     return newStage;
   }
@@ -181,7 +179,7 @@ export class ProductionStagesLevel1Service {
       substagesCount: updatedStage._count.productionStagesLevel2,
     };
 
-   // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
         'room:masterceh',

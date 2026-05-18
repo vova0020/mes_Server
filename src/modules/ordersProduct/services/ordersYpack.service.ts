@@ -120,11 +120,17 @@ export class OrdersYpackService {
                   const prevPalletProgress = pallet.palletStageProgress.find(
                     (p) => p.routeStageId === prevStage.routeStageId,
                   );
-                  if (prevPalletProgress && prevPalletProgress.status === 'COMPLETED') {
+                  if (
+                    prevPalletProgress &&
+                    prevPalletProgress.status === 'COMPLETED'
+                  ) {
                     palletAvailableQuantity += palletQuantity;
                   }
                 });
-                availableQuantity += Math.min(palletAvailableQuantity, totalInOrder);
+                availableQuantity += Math.min(
+                  palletAvailableQuantity,
+                  totalInOrder,
+                );
               }
             } else {
               // Если поддонов нет, используем прогресс детали
@@ -146,13 +152,13 @@ export class OrdersYpackService {
         // Считаем общее количество упаковок и выполненное количество
         let totalPackingQuantity = 0;
         let completedPackingQuantity = 0;
-        
+
         order.packages.forEach((pkg) => {
           totalPackingQuantity += pkg.quantity.toNumber();
-          
+
           const packageCompletedQuantity = (pkg.packingTasks || []).reduce(
             (sum, task) => sum + task.completedQuantity.toNumber(),
-            0
+            0,
           );
           completedPackingQuantity += packageCompletedQuantity;
         });
@@ -164,7 +170,9 @@ export class OrdersYpackService {
             : 0;
         completed =
           totalPackingQuantity > 0
-            ? Math.round((completedPackingQuantity / totalPackingQuantity) * 100)
+            ? Math.round(
+                (completedPackingQuantity / totalPackingQuantity) * 100,
+              )
             : 0;
 
         return {
@@ -219,7 +227,8 @@ export class OrdersYpackService {
         return part.pallets.some((pallet) => {
           return pallet.palletStageProgress.some(
             (progress) =>
-              progress.status === 'IN_PROGRESS' || progress.status === 'COMPLETED',
+              progress.status === 'IN_PROGRESS' ||
+              progress.status === 'COMPLETED',
           );
         });
       }

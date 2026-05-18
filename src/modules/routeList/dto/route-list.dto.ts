@@ -42,13 +42,19 @@ export class PalletRouteDataDto {
   @ApiProperty({ description: 'Общее количество детали в заказе' })
   totalOrderQuantity: number;
 
-  @ApiProperty({ description: 'Наименование облицовки кромки L1', nullable: true })
+  @ApiProperty({
+    description: 'Наименование облицовки кромки L1',
+    nullable: true,
+  })
   edgingNameL1: string | null;
 
   @ApiProperty({ description: 'Артикул облицовки кромки L1', nullable: true })
   edgingSkuL1: string | null;
 
-  @ApiProperty({ description: 'Наименование облицовки кромки W1', nullable: true })
+  @ApiProperty({
+    description: 'Наименование облицовки кромки W1',
+    nullable: true,
+  })
   edgingNameW1: string | null;
 
   @ApiProperty({ description: 'Артикул облицовки кромки W1', nullable: true })

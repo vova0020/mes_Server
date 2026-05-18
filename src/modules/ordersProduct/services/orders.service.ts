@@ -104,17 +104,17 @@ export class OrdersService {
 
           if (stageIndex !== -1) {
             const routeStage = routeStages[stageIndex];
-            
+
             // Только детали, которые проходят через этот этап, учитываются в базе
             totalQuantityForStage += totalInOrder;
 
             // Если есть поддоны, считаем выполненные по поддонам
             if (part.pallets && part.pallets.length > 0) {
               let palletCompletedQuantity = 0;
-              
+
               part.pallets.forEach((pallet) => {
                 const palletQuantity = pallet.quantity.toNumber();
-                
+
                 const palletProgress = pallet.palletStageProgress.find(
                   (p) => p.routeStageId === routeStage.routeStageId,
                 );
@@ -123,10 +123,13 @@ export class OrdersService {
                   palletCompletedQuantity += palletQuantity;
                 }
               });
-              
+
               // Добавляем выполненное количество с поддонов (но не больше чем в заказе)
-              completedQuantity += Math.min(palletCompletedQuantity, totalInOrder);
-              
+              completedQuantity += Math.min(
+                palletCompletedQuantity,
+                totalInOrder,
+              );
+
               // Доступные - для первого этапа всегда все количество в заказе
               if (stageIndex === 0) {
                 availableQuantity += totalInOrder;
@@ -139,11 +142,17 @@ export class OrdersService {
                   const prevPalletProgress = pallet.palletStageProgress.find(
                     (p) => p.routeStageId === prevStage.routeStageId,
                   );
-                  if (prevPalletProgress && prevPalletProgress.status === 'COMPLETED') {
+                  if (
+                    prevPalletProgress &&
+                    prevPalletProgress.status === 'COMPLETED'
+                  ) {
                     palletAvailableQuantity += palletQuantity;
                   }
                 });
-                availableQuantity += Math.min(palletAvailableQuantity, totalInOrder);
+                availableQuantity += Math.min(
+                  palletAvailableQuantity,
+                  totalInOrder,
+                );
               }
             } else {
               // Если поддонов нет, используем прогресс детали
@@ -234,7 +243,8 @@ export class OrdersService {
         return part.pallets.some((pallet) => {
           return pallet.palletStageProgress.some(
             (progress) =>
-              progress.status === 'IN_PROGRESS' || progress.status === 'COMPLETED',
+              progress.status === 'IN_PROGRESS' ||
+              progress.status === 'COMPLETED',
           );
         });
       }

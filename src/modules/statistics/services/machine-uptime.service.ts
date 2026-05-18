@@ -45,7 +45,9 @@ export class MachineUptimeService {
     return stages;
   }
 
-  async getMachineUptimeStats(dto: GetMachineUptimeStatsDto): Promise<MachineUptimeResponse> {
+  async getMachineUptimeStats(
+    dto: GetMachineUptimeStatsDto,
+  ): Promise<MachineUptimeResponse> {
     const { startDate, endDate } = this.calculateDateRange(dto);
 
     let machines;
@@ -134,11 +136,13 @@ export class MachineUptimeService {
     });
 
     // Получаем последнюю запись перед startDate для определения начального статуса
-    const previousHistory = history.length > 0 ? history[0].newStatus : currentStatus;
+    const previousHistory =
+      history.length > 0 ? history[0].newStatus : currentStatus;
 
     if (history.length === 0) {
       // Если нет истории изменений в периоде, используем текущий статус
-      const duration = (actualEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+      const duration =
+        (actualEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
       statusDurations.set(currentStatus, duration);
     } else {
       let activeStatus = previousHistory;
@@ -146,10 +150,14 @@ export class MachineUptimeService {
 
       for (const record of history) {
         const changeTime = record.createdAt;
-        const duration = (changeTime.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+        const duration =
+          (changeTime.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
 
         if (duration > 0) {
-          statusDurations.set(activeStatus, (statusDurations.get(activeStatus) || 0) + duration);
+          statusDurations.set(
+            activeStatus,
+            (statusDurations.get(activeStatus) || 0) + duration,
+          );
         }
 
         activeStatus = record.newStatus;
@@ -157,27 +165,36 @@ export class MachineUptimeService {
       }
 
       // Добавляем время от последнего изменения до текущего момента (или конца периода)
-      const finalDuration = (actualEndDate.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+      const finalDuration =
+        (actualEndDate.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
       if (finalDuration > 0) {
-        statusDurations.set(activeStatus, (statusDurations.get(activeStatus) || 0) + finalDuration);
+        statusDurations.set(
+          activeStatus,
+          (statusDurations.get(activeStatus) || 0) + finalDuration,
+        );
       }
     }
 
-    const totalHours = (actualEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+    const totalHours =
+      (actualEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
     const breakdown: StatusBreakdown[] = [];
 
     for (const [status, hours] of statusDurations.entries()) {
       breakdown.push({
         status,
         hours: Math.round(hours * 100) / 100,
-        percentage: totalHours > 0 ? Math.round((hours / totalHours) * 10000) / 100 : 0,
+        percentage:
+          totalHours > 0 ? Math.round((hours / totalHours) * 10000) / 100 : 0,
       });
     }
 
     return breakdown.sort((a, b) => b.hours - a.hours);
   }
 
-  private calculateDateRange(dto: GetMachineUptimeStatsDto): { startDate: Date; endDate: Date } {
+  private calculateDateRange(dto: GetMachineUptimeStatsDto): {
+    startDate: Date;
+    endDate: Date;
+  } {
     const now = new Date();
     let startDate: Date;
     let endDate: Date;

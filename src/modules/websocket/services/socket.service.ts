@@ -35,7 +35,7 @@ import {
   TechnologyRouteEventPayload,
   DetailCatalogEventPayload,
   UserSettingsEventPayload,
-  BufferSettingsEventPayload
+  BufferSettingsEventPayload,
 } from '../interfaces/socket-user.interface';
 
 /**
@@ -200,7 +200,7 @@ export class SocketService {
    */
 
   // === ТИПИЗИРОВАННЫЕ МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЙ ===
-  
+
   notifyAboutOrderChanges(payload: OrderEventPayload): void {
     const rooms = [ROOMS.MASTER_CEH, ROOMS.MASTER_YPACK, ROOMS.DIRECTOR];
     this.emitToMultipleRooms(rooms, EVENTS.ORDER_EVENT, payload);
@@ -240,7 +240,9 @@ export class SocketService {
     this.emitToMultipleRooms(rooms, EVENTS.STREAM_EVENT, payload);
   }
 
-  notifyAboutTechnologyRouteChanges(payload: TechnologyRouteEventPayload): void {
+  notifyAboutTechnologyRouteChanges(
+    payload: TechnologyRouteEventPayload,
+  ): void {
     const rooms = [ROOMS.TECHNOLOGIST, ROOMS.MASTER_CEH];
     this.emitToMultipleRooms(rooms, EVENTS.TECHNOLOGY_ROUTE_EVENT, payload);
   }

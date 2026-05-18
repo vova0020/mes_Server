@@ -94,4 +94,4 @@ export class ParserController {
       throw new BadRequestException(`Ошибка обработки файла: ${error.message}`);
     }
   }
-} 
+}

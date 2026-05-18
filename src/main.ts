@@ -16,9 +16,12 @@ async function bootstrap() {
   });
 
   // Статическая раздача изображений настроек
-  app.useStaticAssets(join(process.cwd(), 'src', 'modules', 'settings', 'uploads'), {
-    prefix: '/settings/uploads/',
-  });
+  app.useStaticAssets(
+    join(process.cwd(), 'src', 'modules', 'settings', 'uploads'),
+    {
+      prefix: '/settings/uploads/',
+    },
+  );
 
   // Включаем CORS для веб-приложения
   app.enableCors({

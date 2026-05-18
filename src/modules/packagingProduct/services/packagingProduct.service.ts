@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 
-
 @Injectable()
 export class PackagingProductService {
   private readonly logger = new Logger(PackagingProductService.name);

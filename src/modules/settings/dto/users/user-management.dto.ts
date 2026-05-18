@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEmail, MinLength, IsDecimal, IsPhoneNumber } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEmail,
+  MinLength,
+  IsDecimal,
+  IsPhoneNumber,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Decimal } from '@prisma/client/runtime/library';
 

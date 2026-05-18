@@ -129,7 +129,9 @@ export class ProductionOrdersService {
               partName: detailDirectory.partName,
               partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
               routeId: packageDetail.routeId || 1,
-              quantity: Math.ceil(Number(packageDetail.quantity) * Number(packageDto.quantity)), // Общее количество в заказе (округление вверх)
+              quantity: Math.ceil(
+                Number(packageDetail.quantity) * Number(packageDto.quantity),
+              ), // Общее количество в заказе (округление вверх)
               quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
               materialName: detailDirectory.materialName,
               materialSku: detailDirectory.materialSku,
@@ -370,7 +372,9 @@ export class ProductionOrdersService {
                 partName: detailDirectory.partName,
                 partSize: `${detailDirectory.finishedLength || 0}x${detailDirectory.finishedWidth || 0}`,
                 routeId: packageDetail.routeId || 1,
-                quantity: Math.ceil(Number(packageDetail.quantity) * Number(packageDto.quantity)), // Общее количество в заказе (округление вверх)
+                quantity: Math.ceil(
+                  Number(packageDetail.quantity) * Number(packageDto.quantity),
+                ), // Общее количество в заказе (округление вверх)
                 quantityPerPackage: packageDetail.quantity, // Количество на 1 упаковку (фиксируется)
                 materialName: detailDirectory.materialName,
                 materialSku: detailDirectory.materialSku,
@@ -522,7 +526,7 @@ export class ProductionOrdersService {
       });
     });
 
-     // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       ['room:technologist', 'room:director'],
       'order:event',

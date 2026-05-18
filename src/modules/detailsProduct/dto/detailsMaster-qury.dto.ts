@@ -5,16 +5,17 @@ import { ApiProperty } from '@nestjs/swagger';
 export class DetailsQueryDto {
   @ApiProperty({
     description: 'ID производственного заказа',
-    example: 1
+    example: 1,
   })
   @IsNumber()
   @Type(() => Number)
   orderId: number;
 
   @ApiProperty({
-    description: 'ID участка производства (если не указан, используется участок мастера)',
+    description:
+      'ID участка производства (если не указан, используется участок мастера)',
     required: false,
-    example: 2
+    example: 2,
   })
   @IsOptional()
   @IsNumber()
@@ -24,7 +25,7 @@ export class DetailsQueryDto {
   @ApiProperty({
     description: 'Максимальное количество записей для возврата',
     required: false,
-    example: 10
+    example: 10,
   })
   @IsOptional()
   @IsNumber()
@@ -34,7 +35,7 @@ export class DetailsQueryDto {
   @ApiProperty({
     description: 'Смещение для пагинации',
     required: false,
-    example: 0
+    example: 0,
   })
   @IsOptional()
   @IsNumber()

@@ -3,13 +3,12 @@ import { PrismaService } from '../../../shared/prisma.service';
 import { AuditService } from '../../audit/services/audit.service';
 import { PalletsResponseDto } from '../dto/pallet-machin.dto';
 
-
 @Injectable()
 export class PalletsMachineTaskService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
-  ) { }
+  ) {}
 
   /**
    * Получить все поддоны по ID детали
@@ -71,7 +70,7 @@ export class PalletsMachineTaskService {
         routeStageId: true,
       },
     });
-    const routeStageIds = relevantRouteStages.map(rs => rs.routeStageId);
+    const routeStageIds = relevantRouteStages.map((rs) => rs.routeStageId);
 
     // Получаем все поддоны для указанной детали
     const pallets = await this.prisma.pallet.findMany({
@@ -189,33 +188,33 @@ export class PalletsMachineTaskService {
           bufferCell:
             pallet.palletBufferCells.length > 0
               ? {
-                id: pallet.palletBufferCells[0].cell.cellId,
-                code: pallet.palletBufferCells[0].cell.cellCode,
-                bufferId: pallet.palletBufferCells[0].cell.bufferId,
-                bufferName:
-                  pallet.palletBufferCells[0].cell.buffer.bufferName,
-              }
+                  id: pallet.palletBufferCells[0].cell.cellId,
+                  code: pallet.palletBufferCells[0].cell.cellCode,
+                  bufferId: pallet.palletBufferCells[0].cell.bufferId,
+                  bufferName:
+                    pallet.palletBufferCells[0].cell.buffer.bufferName,
+                }
               : null,
           machine: machine
             ? {
-              id: machine.machineId,
-              name: machine.machineName,
-              status: machine.status,
-            }
+                id: machine.machineId,
+                name: machine.machineName,
+                status: machine.status,
+              }
             : null,
           currentStageProgress: currentStageProgress
             ? {
-              id: currentStageProgress.pspId,
-              status: currentStageProgress.status,
-              completedAt: currentStageProgress.completedAt,
-              routeStage: {
-                id: currentStageProgress.routeStage.routeStageId,
-                name: currentStageProgress.routeStage.stage.stageName,
-                sequence: Number(
-                  currentStageProgress.routeStage.sequenceNumber,
-                ),
-              },
-            }
+                id: currentStageProgress.pspId,
+                status: currentStageProgress.status,
+                completedAt: currentStageProgress.completedAt,
+                routeStage: {
+                  id: currentStageProgress.routeStage.routeStageId,
+                  name: currentStageProgress.routeStage.stage.stageName,
+                  sequence: Number(
+                    currentStageProgress.routeStage.sequenceNumber,
+                  ),
+                },
+              }
             : null,
           processingStatus,
         };
@@ -397,8 +396,7 @@ export class PalletsMachineTaskService {
 
     // Находим текущий активный этап
     const activeProgress = pallet.palletStageProgress.find(
-      (p: any) =>
-        p.status === 'IN_PROGRESS' || p.status === 'PENDING',
+      (p: any) => p.status === 'IN_PROGRESS' || p.status === 'PENDING',
     );
 
     if (activeProgress) {

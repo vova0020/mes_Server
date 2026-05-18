@@ -20,7 +20,7 @@ export class RouteManagementService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly socketService: SocketService,
-  ) { }
+  ) {}
 
   async getOrdersForRouteManagement(): Promise<OrderForRoutesResponseDto[]> {
     const orders = await this.prismaService.order.findMany({
@@ -42,7 +42,7 @@ export class RouteManagementService {
     return orders.map((order) => {
       // Подсчитываем общее количество всех деталей в заказе (не уникальных)
       let totalParts = 0;
-      order.packages.forEach(pkg => {
+      order.packages.forEach((pkg) => {
         totalParts += pkg.composition.length;
       });
 
@@ -139,12 +139,14 @@ export class RouteManagementService {
           currentRoute,
           size: comp.partSize,
           materialName: 'Не указан',
-          packages: [{
-            packageId: pkg.packageId,
-            packageCode: pkg.packageCode,
-            packageName: pkg.packageName,
-            quantity: Number(comp.quantity),
-          }],
+          packages: [
+            {
+              packageId: pkg.packageId,
+              packageCode: pkg.packageCode,
+              packageName: pkg.packageName,
+              quantity: Number(comp.quantity),
+            },
+          ],
         });
       }
     }
@@ -192,7 +194,9 @@ export class RouteManagementService {
     const order = composition.package.order;
 
     // Запрещаем изменение маршрута если заказ уже в работе
-    if (['LAUNCH_PERMITTED', 'IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
+    if (
+      ['LAUNCH_PERMITTED', 'IN_PROGRESS', 'COMPLETED'].includes(order.status)
+    ) {
       throw new BadRequestException(
         `Нельзя изменять маршруты у деталей из заказов со статусом "${order.status}". Изменение маршрутов разрешено только для заказов со статусом "Предварительный" или "Утверждено"`,
       );
@@ -213,7 +217,9 @@ export class RouteManagementService {
     });
 
     if (!newRoute) {
-      throw new NotFoundException(`Маршрут с ID ${updateDto.routeId} не найден`);
+      throw new NotFoundException(
+        `Маршрут с ID ${updateDto.routeId} не найден`,
+      );
     }
 
     // Проверяем, что маршрут действительно изменяется
@@ -277,7 +283,6 @@ export class RouteManagementService {
       'order:stats',
       { status: 'updated' },
     );
-
 
     return result;
   }

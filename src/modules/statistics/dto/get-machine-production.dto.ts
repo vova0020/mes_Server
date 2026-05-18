@@ -26,4 +26,20 @@ export class GetMachineProductionDto {
   @Type(() => Number)
   @IsInt()
   machineId?: number;
+
+  /**
+   * ID заказа (фильтр по заказу)
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  orderId?: number;
+
+  /**
+   * ID этапа производства (фильтр по этапу)
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stageId?: number;
 }

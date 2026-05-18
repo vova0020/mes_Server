@@ -27,7 +27,8 @@ export class RouteManagementController {
   @Get('routes')
   @ApiOperation({
     summary: 'Получить список всех доступных маршрутов',
-    description: 'Возвращает список всех маршрутов с их этапами для выбора пользователем',
+    description:
+      'Возвращает список всех маршрутов с их этапами для выбора пользователем',
   })
   @ApiResponse({
     status: HttpStatus.OK,

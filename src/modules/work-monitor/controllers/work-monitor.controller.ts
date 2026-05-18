@@ -1,6 +1,10 @@
 import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { WorkMonitorService } from '../services/work-monitor.service';
-import { StreamDto, StageProgressDto, MachineWorkplaceDto } from '../dto/work-monitor.dto';
+import {
+  StreamDto,
+  StageProgressDto,
+  MachineWorkplaceDto,
+} from '../dto/work-monitor.dto';
 
 @Controller('work-monitor')
 export class WorkMonitorController {

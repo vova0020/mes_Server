@@ -168,8 +168,16 @@ export class PartPalletsController {
       properties: {
         partId: { type: 'number', description: 'ID детали', example: 1 },
         palletId: { type: 'number', description: 'ID поддона', example: 1 },
-        quantity: { type: 'number', description: 'Количество деталей для возврата', example: 10 },
-        returnToStageId: { type: 'number', description: 'ID этапа для возврата', example: 1 },
+        quantity: {
+          type: 'number',
+          description: 'Количество деталей для возврата',
+          example: 10,
+        },
+        returnToStageId: {
+          type: 'number',
+          description: 'ID этапа для возврата',
+          example: 1,
+        },
         userId: { type: 'number', description: 'ID пользователя', example: 1 },
       },
       required: ['partId', 'palletId', 'quantity', 'returnToStageId', 'userId'],
@@ -209,7 +217,9 @@ export class PartPalletsController {
         throw new BadRequestException(error.message);
       }
       this.logger.error(`Ошибка при возврате деталей: ${error.message}`);
-      throw new InternalServerErrorException('Ошибка при возврате деталей на производство');
+      throw new InternalServerErrorException(
+        'Ошибка при возврате деталей на производство',
+      );
     }
   }
 }

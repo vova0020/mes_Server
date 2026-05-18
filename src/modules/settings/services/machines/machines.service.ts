@@ -7,7 +7,6 @@ import {
 } from '../../dto/machines/machines.dto';
 import { SocketService } from '../../../websocket/services/socket.service';
 
-
 export interface CreateMachineData {
   machineName: string;
   status: MachineStatus;
@@ -186,7 +185,6 @@ export class MachinesService {
         { status: 'updated' },
       );
 
-
       const executionTime = Date.now() - startTime;
       this.logger.log(
         `✅ Успешно создан станок "${result.machineName}" (ID: ${result.machineId}) за ${executionTime}ms`,
@@ -247,7 +245,7 @@ export class MachinesService {
         { status: 'updated' },
       );
 
-       // Отправляем WebSocket уведомление о событии
+      // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -322,7 +320,7 @@ export class MachinesService {
         { status: 'updated' },
       );
 
-       // Отправляем WebSocket уведомление о событии
+      // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -335,7 +333,6 @@ export class MachinesService {
         'machine:event',
         { status: 'updated' },
       );
-
 
       const executionTime = Date.now() - startTime;
       this.logger.log(
@@ -435,7 +432,7 @@ export class MachinesService {
         { status: 'updated' },
       );
 
-       // Отправляем WebSocket уведомление о событии
+      // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -522,7 +519,7 @@ export class MachinesService {
         { status: 'updated' },
       );
 
-       // Отправляем WebSocket уведомление о событии
+      // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
           'room:masterceh',
@@ -601,7 +598,7 @@ export class MachinesService {
         );
         throw new Error(
           `Нельзя привязать подэтап "${substage.substageName}" к станку. ` +
-          `Станок должен быть сначала связан с этапом "${substage.stage.stageName}"`,
+            `Станок должен быть сначала связан с этапом "${substage.stage.stageName}"`,
         );
       }
       console.log(

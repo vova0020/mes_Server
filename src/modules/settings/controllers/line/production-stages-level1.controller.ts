@@ -108,7 +108,8 @@ export class ProductionStagesLevel1Controller {
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
-    description: 'Нельзя удалить технологическую операцию, которая используется в потоках, линиях или станках',
+    description:
+      'Нельзя удалить технологическую операцию, которая используется в потоках, линиях или станках',
   })
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.productionStagesLevel1Service.remove(id);

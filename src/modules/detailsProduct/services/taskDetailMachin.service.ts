@@ -450,9 +450,12 @@ export class TaskDetailService {
       // Вычисляем распределение по статусам для конкретного этапа
       // readyForProcessing - сумма количества поддонов, которые назначены станку на обработку для данного этапа, но еще не обработаны
       // completed - сумма количества поддонов, которые станок завершил обрабатывать для данного этапа
-      
+
       // Создаем карту статистики по этапам
-      const stageStats = new Map<number, { readyForProcessing: number; completed: number }>();
+      const stageStats = new Map<
+        number,
+        { readyForProcessing: number; completed: number }
+      >();
 
       // Анализируем поддоны для данной детали
       for (const pallet of part.pallets) {
@@ -466,24 +469,27 @@ export class TaskDetailService {
 
         for (const assignment of currentMachineAssignments) {
           if (!assignment.routeStageId) continue;
-          
+
           // Получаем stageId для данного routeStageId
           const routeStageInfo = await this.prisma.routeStage.findUnique({
             where: { routeStageId: assignment.routeStageId },
-            select: { stageId: true }
+            select: { stageId: true },
           });
-          
+
           if (!routeStageInfo) continue;
-          
+
           const currentStageId = routeStageInfo.stageId;
-          
+
           // Инициализируем статистику для этапа, если её нет
           if (!stageStats.has(currentStageId)) {
-            stageStats.set(currentStageId, { readyForProcessing: 0, completed: 0 });
+            stageStats.set(currentStageId, {
+              readyForProcessing: 0,
+              completed: 0,
+            });
           }
-          
+
           const stats = stageStats.get(currentStageId)!;
-          
+
           if (assignment.completedAt) {
             // Назначение завершено - поддон обработан станком для данного этапа
             stats.completed += palletQuantity;
@@ -499,16 +505,18 @@ export class TaskDetailService {
         if (mapKey.startsWith(`${partId}-`)) {
           // Извлекаем routeStageId из ключа
           const routeStageIdFromKey = parseInt(mapKey.split('-')[1]);
-          
+
           // Получаем stageId для данного routeStageId
           const routeStageInfo = await this.prisma.routeStage.findUnique({
             where: { routeStageId: routeStageIdFromKey },
-            select: { stageId: true }
+            select: { stageId: true },
           });
-          
+
           const currentStageId = routeStageInfo?.stageId;
-          const stats = currentStageId ? stageStats.get(currentStageId) : undefined;
-          
+          const stats = currentStageId
+            ? stageStats.get(currentStageId)
+            : undefined;
+
           detailMap.set(mapKey, {
             ...detailItem,
             quantity: part.pallets.length, // Общее количество поддонов

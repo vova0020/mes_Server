@@ -1,4 +1,3 @@
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { LoginDto } from '../dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -206,7 +205,10 @@ export class AuthService {
       }));
 
       console.log('🏭 Обработанные machines:', assignments.machines.length);
-      console.log('🏭 Machines с этапами:', assignments.machines.map(m => `${m.name}: ${m.stages.length} этапов`));
+      console.log(
+        '🏭 Machines с этапами:',
+        assignments.machines.map((m) => `${m.name}: ${m.stages.length} этапов`),
+      );
     }
 
     // Обрабатываем ORDER_PICKER

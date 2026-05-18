@@ -1,4 +1,10 @@
-import { IsInt, IsEnum, IsOptional, IsDateString, ValidateIf } from 'class-validator';
+import {
+  IsInt,
+  IsEnum,
+  IsOptional,
+  IsDateString,
+  ValidateIf,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum UnitOfMeasurement {
@@ -22,15 +28,15 @@ export class GetProductionLineStatsDto {
   @IsEnum(DateRangeType)
   dateRangeType: DateRangeType;
 
-  @ValidateIf(o => o.dateRangeType === DateRangeType.CUSTOM)
+  @ValidateIf((o) => o.dateRangeType === DateRangeType.CUSTOM)
   @IsDateString()
   startDate?: string;
 
-  @ValidateIf(o => o.dateRangeType === DateRangeType.CUSTOM)
+  @ValidateIf((o) => o.dateRangeType === DateRangeType.CUSTOM)
   @IsDateString()
   endDate?: string;
 
-  @ValidateIf(o => o.dateRangeType !== DateRangeType.CUSTOM)
+  @ValidateIf((o) => o.dateRangeType !== DateRangeType.CUSTOM)
   @IsDateString()
   @IsOptional()
   date?: string;

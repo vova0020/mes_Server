@@ -174,7 +174,9 @@ export interface FilterOptions {
 export class StatisticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getProductionLineStats(dto: GetProductionLineStatsDto): Promise<StageStats[]> {
+  async getProductionLineStats(
+    dto: GetProductionLineStatsDto,
+  ): Promise<StageStats[]> {
     const { startDate, endDate } = this.calculateDateRange(dto);
 
     // Получаем этапы потока
@@ -325,7 +327,7 @@ export class StatisticsService {
       select: { routeStageId: true },
     });
 
-    const routeStageIds = routeStages.map(rs => rs.routeStageId);
+    const routeStageIds = routeStages.map((rs) => rs.routeStageId);
 
     // Используем MachineAssignment с processedQuantity
     const assignments = await this.prisma.machineAssignment.findMany({
@@ -356,7 +358,7 @@ export class StatisticsService {
     for (const assignment of assignments) {
       const dateKey = assignment.completedAt!.toISOString().split('T')[0];
       const quantity = Number(assignment.processedQuantity || 0);
-      
+
       let value = 0;
       if (unit === UnitOfMeasurement.PIECES) {
         value = quantity;
@@ -432,7 +434,8 @@ export class StatisticsService {
       } else {
         let areaPerPackage = 0;
         for (const comp of task.package.composition) {
-          const partArea = Number(comp.finishedLength || 0) * Number(comp.finishedWidth || 0);
+          const partArea =
+            Number(comp.finishedLength || 0) * Number(comp.finishedWidth || 0);
           const partAreaM2 = partArea / 1000000;
           areaPerPackage += partAreaM2 * Number(comp.quantityPerPackage);
         }
@@ -493,11 +496,11 @@ export class StatisticsService {
     for (const assignment of assignments) {
       const dateKey = assignment.completedAt!.toISOString().split('T')[0];
       const quantity = Number(assignment.processedQuantity || 0);
-      
+
       let value = 0;
       const machineUnit = assignment.machine.loadUnit;
       const part = assignment.pallet.part;
-      
+
       if (machineUnit === 'шт' || machineUnit === 'pcs') {
         value = quantity;
       } else if (machineUnit === 'м²') {
@@ -526,7 +529,7 @@ export class StatisticsService {
         const width = Number(part.finishedWidth || 0);
         value = (length * width * quantity) / 1000000;
       }
-      
+
       dataByDate.set(dateKey, (dataByDate.get(dateKey) || 0) + value);
     }
 
@@ -546,7 +549,7 @@ export class StatisticsService {
       where: { lineId },
       select: { routeId: true },
     });
-    const routeIds = routes.map(r => r.routeId);
+    const routeIds = routes.map((r) => r.routeId);
 
     // Получаем задачи упаковки с completedQuantity > 0 только для станков данного этапа
     const packingTasks = await this.prisma.packingTask.findMany({
@@ -580,7 +583,10 @@ export class StatisticsService {
     });
 
     // Группируем по станкам
-    const machineDataMap = new Map<number, { name: string; unit: string; dateMap: Map<string, number> }>();
+    const machineDataMap = new Map<
+      number,
+      { name: string; unit: string; dateMap: Map<string, number> }
+    >();
 
     for (const task of packingTasks) {
       if (!machineDataMap.has(task.machineId)) {
@@ -595,7 +601,10 @@ export class StatisticsService {
       const dateKey = task.assignedAt.toISOString().split('T')[0];
       const value = Number(task.completedQuantity);
 
-      machineData.dateMap.set(dateKey, (machineData.dateMap.get(dateKey) || 0) + value);
+      machineData.dateMap.set(
+        dateKey,
+        (machineData.dateMap.get(dateKey) || 0) + value,
+      );
     }
 
     // Формируем результат
@@ -714,6 +723,7 @@ export class StatisticsService {
       createdAt?: { gte?: Date; lte?: Date };
       routeStage?: { stageId: number };
       reportedById?: number;
+      machineId?: number;
     } = {};
 
     if (dto.startDate || dto.endDate) {
@@ -736,6 +746,10 @@ export class StatisticsService {
       reclamationWhere.reportedById = dto.workerId;
     }
 
+    if (dto.machineId) {
+      reclamationWhere.machineId = dto.machineId;
+    }
+
     // Получаем рекламации с полной информацией
     const reclamations = await this.prisma.reclamation.findMany({
       where: reclamationWhere,
@@ -747,6 +761,7 @@ export class StatisticsService {
               include: {
                 package: {
                   include: {
+                    composition: true,
                     order: true,
                   },
                 },
@@ -840,10 +855,7 @@ export class StatisticsService {
         : [];
 
     // Группируем ВСЕ возвраты по partId → массив событий
-    const returnEventsByPartId = new Map<
-      number,
-      (typeof returnMovements)
-    >();
+    const returnEventsByPartId = new Map<number, typeof returnMovements>();
     for (const mv of returnMovements) {
       if (!returnEventsByPartId.has(mv.partId)) {
         returnEventsByPartId.set(mv.partId, []);
@@ -887,6 +899,28 @@ export class StatisticsService {
         orderName: ppp.package.order.orderName,
       }));
 
+      // Получаем материал: сначала из part.material, если нет - из composition
+      const materialId = rec.part.materialId;
+      let materialName = rec.part.material?.materialName ?? null;
+      let materialSku = rec.part.material?.article ?? null;
+
+      // Если материал не найден в part, пытаемся взять из composition
+      if (!materialName && rec.part.productionPackageParts.length > 0) {
+        const firstPackage = rec.part.productionPackageParts[0];
+        if (
+          firstPackage.package.composition &&
+          firstPackage.package.composition.length > 0
+        ) {
+          const compositionItem = firstPackage.package.composition.find(
+            (comp) => comp.partCode === rec.part.partCode,
+          );
+          if (compositionItem) {
+            materialName = compositionItem.materialName;
+            materialSku = compositionItem.materialSku;
+          }
+        }
+      }
+
       return {
         reclamationId: rec.reclamationId,
         partId: rec.partId,
@@ -910,9 +944,9 @@ export class StatisticsService {
         // Все упаковки и заказы (может быть несколько)
         packages,
         // Материал
-        materialId: rec.part.materialId,
-        materialName: rec.part.material?.materialName ?? null,
-        materialSku: rec.part.material?.article ?? null,
+        materialId: materialId,
+        materialName: materialName,
+        materialSku: materialSku,
         // Работники
         reportedById: rec.reportedById,
         reportedByName: rec.reportedBy
@@ -983,60 +1017,354 @@ export class StatisticsService {
 
   /**
    * Получить данные учёта выпуска продукции по рабочим местам (станкам).
-   * Источник данных — таблица MachineOperationHistory (история завершённых операций).
+   * Источник данных — таблица MachineOperationHistory (обычные этапы) и PackingTask (финальный этап упаковки).
    * Фильтры: период (startDate/endDate), конкретный станок (machineId).
    */
-  async getMachineProduction(dto: GetMachineProductionDto): Promise<MachineProductionRecord[]> {
-    // Строим условие WHERE
-    const where: {
-      machineId?: number;
-      completedAt?: { gte?: Date; lte?: Date };
-    } = {};
+  async getMachineProduction(
+    dto: GetMachineProductionDto,
+  ): Promise<MachineProductionRecord[]> {
+    let result: MachineProductionRecord[] = [];
 
+    console.log('getMachineProduction called with:', dto);
+
+    // Определяем, является ли запрошенный станок финальным
+    let isFinalMachine = false;
     if (dto.machineId) {
-      where.machineId = dto.machineId;
-    }
-
-    if (dto.startDate || dto.endDate) {
-      where.completedAt = {};
-      if (dto.startDate) {
-        where.completedAt.gte = new Date(dto.startDate);
-      }
-      if (dto.endDate) {
-        const endDate = new Date(dto.endDate);
-        endDate.setHours(23, 59, 59, 999);
-        where.completedAt.lte = endDate;
-      }
-    }
-
-    const operations = await this.prisma.machineOperationHistory.findMany({
-      where,
-      include: {
-        machine: {
-          select: {
-            machineId: true,
-            machineName: true,
-            loadUnit: true,
+      const machineStage = await this.prisma.machineStage.findFirst({
+        where: {
+          machineId: dto.machineId,
+          stage: {
+            finalStage: true,
           },
         },
-        part: {
+      });
+      isFinalMachine = !!machineStage;
+      console.log(`Machine ${dto.machineId} is final:`, isFinalMachine);
+    }
+
+    // Строим условие WHERE для дат
+    const dateWhere: { gte?: Date; lte?: Date } = {};
+    if (dto.startDate) {
+      dateWhere.gte = new Date(dto.startDate);
+    }
+    if (dto.endDate) {
+      const endDate = new Date(dto.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      dateWhere.lte = endDate;
+    }
+
+    // Если запрошен конкретный станок
+    if (dto.machineId) {
+      if (isFinalMachine) {
+        // Финальный станок - берем данные из PackingTask
+        const packingTasks = await this.prisma.packingTask.findMany({
+          where: {
+            machineId: dto.machineId,
+            completedQuantity: { gt: 0 },
+            completedAt:
+              Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+          },
           include: {
-            material: {
+            machine: {
               select: {
-                materialId: true,
-                materialName: true,
-                article: true,
+                machineId: true,
+                machineName: true,
+                loadUnit: true,
               },
             },
-            productionPackageParts: {
+            package: {
               include: {
-                package: {
+                composition: true,
+                order: {
+                  select: {
+                    orderId: true,
+                    batchNumber: true,
+                    orderName: true,
+                  },
+                },
+              },
+            },
+            assignedUser: {
+              include: {
+                userDetail: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { assignedAt: 'desc' },
+        });
+
+        result.push(
+          ...packingTasks.map((task) => {
+            const packages = [
+              {
+                packageId: task.packageId,
+                packageCode: task.package.packageCode,
+                packageName: task.package.packageName,
+                orderId: task.package.orderId,
+                orderBatchNumber: task.package.order.batchNumber,
+                orderName: task.package.order.orderName,
+              },
+            ];
+
+            const operatorName = task.assignedUser
+              ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() ||
+                null
+              : null;
+
+            const routeStageId = task.package.composition[0]?.routeId || 0;
+
+            const durationSeconds = task.completedAt
+              ? Math.floor(
+                  (task.completedAt.getTime() - task.assignedAt.getTime()) /
+                    1000,
+                )
+              : 0;
+
+            // Получаем материал из первой детали в составе упаковки
+            const firstComposition = task.package.composition[0];
+            const materialName = firstComposition?.materialName || null;
+            const materialSku = firstComposition?.materialSku || null;
+
+            return {
+              operationId: task.taskId,
+              machineId: task.machine.machineId,
+              machineName: task.machine.machineName,
+              machineLoadUnit: task.machine.loadUnit,
+              partId: 0,
+              partCode: task.package.packageCode,
+              partName: task.package.packageName,
+              partSize: '',
+              materialId: null,
+              materialName,
+              materialSku,
+              palletId: 0,
+              palletName: '',
+              routeStageId: routeStageId,
+              stageId: 0,
+              stageName: 'Упаковка',
+              quantityProcessed: Number(task.completedQuantity),
+              startedAt: task.assignedAt,
+              completedAt: task.completedAt || task.assignedAt,
+              durationSeconds,
+              operatorId: task.assignedTo,
+              operatorName,
+              packages,
+            };
+          }),
+        );
+      } else {
+        // Обычный станок - берем данные из MachineOperationHistory
+        const whereCondition: any = {
+          machineId: dto.machineId,
+          completedAt:
+            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+        };
+
+        // Добавляем фильтр по этапу производства
+        if (dto.stageId) {
+          whereCondition.routeStage = {
+            stageId: dto.stageId,
+          };
+        }
+
+        const operations = await this.prisma.machineOperationHistory.findMany({
+          where: whereCondition,
+          include: {
+            machine: {
+              select: {
+                machineId: true,
+                machineName: true,
+                loadUnit: true,
+              },
+            },
+            part: {
+              include: {
+                material: {
+                  select: {
+                    materialId: true,
+                    materialName: true,
+                    article: true,
+                  },
+                },
+                productionPackageParts: {
                   include: {
-                    order: {
-                      select: {
-                        orderId: true,
-                        batchNumber: true,
-                        orderName: true,
+                    package: {
+                      include: {
+                        composition: true,
+                        order: {
+                          select: {
+                            orderId: true,
+                            batchNumber: true,
+                            orderName: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            pallet: {
+              select: {
+                palletId: true,
+                palletName: true,
+              },
+            },
+            routeStage: {
+              include: {
+                stage: {
+                  select: {
+                    stageId: true,
+                    stageName: true,
+                  },
+                },
+              },
+            },
+            operator: {
+              include: {
+                userDetail: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { completedAt: 'desc' },
+        });
+
+        result.push(
+          ...operations.map((op) => {
+            const packages = op.part.productionPackageParts.map((ppp) => ({
+              packageId: ppp.packageId,
+              packageCode: ppp.package.packageCode,
+              packageName: ppp.package.packageName,
+              orderId: ppp.package.orderId,
+              orderBatchNumber: ppp.package.order.batchNumber,
+              orderName: ppp.package.order.orderName,
+            }));
+
+            const operatorName = op.operator
+              ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() ||
+                null
+              : null;
+
+            // Пытаемся получить материал из part.material, если нет - из composition
+            const materialId = op.part.material?.materialId ?? null;
+            let materialName = op.part.material?.materialName ?? null;
+            let materialSku = op.part.material?.article ?? null;
+
+            // Если материал не найден в part, пытаемся взять из composition
+            if (!materialName && op.part.productionPackageParts.length > 0) {
+              const firstPackage = op.part.productionPackageParts[0];
+              if (
+                firstPackage.package.composition &&
+                firstPackage.package.composition.length > 0
+              ) {
+                const compositionItem = firstPackage.package.composition.find(
+                  (comp) => comp.partCode === op.part.partCode,
+                );
+                if (compositionItem) {
+                  materialName = compositionItem.materialName;
+                  materialSku = compositionItem.materialSku;
+                }
+              }
+            }
+
+            return {
+              operationId: op.operationId,
+              machineId: op.machine.machineId,
+              machineName: op.machine.machineName,
+              machineLoadUnit: op.machine.loadUnit,
+              partId: op.part.partId,
+              partCode: op.part.partCode,
+              partName: op.part.partName,
+              partSize: op.part.size,
+              materialId: materialId,
+              materialName: materialName,
+              materialSku: materialSku,
+              palletId: op.pallet.palletId,
+              palletName: op.pallet.palletName,
+              routeStageId: op.routeStageId,
+              stageId: op.routeStage.stage.stageId,
+              stageName: op.routeStage.stage.stageName,
+              quantityProcessed: Number(op.quantityProcessed),
+              startedAt: op.startedAt,
+              completedAt: op.completedAt,
+              durationSeconds: op.duration,
+              operatorId: op.operatorId,
+              operatorName,
+              packages,
+            };
+          }),
+        );
+      }
+    } else {
+      // Запрошены все станки - получаем данные из обеих таблиц
+
+      // Получаем список финальных станков
+      const finalStageMachines = await this.prisma.machineStage.findMany({
+        where: {
+          stage: {
+            finalStage: true,
+          },
+        },
+        select: {
+          machineId: true,
+        },
+      });
+      const finalMachineIds = finalStageMachines.map((m) => m.machineId);
+
+      // 1. Обычные станки - MachineOperationHistory
+      const whereCondition: any = {
+        machineId:
+          finalMachineIds.length > 0 ? { notIn: finalMachineIds } : undefined,
+        completedAt: Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+      };
+
+      // Добавляем фильтр по этапу производства
+      if (dto.stageId) {
+        whereCondition.routeStage = {
+          stageId: dto.stageId,
+        };
+      }
+
+      const operations = await this.prisma.machineOperationHistory.findMany({
+        where: whereCondition,
+        include: {
+          machine: {
+            select: {
+              machineId: true,
+              machineName: true,
+              loadUnit: true,
+            },
+          },
+          part: {
+            include: {
+              material: {
+                select: {
+                  materialId: true,
+                  materialName: true,
+                  article: true,
+                },
+              },
+              productionPackageParts: {
+                include: {
+                  package: {
+                    include: {
+                      composition: true,
+                      order: {
+                        select: {
+                          orderId: true,
+                          batchNumber: true,
+                          orderName: true,
+                        },
                       },
                     },
                   },
@@ -1044,76 +1372,225 @@ export class StatisticsService {
               },
             },
           },
-        },
-        pallet: {
-          select: {
-            palletId: true,
-            palletName: true,
+          pallet: {
+            select: {
+              palletId: true,
+              palletName: true,
+            },
           },
-        },
-        routeStage: {
-          include: {
-            stage: {
-              select: {
-                stageId: true,
-                stageName: true,
+          routeStage: {
+            include: {
+              stage: {
+                select: {
+                  stageId: true,
+                  stageName: true,
+                },
+              },
+            },
+          },
+          operator: {
+            include: {
+              userDetail: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                },
               },
             },
           },
         },
-        operator: {
+        orderBy: { completedAt: 'desc' },
+      });
+
+      result.push(
+        ...operations.map((op) => {
+          const packages = op.part.productionPackageParts.map((ppp) => ({
+            packageId: ppp.packageId,
+            packageCode: ppp.package.packageCode,
+            packageName: ppp.package.packageName,
+            orderId: ppp.package.orderId,
+            orderBatchNumber: ppp.package.order.batchNumber,
+            orderName: ppp.package.order.orderName,
+          }));
+
+          const operatorName = op.operator
+            ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() ||
+              null
+            : null;
+
+          // Пытаемся получить материал из part.material, если нет - из composition
+          const materialId = op.part.material?.materialId ?? null;
+          let materialName = op.part.material?.materialName ?? null;
+          let materialSku = op.part.material?.article ?? null;
+
+          // Если материал не найден в part, пытаемся взять из composition
+          if (!materialName && op.part.productionPackageParts.length > 0) {
+            const firstPackage = op.part.productionPackageParts[0];
+            if (
+              firstPackage.package.composition &&
+              firstPackage.package.composition.length > 0
+            ) {
+              const compositionItem = firstPackage.package.composition.find(
+                (comp) => comp.partCode === op.part.partCode,
+              );
+              if (compositionItem) {
+                materialName = compositionItem.materialName;
+                materialSku = compositionItem.materialSku;
+              }
+            }
+          }
+
+          return {
+            operationId: op.operationId,
+            machineId: op.machine.machineId,
+            machineName: op.machine.machineName,
+            machineLoadUnit: op.machine.loadUnit,
+            partId: op.part.partId,
+            partCode: op.part.partCode,
+            partName: op.part.partName,
+            partSize: op.part.size,
+            materialId: materialId,
+            materialName: materialName,
+            materialSku: materialSku,
+            palletId: op.pallet.palletId,
+            palletName: op.pallet.palletName,
+            routeStageId: op.routeStageId,
+            stageId: op.routeStage.stage.stageId,
+            stageName: op.routeStage.stage.stageName,
+            quantityProcessed: Number(op.quantityProcessed),
+            startedAt: op.startedAt,
+            completedAt: op.completedAt,
+            durationSeconds: op.duration,
+            operatorId: op.operatorId,
+            operatorName,
+            packages,
+          };
+        }),
+      );
+
+      // 2. Финальные станки - PackingTask
+      if (finalMachineIds.length > 0) {
+        const packingTasks = await this.prisma.packingTask.findMany({
+          where: {
+            machineId: { in: finalMachineIds },
+            completedQuantity: { gt: 0 },
+            completedAt:
+              Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+          },
           include: {
-            userDetail: {
+            machine: {
               select: {
-                firstName: true,
-                lastName: true,
+                machineId: true,
+                machineName: true,
+                loadUnit: true,
+              },
+            },
+            package: {
+              include: {
+                composition: true,
+                order: {
+                  select: {
+                    orderId: true,
+                    batchNumber: true,
+                    orderName: true,
+                  },
+                },
+              },
+            },
+            assignedUser: {
+              include: {
+                userDetail: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      orderBy: { completedAt: 'desc' },
-    });
+          orderBy: { assignedAt: 'desc' },
+        });
 
-    return operations.map((op) => {
-      const packages = op.part.productionPackageParts.map((ppp) => ({
-        packageId: ppp.packageId,
-        packageCode: ppp.package.packageCode,
-        packageName: ppp.package.packageName,
-        orderId: ppp.package.orderId,
-        orderBatchNumber: ppp.package.order.batchNumber,
-        orderName: ppp.package.order.orderName,
-      }));
+        result.push(
+          ...packingTasks.map((task) => {
+            const packages = [
+              {
+                packageId: task.packageId,
+                packageCode: task.package.packageCode,
+                packageName: task.package.packageName,
+                orderId: task.package.orderId,
+                orderBatchNumber: task.package.order.batchNumber,
+                orderName: task.package.order.orderName,
+              },
+            ];
 
-      const operatorName = op.operator
-        ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() || null
-        : null;
+            const operatorName = task.assignedUser
+              ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() ||
+                null
+              : null;
 
-      return {
-        operationId: op.operationId,
-        machineId: op.machine.machineId,
-        machineName: op.machine.machineName,
-        machineLoadUnit: op.machine.loadUnit,
-        partId: op.part.partId,
-        partCode: op.part.partCode,
-        partName: op.part.partName,
-        partSize: op.part.size,
-        materialId: op.part.material?.materialId ?? null,
-        materialName: op.part.material?.materialName ?? null,
-        materialSku: op.part.material?.article ?? null,
-        palletId: op.pallet.palletId,
-        palletName: op.pallet.palletName,
-        routeStageId: op.routeStageId,
-        stageId: op.routeStage.stage.stageId,
-        stageName: op.routeStage.stage.stageName,
-        quantityProcessed: Number(op.quantityProcessed),
-        startedAt: op.startedAt,
-        completedAt: op.completedAt,
-        durationSeconds: op.duration,
-        operatorId: op.operatorId,
-        operatorName,
-        packages,
-      };
-    });
+            const routeStageId = task.package.composition[0]?.routeId || 0;
+
+            const durationSeconds = task.completedAt
+              ? Math.floor(
+                  (task.completedAt.getTime() - task.assignedAt.getTime()) /
+                    1000,
+                )
+              : 0;
+
+            // Получаем материал из первой детали в составе упаковки
+            const firstComposition = task.package.composition[0];
+            const materialName = firstComposition?.materialName || null;
+            const materialSku = firstComposition?.materialSku || null;
+
+            return {
+              operationId: task.taskId,
+              machineId: task.machine.machineId,
+              machineName: task.machine.machineName,
+              machineLoadUnit: task.machine.loadUnit,
+              partId: 0,
+              partCode: task.package.packageCode,
+              partName: task.package.packageName,
+              partSize: '',
+              materialId: null,
+              materialName,
+              materialSku,
+              palletId: 0,
+              palletName: '',
+              routeStageId: routeStageId,
+              stageId: 0,
+              stageName: 'Упаковка',
+              quantityProcessed: Number(task.completedQuantity),
+              startedAt: task.assignedAt,
+              completedAt: task.completedAt || task.assignedAt,
+              durationSeconds,
+              operatorId: task.assignedTo,
+              operatorName,
+              packages,
+            };
+          }),
+        );
+      }
+    }
+
+    // Применяем фильтр по заказу (orderId) на уровне приложения
+    if (dto.orderId) {
+      result = result.filter((record) =>
+        record.packages.some((pkg) => pkg.orderId === dto.orderId),
+      );
+    }
+
+    // Применяем фильтр по этапу (stageId) на уровне приложения для финальных станков
+    if (dto.stageId && result.length > 0) {
+      result = result.filter((record) => record.stageId === dto.stageId);
+    }
+
+    // Сортируем результат по дате завершения
+    console.log(
+      `Returning ${result.length} records for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}`,
+    );
+    return result.sort(
+      (a, b) => b.completedAt.getTime() - a.completedAt.getTime(),
+    );
   }
 }

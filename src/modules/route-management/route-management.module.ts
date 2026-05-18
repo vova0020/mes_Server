@@ -11,14 +11,8 @@ import { RouteManagementService } from './services/route-management.service';
     SharedModule, // Импортируем SharedModule для доступа к PrismaService
     WebsocketModule,
   ],
-  controllers: [
-    RouteManagementController,
-  ],
-  providers: [
-    RouteManagementService,
-  ],
-  exports: [
-    RouteManagementService,
-  ],
+  controllers: [RouteManagementController],
+  providers: [RouteManagementService],
+  exports: [RouteManagementService],
 })
 export class RouteManagementModule {}

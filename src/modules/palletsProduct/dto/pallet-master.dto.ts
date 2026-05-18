@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsPositive, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsNumber,
+  IsPositive,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class BufferCellDto {
@@ -52,8 +59,10 @@ export class PalletDto {
 export class PalletsResponseDto {
   pallets: PalletDto[];
   total: number;
-  
-  @ApiProperty({ description: 'Количество нераспределенных деталей по поддонам' })
+
+  @ApiProperty({
+    description: 'Количество нераспределенных деталей по поддонам',
+  })
   unallocatedQuantity: number;
 }
 
@@ -333,7 +342,10 @@ export class CreatePalletDto {
   @IsPositive()
   quantity: number;
 
-  @ApiPropertyOptional({ description: 'Название поддона (опционально)', example: 'Поддон-001' })
+  @ApiPropertyOptional({
+    description: 'Название поддона (опционально)',
+    example: 'Поддон-001',
+  })
   @IsOptional()
   palletName?: string;
 }
@@ -360,7 +372,6 @@ export class CreatePalletResponseDto {
     };
   };
 }
-
 
 // DTO для получения подробной информации о поддоне
 export class DetailedPalletDto extends PalletDto {
@@ -402,11 +413,17 @@ export class CreateDefectReclamationDto {
   @IsPositive()
   quantity: number;
 
-  @ApiPropertyOptional({ description: 'Описание брака (опционально)', example: 'Дефект поверхности' })
+  @ApiPropertyOptional({
+    description: 'Описание брака (опционально)',
+    example: 'Дефект поверхности',
+  })
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ description: 'ID поддона, с которого списывается брак (опционально)', example: 1 })
+  @ApiPropertyOptional({
+    description: 'ID поддона, с которого списывается брак (опционально)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
@@ -447,16 +464,25 @@ export class DefectPalletPartsDto {
   @IsPositive()
   quantity: number;
 
-  @ApiProperty({ description: 'ID пользователя, создающего рекламацию', example: 1 })
+  @ApiProperty({
+    description: 'ID пользователя, создающего рекламацию',
+    example: 1,
+  })
   @IsNumber()
   @IsPositive()
   reportedById: number;
 
-  @ApiPropertyOptional({ description: 'Описание брака', example: 'Дефект поверхности' })
+  @ApiPropertyOptional({
+    description: 'Описание брака',
+    example: 'Дефект поверхности',
+  })
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ description: 'ID станка (если брак обнаружен на станке)', example: 1 })
+  @ApiPropertyOptional({
+    description: 'ID станка (если брак обнаружен на станке)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
@@ -475,7 +501,10 @@ export class ReturnPartsToProductionDto {
   @IsPositive()
   partId: number;
 
-  @ApiProperty({ description: 'ID поддона, на который возвращаются детали', example: 1 })
+  @ApiProperty({
+    description: 'ID поддона, на который возвращаются детали',
+    example: 1,
+  })
   @IsNumber()
   @IsPositive()
   palletId: number;
@@ -485,12 +514,18 @@ export class ReturnPartsToProductionDto {
   @IsPositive()
   quantity: number;
 
-  @ApiProperty({ description: 'ID этапа, на который возвращаются детали', example: 1 })
+  @ApiProperty({
+    description: 'ID этапа, на который возвращаются детали',
+    example: 1,
+  })
   @IsNumber()
   @IsPositive()
   returnToStageId: number;
 
-  @ApiProperty({ description: 'ID пользователя, выполняющего возврат', example: 1 })
+  @ApiProperty({
+    description: 'ID пользователя, выполняющего возврат',
+    example: 1,
+  })
   @IsNumber()
   @IsPositive()
   userId: number;
@@ -503,7 +538,7 @@ export class RedistributePalletPartsDto {
   @IsPositive()
   sourcePalletId: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Распределение деталей по поддонам',
     type: 'array',
     items: {
@@ -511,9 +546,9 @@ export class RedistributePalletPartsDto {
       properties: {
         targetPalletId: { type: 'number', nullable: true },
         quantity: { type: 'number' },
-        palletName: { type: 'string', nullable: true }
-      }
-    }
+        palletName: { type: 'string', nullable: true },
+      },
+    },
   })
   @IsArray()
   distributions: {

@@ -637,7 +637,7 @@ export class PalletMachineService {
           routeStageId: currentProgress.routeStageId,
           completedAt: null,
         },
-        data: { 
+        data: {
           completedAt,
           processedQuantity,
         },

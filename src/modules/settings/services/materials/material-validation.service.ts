@@ -17,7 +17,9 @@ export interface MaterialValidationResult {
 export class MaterialValidationService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async validateMaterials(materials: Array<{ code: string; name: string }>): Promise<MaterialValidationResult[]> {
+  async validateMaterials(
+    materials: Array<{ code: string; name: string }>,
+  ): Promise<MaterialValidationResult[]> {
     const results: MaterialValidationResult[] = [];
 
     for (const material of materials) {

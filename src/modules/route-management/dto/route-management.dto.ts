@@ -1,8 +1,4 @@
-import {
-  IsInt,
-  IsOptional,
-  IsEnum,
-} from 'class-validator';
+import { IsInt, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum OrderStatusForRoutes {

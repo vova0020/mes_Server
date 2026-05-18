@@ -164,7 +164,7 @@ export class RoomService {
     this.logger.warn(
       `🔍 LEAVE_ROOM CALLED: Socket ${socket.id} attempting to leave room: ${roomName}`,
     );
-    
+
     // Получаем стек вызовов для понимания, откуда вызывается метод
     const stack = new Error().stack;
     this.logger.warn(`📍 CALL STACK: ${stack}`);

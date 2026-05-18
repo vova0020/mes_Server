@@ -5,7 +5,13 @@ import * as path from 'path';
 
 @Injectable()
 export class SettingsImagesService {
-  private readonly uploadPath = path.join(process.cwd(), 'src', 'modules', 'settings', 'uploads');
+  private readonly uploadPath = path.join(
+    process.cwd(),
+    'src',
+    'modules',
+    'settings',
+    'uploads',
+  );
 
   constructor(private prisma: PrismaService) {
     if (!fs.existsSync(this.uploadPath)) {
@@ -17,7 +23,7 @@ export class SettingsImagesService {
     const ext = file.originalname.split('.').pop();
     const filename = `${Date.now()}.${ext}`;
     const filepath = path.join(this.uploadPath, filename);
-    
+
     fs.writeFileSync(filepath, file.buffer);
 
     const image = await this.prisma.settingsImage.create({
@@ -61,7 +67,7 @@ export class SettingsImagesService {
     const ext = file.originalname.split('.').pop();
     const filename = `${Date.now()}.${ext}`;
     const filepath = path.join(this.uploadPath, filename);
-    
+
     fs.writeFileSync(filepath, file.buffer);
 
     const updatedImage = await this.prisma.settingsImage.update({

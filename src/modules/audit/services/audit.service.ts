@@ -1,7 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/shared/prisma.service';
-import { EventType, MachineStatus, OrderStatus, PartStatus, PackageStatus } from '@prisma/client';
-import { StatusChangeData, OperationData, MovementData } from '../interfaces/audit-context.interface';
+import {
+  EventType,
+  MachineStatus,
+  OrderStatus,
+  PartStatus,
+  PackageStatus,
+} from '@prisma/client';
+import {
+  StatusChangeData,
+  OperationData,
+  MovementData,
+} from '../interfaces/audit-context.interface';
 
 @Injectable()
 export class AuditService {
@@ -83,7 +93,9 @@ export class AuditService {
         ),
       ]);
     } catch (error) {
-      this.logger.error(`Failed to log machine status change: ${error.message}`);
+      this.logger.error(
+        `Failed to log machine status change: ${error.message}`,
+      );
     }
   }
 
@@ -252,7 +264,9 @@ export class AuditService {
         ),
       ]);
     } catch (error) {
-      this.logger.error(`Failed to log package status change: ${error.message}`);
+      this.logger.error(
+        `Failed to log package status change: ${error.message}`,
+      );
     }
   }
 
@@ -349,7 +363,9 @@ export class AuditService {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to update operator performance: ${error.message}`);
+      this.logger.error(
+        `Failed to update operator performance: ${error.message}`,
+      );
     }
   }
 }

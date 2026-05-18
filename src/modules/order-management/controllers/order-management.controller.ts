@@ -99,7 +99,8 @@ export class OrderManagementController {
   @Patch(':id/postpone')
   @ApiOperation({
     summary: 'Отложить заказ',
-    description: 'Переводит заказ в статус "отложен". Можно отложить только предварительные и утвержденные заказы.',
+    description:
+      'Переводит заказ в статус "отложен". Можно отложить только предварительные и утвержденные заказы.',
   })
   @ApiParam({
     name: 'id',
@@ -128,7 +129,8 @@ export class OrderManagementController {
   @Delete(':id')
   @ApiOperation({
     summary: 'Удалить заказ',
-    description: 'Удаляет заказ только если детали не прошли этапы производства.',
+    description:
+      'Удаляет заказ только если детали не прошли этапы производства.',
   })
   @ApiParam({
     name: 'id',
@@ -154,7 +156,8 @@ export class OrderManagementController {
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Нельзя удалить заказ, так как детали уже прошли этапы производства',
+    description:
+      'Нельзя удалить заказ, так как детали уже прошли этапы производства',
   })
   async deleteOrder(
     @Param('id', ParseIntPipe) id: number,

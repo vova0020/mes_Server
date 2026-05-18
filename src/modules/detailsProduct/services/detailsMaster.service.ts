@@ -169,8 +169,6 @@ export class DetailsMasterService {
       (rs) => rs.routeStageId,
     );
 
-
-
     // Находим все пакеты, связанные с заказом
     const packages = await this.prisma.package.findMany({
       where: { orderId },
@@ -380,9 +378,7 @@ export class DetailsMasterService {
 
             for (const pallet of part.pallets) {
               const palletQuantity = Number(pallet.quantity);
-              
 
-              
               const currentSegmentProgress = pallet.palletStageProgress.filter(
                 (progress) =>
                   currentSegmentStageIds.includes(
@@ -403,8 +399,6 @@ export class DetailsMasterService {
                     ) &&
                     !assignment.completedAt,
                 );
-                
-
 
               const completedMachineAssignments =
                 pallet.machineAssignments.filter(
@@ -443,7 +437,7 @@ export class DetailsMasterService {
           } else {
             // Для не первого этапа - считаем готово к обработке от завершенных предыдущих этапов
             let readyFromPreviousStages = 0;
-            
+
             for (const pallet of part.pallets) {
               const palletQuantity = Number(pallet.quantity);
 
@@ -526,21 +520,28 @@ export class DetailsMasterService {
                 }
               }
             }
-            
+
             // Готово к обработке = прошло предыдущие этапы минус уже распределено и готово
-            readyForProcessing = Math.max(0, readyFromPreviousStages - distributed - completed);
+            readyForProcessing = Math.max(
+              0,
+              readyFromPreviousStages - distributed - completed,
+            );
           }
 
-          console.log(`FINAL ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}, total=${Number(part.totalQuantity)}`);
-          
+          console.log(
+            `FINAL ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}, total=${Number(part.totalQuantity)}`,
+          );
+
           readyForProcessing = Math.min(
             readyForProcessing,
             Number(part.totalQuantity),
           );
           distributed = Math.min(distributed, Number(part.totalQuantity));
           completed = Math.min(completed, Number(part.totalQuantity));
-          
-          console.log(`AFTER LIMITS ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}`);
+
+          console.log(
+            `AFTER LIMITS ${part.partCode}: ready=${readyForProcessing}, distributed=${distributed}, completed=${completed}`,
+          );
 
           const compositionItem = packageItem.composition.find(
             (comp) => comp.partCode === part.partCode,

@@ -1,4 +1,3 @@
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
@@ -18,8 +17,6 @@ describe('AppController (e2e)', () => {
 
   // Если маршрут "/" не определён, обновите ожидание на 404
   it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(404);
+    return request(app.getHttpServer()).get('/').expect(404);
   });
 });

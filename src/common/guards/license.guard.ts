@@ -27,7 +27,8 @@ export class LicenseGuard implements CanActivate {
     }
 
     try {
-      const goServiceUrl = process.env.GO_SERVICE_URL || 'http://localhost:8080';
+      const goServiceUrl =
+        process.env.GO_SERVICE_URL || 'http://localhost:8080';
       const response = await fetch(`${goServiceUrl}/api/license/limits/check`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,7 +43,7 @@ export class LicenseGuard implements CanActivate {
       }
 
       const result = await response.json();
-      
+
       if (!result.allowed) {
         throw new ForbiddenException(
           result.message || `Превышен лимит для ${entityType}`,
@@ -54,7 +55,7 @@ export class LicenseGuard implements CanActivate {
       if (error instanceof ForbiddenException) {
         throw error;
       }
-      
+
       throw new HttpException(
         'Сервис лицензирования недоступен',
         HttpStatus.SERVICE_UNAVAILABLE,

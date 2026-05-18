@@ -27,7 +27,7 @@ export class DetailsService {
   constructor(
     private readonly prisma: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   /**
    * Удаляет undefined значения из объекта для корректной работы с Prisma
@@ -329,7 +329,6 @@ export class DetailsService {
       detailDeleted = true;
     }
 
-
     // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
@@ -564,7 +563,7 @@ export class DetailsService {
         created++;
       }
     }
-  // Отправляем WebSocket уведомление о событии
+    // Отправляем WebSocket уведомление о событии
     this.socketService.emitToMultipleRooms(
       [
         'room:masterceh',
@@ -591,14 +590,16 @@ export class DetailsService {
       'detail_catalog:event',
       { status: 'updated' },
     );
-    
+
     return { created, updated, connected };
   }
 
   /**
    * Группирует детали: если все поля кроме quantity совпадают - суммирует quantity
    */
-  private consolidateDetails(details: DetailFromFileDto[]): DetailFromFileDto[] {
+  private consolidateDetails(
+    details: DetailFromFileDto[],
+  ): DetailFromFileDto[] {
     const consolidatedMap = new Map<string, DetailFromFileDto>();
 
     for (const detail of details) {

@@ -194,9 +194,12 @@ export class DetailsMachinNoSmenService {
 
           // Получаем материал из PackageComposition для данной детали
           const compositionItem = packageItem.composition.find(
-            (comp) => comp.partCode === part.partCode
+            (comp) => comp.partCode === part.partCode,
           );
-          const materialName = compositionItem?.materialName || part.material?.materialName || 'Не указан';
+          const materialName =
+            compositionItem?.materialName ||
+            part.material?.materialName ||
+            'Не указан';
 
           detailsMap.set(part.partId, {
             id: part.partId,

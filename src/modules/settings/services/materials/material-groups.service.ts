@@ -12,13 +12,12 @@ import {
 } from '../../dto/material/material-group.dto';
 import { SocketService } from '../../../websocket/services/socket.service';
 
-
 @Injectable()
 export class MaterialGroupsService {
   constructor(
     private readonly prismaService: PrismaService,
     private socketService: SocketService,
-  ) { }
+  ) {}
 
   async create(
     createMaterialGroupDto: CreateMaterialGroupDto,
@@ -167,7 +166,6 @@ export class MaterialGroupsService {
       { status: 'updated' },
     );
 
-
     return groupResponse;
   }
 
@@ -209,7 +207,6 @@ export class MaterialGroupsService {
       'material:event',
       { status: 'updated' },
     );
-
   }
 
   async linkMaterialToGroup(linkDto: LinkMaterialToGroupDto): Promise<void> {
@@ -265,9 +262,7 @@ export class MaterialGroupsService {
       { status: 'updated' },
     );
 
-
     // Также отправляем в комнату материалов
-
   }
 
   async unlinkMaterialFromGroup(
@@ -312,7 +307,6 @@ export class MaterialGroupsService {
       'material:event',
       { status: 'updated' },
     );
-
   }
 
   async getMaterialsInGroup(groupId: number) {

@@ -24,7 +24,9 @@ export class StatisticsController {
   }
 
   @Get('production-line')
-  async getProductionLineStats(@Query() dto: GetProductionLineStatsDto): Promise<StageStats[]> {
+  async getProductionLineStats(
+    @Query() dto: GetProductionLineStatsDto,
+  ): Promise<StageStats[]> {
     return this.statisticsService.getProductionLineStats(dto);
   }
 
@@ -34,7 +36,9 @@ export class StatisticsController {
   }
 
   @Get('defects')
-  async getDefectStats(@Query() dto: GetDefectStatsDto): Promise<DefectDetail[]> {
+  async getDefectStats(
+    @Query() dto: GetDefectStatsDto,
+  ): Promise<DefectDetail[]> {
     return this.statisticsService.getDefectStats(dto);
   }
 

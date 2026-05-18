@@ -29,13 +29,15 @@ export class CreateBufferCellDto {
   @MaxLength(20, { message: 'Код ячейки не должен превышать 20 символов' })
   cellCode: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Статус ячейки', 
-    enum: CellStatus, 
-    example: CellStatus.AVAILABLE 
+  @ApiPropertyOptional({
+    description: 'Статус ячейки',
+    enum: CellStatus,
+    example: CellStatus.AVAILABLE,
   })
   @IsOptional()
-  @IsEnum(CellStatus, { message: 'Статус должен быть AVAILABLE, OCCUPIED или RESERVED' })
+  @IsEnum(CellStatus, {
+    message: 'Статус должен быть AVAILABLE, OCCUPIED или RESERVED',
+  })
   status?: CellStatus;
 
   @ApiProperty({ description: 'Вместимость ячейки', example: 100 })
@@ -61,7 +63,9 @@ export class UpdateBufferCellDto {
 
   @ApiPropertyOptional({ description: 'Статус ячейки', enum: CellStatus })
   @IsOptional()
-  @IsEnum(CellStatus, { message: 'Статус должен быть AVAILABLE, OCCUPIED или RESERVED' })
+  @IsEnum(CellStatus, {
+    message: 'Статус должен быть AVAILABLE, OCCUPIED или RESERVED',
+  })
   status?: CellStatus;
 
   @ApiPropertyOptional({ description: 'Вместимость ячейки' })
@@ -86,24 +90,34 @@ export class UpdateBufferCellDto {
 export class CreateBufferDto {
   @ApiProperty({ description: 'Название буфера', example: 'Буфер линии 1' })
   @IsString({ message: 'Название буфера должно быть строкой' })
-  @MaxLength(100, { message: 'Название буфера не должно превышать 100 символов' })
+  @MaxLength(100, {
+    message: 'Название буфера не должно превышать 100 символов',
+  })
   bufferName: string;
 
-  @ApiPropertyOptional({ description: 'Описание буфера', example: 'Основной буфер для хранения заготовок' })
+  @ApiPropertyOptional({
+    description: 'Описание буфера',
+    example: 'Основной буфер для хранения заготовок',
+  })
   @IsOptional()
   @IsString({ message: 'Описание должно быть строкой' })
   @MaxLength(500, { message: 'Описание не должно превышать 500 символов' })
   description?: string;
 
-  @ApiProperty({ description: 'Местоположение буфера', example: 'Цех 1, участок А' })
+  @ApiProperty({
+    description: 'Местоположение буфера',
+    example: 'Цех 1, участок А',
+  })
   @IsString({ message: 'Местоположение должно быть строкой' })
-  @MaxLength(200, { message: 'Местоположение не должно превышать 200 символов' })
+  @MaxLength(200, {
+    message: 'Местоположение не должно превышать 200 символов',
+  })
   location: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Ячейки буфера', 
+  @ApiPropertyOptional({
+    description: 'Ячейки буфера',
     type: [CreateBufferCellDto],
-    example: [{ cellCode: 'A01', capacity: 100 }] 
+    example: [{ cellCode: 'A01', capacity: 100 }],
   })
   @IsOptional()
   @IsArray({ message: 'Ячейки должны быть массивом' })
@@ -111,9 +125,9 @@ export class CreateBufferDto {
   @Type(() => CreateBufferCellDto)
   cells?: CreateBufferCellDto[];
 
-  @ApiPropertyOptional({ 
-    description: 'ID этапов для привязки к буферу', 
-    example: [1, 2, 3] 
+  @ApiPropertyOptional({
+    description: 'ID этапов для привязки к буферу',
+    example: [1, 2, 3],
   })
   @IsOptional()
   @IsArray({ message: 'Этапы должны быть массивом' })
@@ -125,7 +139,9 @@ export class UpdateBufferDto {
   @ApiPropertyOptional({ description: 'Название буфера' })
   @IsOptional()
   @IsString({ message: 'Название буфера должно быть строкой' })
-  @MaxLength(100, { message: 'Название буфера не должно превышать 100 символов' })
+  @MaxLength(100, {
+    message: 'Название буфера не должно превышать 100 символов',
+  })
   bufferName?: string;
 
   @ApiPropertyOptional({ description: 'Описание буфера' })
@@ -137,7 +153,9 @@ export class UpdateBufferDto {
   @ApiPropertyOptional({ description: 'Местоположение буфера' })
   @IsOptional()
   @IsString({ message: 'Местоположение должно быть строкой' })
-  @MaxLength(200, { message: 'Местоположение не должно превышать 200 символов' })
+  @MaxLength(200, {
+    message: 'Местоположение не должно превышать 200 символов',
+  })
   location?: string;
 }
 
@@ -153,9 +171,9 @@ export class CreateBufferStageDto {
 }
 
 export class UpdateBufferStagesDto {
-  @ApiProperty({ 
-    description: 'Массив ID этапов для привязки к буферу', 
-    example: [1, 2, 3] 
+  @ApiProperty({
+    description: 'Массив ID этапов для привязки к буферу',
+    example: [1, 2, 3],
   })
   @IsArray({ message: 'Этапы должны быть массивом' })
   @IsNumber({}, { each: true, message: 'ID этапа должно быть числом' })
@@ -167,21 +185,28 @@ export class UpdateBufferStagesDto {
 // ================================
 
 export class CopyBufferDto {
-  @ApiProperty({ description: 'Новое название буфера', example: 'Буфер линии 1 (копия)' })
+  @ApiProperty({
+    description: 'Новое название буфера',
+    example: 'Буфер линии 1 (копия)',
+  })
   @IsString({ message: 'Название буфера должно быть строкой' })
-  @MaxLength(100, { message: 'Название буфе��а не должно превышать 100 символов' })
+  @MaxLength(100, {
+    message: 'Название буфе��а не должно превышать 100 символов',
+  })
   newBufferName: string;
 
   @ApiPropertyOptional({ description: 'Новое местоположение буфера' })
   @IsOptional()
   @IsString({ message: 'Местоположение должно быть строкой' })
-  @MaxLength(200, { message: 'Местоположение не должно превышать 200 символов' })
+  @MaxLength(200, {
+    message: 'Местоположение не должно превышать 200 символов',
+  })
   newLocation?: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Копировать ячейки', 
+  @ApiPropertyOptional({
+    description: 'Копировать ячейки',
     example: true,
-    default: true 
+    default: true,
   })
   @IsOptional()
   @Transform(({ value }) => {
@@ -192,10 +217,10 @@ export class CopyBufferDto {
   })
   copyCells?: boolean;
 
-  @ApiPropertyOptional({ 
-    description: 'Копировать связи с этапами', 
+  @ApiPropertyOptional({
+    description: 'Копировать связи с этапами',
     example: true,
-    default: true 
+    default: true,
   })
   @IsOptional()
   @Transform(({ value }) => {

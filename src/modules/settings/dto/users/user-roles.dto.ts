@@ -10,14 +10,14 @@ export enum UserRoleType {
   MASTER = 'master',
   OPERATOR = 'operator',
   ORDER_PICKER = 'orderPicker',
-  WORKPLACE = 'workplace'
+  WORKPLACE = 'workplace',
 }
 
 // Типы контекстов для привязки ролей
 export enum RoleContextType {
-  MACHINE = 'MACHINE',           // workplace → станок
+  MACHINE = 'MACHINE', // workplace → станок
   STAGE_LEVEL1 = 'STAGE_LEVEL1', // master/operator → этап 1-го уровня
-  ORDER_PICKER = 'ORDER_PICKER'  // orderPicker → задачи комплектовщика
+  ORDER_PICKER = 'ORDER_PICKER', // orderPicker → задачи комплектовщика
 }
 
 export class CreateUserRoleDto {

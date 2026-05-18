@@ -16,7 +16,9 @@ export class MaterialsManagementService {
     });
 
     if (!group) {
-      throw new NotFoundException(`Группа материалов с ID ${dto.groupId} не найдена`);
+      throw new NotFoundException(
+        `Группа материалов с ID ${dto.groupId} не найдена`,
+      );
     }
 
     const results: {
@@ -38,7 +40,7 @@ export class MaterialsManagementService {
         if (existing) {
           const updated = await this.prismaService.material.update({
             where: { materialId: existing.materialId },
-            data: { 
+            data: {
               materialName: material.name,
               unit: material.unit || existing.unit,
             },
@@ -118,6 +120,6 @@ export class MaterialsManagementService {
       distinct: ['unit'],
     });
 
-    return materials.map(m => m.unit).filter(Boolean);
+    return materials.map((m) => m.unit).filter(Boolean);
   }
 }

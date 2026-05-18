@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsInt, Min, IsArray, ValidateNested, IsBoolean, IsOptional, Allow } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  Min,
+  IsArray,
+  ValidateNested,
+  IsBoolean,
+  IsOptional,
+  Allow,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class MaterialFromFileDto {

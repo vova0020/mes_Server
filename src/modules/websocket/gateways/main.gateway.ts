@@ -294,7 +294,7 @@ export class MainGateway
       this.logger.warn(
         `✅ CLIENT LEFT ROOM: ${client.id} successfully left ${data.room}`,
       );
-      
+
       // Подтверждение успешного выхода
       client.emit('left', {
         room: data.room,
@@ -356,7 +356,7 @@ export class MainGateway
   @SubscribeMessage('debug_rooms')
   async handleDebugRooms(@ConnectedSocket() client: Socket) {
     const roomsInfo: any = {};
-    
+
     // Проходим по всем комнатам
     Object.values(ROOMS).forEach((roomName) => {
       const room = this.server.sockets.adapter.rooms.get(roomName);
@@ -383,7 +383,7 @@ export class MainGateway
     });
 
     this.logger.warn(`📊 DEBUG ROOMS INFO:`, roomsInfo);
-    
+
     client.emit('debug_rooms_response', {
       allRooms: roomsInfo,
       yourRooms: clientRooms,
