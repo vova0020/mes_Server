@@ -25,6 +25,9 @@ import { RouteListModule } from './modules/routeList/route-list.module';
 import { WorkMonitorModule } from './modules/work-monitor/work-monitor.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { CustomOrdersModule } from './modules/custom/ordersProduct/custom-orders.module';
+import { CustomPalletsModule } from './modules/custom/palletsProduct/custom-pallets.module';
+import { CustomDetailsModule } from './modules/custom/detailsProduct/custom-details.module';
 
 @Module({
   imports: [
@@ -49,6 +52,9 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
     WorkMonitorModule,
     AuditModule,
     StatisticsModule,
+    CustomOrdersModule,
+    CustomPalletsModule,
+    CustomDetailsModule,
 
     // MachinNoSmenModule,
     // MachinModule,

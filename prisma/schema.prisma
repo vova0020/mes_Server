@@ -813,6 +813,7 @@ model Route {
   parts               Part[] // детали, которым присвоен этот маршрут
   packageDetailRoutes PackageDetailDirectory[] // связи с деталями в упаковках
   packageCompositions PackageComposition[] // исходный состав упаковок
+  customOrderParts    CustomOrderPart[] // детали заказного производства
 
   @@map("routes")
 }
@@ -842,6 +843,8 @@ model RouteStage {
   reclamations        Reclamation[]
   /// Возвраты деталей на этот этап
   inventoryReturns    InventoryMovement[] @relation("ReturnToStage")
+  /// Прогресс заказного производства
+  customPalletPartProgress CustomPalletPartStageProgress[] @relation("CustomPalletPartProgress")
   
   // История и аналитика
   partStatusHistory     PartStatusHistory[]
@@ -1686,4 +1689,189 @@ model SettingsImage {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("settings_images")
+}
+
+// ========================================
+// 15. Модуль заказного производства
+// ========================================
+
+/// Таблица custom_orders: заказы для индивидуального производства
+model CustomOrder {
+  /// Первичный ключ заказа
+  customOrderId        Int         @id @default(autoincrement()) @map("custom_order_id")
+  /// Номер заказа
+  orderNumber          String      @map("order_number")
+  /// Название заказа
+  orderName            String      @map("order_name")
+  /// Процент выполнения заказа
+  completionPercentage Decimal     @default(0) @map("completion_percentage")
+  /// Дата создания заказа
+  createdAt            DateTime    @default(now()) @map("created_at")
+  /// Дата последнего обновления заказа
+  updatedAt            DateTime?   @updatedAt @map("updated_at")
+  /// Дата завершения заказа
+  completedAt          DateTime?   @map("completed_at")
+  /// Требуемая дата выполнения заказа
+  requiredDate         DateTime    @map("required_date")
+  /// Статус заказа
+  status               OrderStatus @default(PRELIMINARY)
+  /// Приоритет заказа
+  priority             Int         @default(0)
+
+  // связи:
+  /// Детали заказного производства
+  customParts CustomOrderPart[]
+
+  @@map("custom_orders")
+}
+
+/// Таблица custom_order_parts: детали для заказного производства
+model CustomOrderPart {
+  /// Первичный ключ детали
+  customPartId        Int     @id @default(autoincrement()) @map("custom_part_id")
+  /// Внешний ключ на заказ
+  customOrderId       Int     @map("custom_order_id")
+  /// Код детали
+  partCode            String  @map("part_code")
+  /// Название детали
+  partName            String  @map("part_name")
+  /// Наименование материала
+  materialName        String  @map("material_name")
+  /// Артикул материала
+  materialSku         String  @map("material_sku")
+  /// Толщина детали
+  thickness           Float?  @map("thickness")
+  /// Толщина с учетом облицовки пласти
+  thicknessWithEdging Float?  @map("thickness_with_edging")
+  /// Количество деталей
+  quantity            Decimal
+  /// Заготовка [L]
+  blankLength         Float?  @map("blank_length")
+  /// Заготовка [W]
+  blankWidth          Float?  @map("blank_width")
+  /// Готовая деталь [L]
+  finishedLength      Float?  @map("finished_length")
+  /// Готовая деталь [W]
+  finishedWidth       Float?  @map("finished_width")
+  /// Паз
+  groove              String? @map("groove")
+  /// Артикул облицовки кромки [L1]
+  edgingSkuL1         String? @map("edging_sku_l1")
+  /// Обозначение облицовки кромки [L1]
+  edgingNameL1        String? @map("edging_name_l1")
+  /// Артикул облицовки кромки [L2]
+  edgingSkuL2         String? @map("edging_sku_l2")
+  /// Обозначение облицовки кромки [L2]
+  edgingNameL2        String? @map("edging_name_l2")
+  /// Артикул облицовки кромки [W1]
+  edgingSkuW1         String? @map("edging_sku_w1")
+  /// Обозначение облицовки кромки [W1]
+  edgingNameW1        String? @map("edging_name_w1")
+  /// Артикул облицовки кромки [W2]
+  edgingSkuW2         String? @map("edging_sku_w2")
+  /// Обозначение облицовки кромки [W2]
+  edgingNameW2        String? @map("edging_name_w2")
+  /// Пластик (лицевая)
+  plasticFace         String? @map("plastic_face")
+  /// Пластик (лицевая) артикул
+  plasticFaceSku      String? @map("plastic_face_sku")
+  /// Пластик (нелицевая)
+  plasticBack         String? @map("plastic_back")
+  /// Пластик (нелицевая) артикул
+  plasticBackSku      String? @map("plastic_back_sku")
+  /// Дополнительный материал
+  additionalMaterial  String? @map("additional_material")
+  /// ПФ
+  pf                  Boolean? @map("pf")
+  /// Артикул ПФ (для детали)
+  pfSku               String?  @map("pf_sku")
+  /// СБ деталь
+  sbPart              Boolean? @map("sb_part")
+  /// ПФ СБ
+  pfSb                Boolean? @map("pf_sb")
+  /// Артикул СБ детали (для ПФ СБ)
+  sbPartSku           String?  @map("sb_part_sku")
+  /// Подстопное место на конвейере
+  conveyorPosition    String?  @map("conveyor_position")
+  /// ID маршрута обработки
+  routeId             Int      @map("route_id")
+  /// Текущий статус детали
+  status              PartStatus @default(PENDING)
+
+  // связи:
+  /// Ссылка на заказ
+  customOrder CustomOrder @relation(fields: [customOrderId], references: [customOrderId], onDelete: Cascade)
+  /// Ссылка на маршрут
+  route       Route       @relation(fields: [routeId], references: [routeId])
+  /// Связи с поддонами (многие-ко-многим)
+  customPalletParts CustomPalletPart[]
+
+  @@map("custom_order_parts")
+}
+
+/// Таблица custom_pallets: поддоны для заказного производства
+model CustomPallet {
+  /// Первичный ключ поддона
+  customPalletId Int     @id @default(autoincrement()) @map("custom_pallet_id")
+  /// Название или код поддона
+  palletName     String  @map("pallet_name")
+  /// Флаг активности поддона
+  isActive       Boolean @default(true) @map("is_active")
+  /// Дата создания
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // связи:
+  /// Детали на этом поддоне (многие-ко-многим)
+  customPalletParts CustomPalletPart[]
+
+  @@map("custom_pallets")
+}
+
+/// Таблица custom_pallet_parts: связь поддонов с деталями в заказном производстве
+model CustomPalletPart {
+  /// Первичный ключ записи
+  id             Int     @id @default(autoincrement())
+  /// Внешний ключ на поддон
+  customPalletId Int     @map("custom_pallet_id")
+  /// Внешний ключ на деталь
+  customPartId   Int     @map("custom_part_id")
+  /// Количество данной детали на поддоне
+  quantity       Decimal
+
+  // связи:
+  /// Ссылка на поддон
+  customPallet CustomPallet    @relation(fields: [customPalletId], references: [customPalletId], onDelete: Cascade)
+  /// Ссылка на деталь
+  customPart   CustomOrderPart @relation(fields: [customPartId], references: [customPartId], onDelete: Cascade)
+  /// Прогресс по этапам для этой связки поддон-деталь
+  stageProgress CustomPalletPartStageProgress[]
+
+  @@map("custom_pallet_parts")
+}
+
+/// Таблица custom_pallet_part_stage_progress: прогресс прохождения детали на поддоне по этапам
+model CustomPalletPartStageProgress {
+  /// Первичный ключ записи
+  progressId       Int        @id @default(autoincrement()) @map("progress_id")
+  /// Внешний ключ на связь поддон-деталь
+  palletPartId     Int        @map("pallet_part_id")
+  /// Внешний ключ на этап маршрута
+  routeStageId     Int        @map("route_stage_id")
+  /// Количество деталей, прошедших этот этап на данном поддоне
+  completedQuantity Decimal   @default(0) @map("completed_quantity")
+  /// Статус прохождения этапа
+  status           TaskStatus @default(NOT_PROCESSED)
+  /// Время начала обработки
+  startedAt        DateTime?  @map("started_at")
+  /// Время завершения этапа
+  completedAt      DateTime?  @map("completed_at")
+
+  // связи:
+  /// Ссылка на связь поддон-деталь
+  palletPart   CustomPalletPart @relation(fields: [palletPartId], references: [id], onDelete: Cascade)
+  /// Ссылка на этап маршрута
+  routeStage   RouteStage       @relation("CustomPalletPartProgress", fields: [routeStageId], references: [routeStageId])
+
+  @@unique([palletPartId, routeStageId])
+  @@map("custom_pallet_part_stage_progress")
 }
