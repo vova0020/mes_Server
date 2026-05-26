@@ -1,11 +1,11 @@
-import { IsInt, IsDecimal, IsOptional, IsString, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString, IsArray, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PartToRedistribute {
   @IsInt()
   customPartId: number;
 
-  @IsDecimal()
+  @IsNumber()
   @Min(0.01)
   quantity: number;
 }
