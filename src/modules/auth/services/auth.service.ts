@@ -110,6 +110,7 @@ export class AuthService {
         firstName: user.userDetail?.firstName,
         lastName: user.userDetail?.lastName,
         position: user.userDetail?.position || undefined,
+        productionType: user.productionType,
       },
       assignments,
     };

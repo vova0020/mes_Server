@@ -28,6 +28,7 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
 import { CustomOrdersModule } from './modules/custom/ordersProduct/custom-orders.module';
 import { CustomPalletsModule } from './modules/custom/palletsProduct/custom-pallets.module';
 import { CustomDetailsModule } from './modules/custom/detailsProduct/custom-details.module';
+import { CustomMachineMasterModule } from './modules/custom/masterPage/machinesCards/custom-machine-master.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { CustomDetailsModule } from './modules/custom/detailsProduct/custom-deta
     CustomOrdersModule,
     CustomPalletsModule,
     CustomDetailsModule,
+    CustomMachineMasterModule,
 
     // MachinNoSmenModule,
     // MachinModule,

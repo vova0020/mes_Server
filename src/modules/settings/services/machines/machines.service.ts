@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/prisma.service';
-import { Machine, MachineStatus } from '@prisma/client';
+import { Machine, MachineStatus, ProductionType } from '@prisma/client';
 import {
   StagesWithSubstagesResponse,
   SubstageOptionResponse,
@@ -13,6 +13,7 @@ export interface CreateMachineData {
   recommendedLoad: number;
   loadUnit: string;
   noSmenTask: boolean;
+  productionType?: ProductionType;
 }
 
 export interface UpdateMachineData {
@@ -21,6 +22,7 @@ export interface UpdateMachineData {
   recommendedLoad?: number;
   loadUnit?: string;
   noSmenTask?: boolean;
+  productionType?: ProductionType;
 }
 
 @Injectable()
@@ -139,6 +141,7 @@ export class MachinesService {
           recommendedLoad: data.recommendedLoad,
           loadUnit: data.loadUnit,
           noSmenTask: data.noSmenTask,
+          productionType: data.productionType || 'BOTH',
         },
         include: {
           machinesStages: {

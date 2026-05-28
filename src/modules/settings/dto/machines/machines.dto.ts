@@ -13,7 +13,7 @@ import {
   ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MachineStatus } from '@prisma/client';
+import { MachineStatus, ProductionType } from '@prisma/client';
 
 // DTO для создания станка
 export class CreateMachineDto {
@@ -34,6 +34,10 @@ export class CreateMachineDto {
 
   @IsBoolean({ message: 'noSmenTask должно быть булевым значением' })
   noSmenTask: boolean;
+
+  @IsEnum(ProductionType, { message: 'Некорректный тип производства' })
+  @IsOptional()
+  productionType?: ProductionType;
 }
 
 // DTO для обновления станка
@@ -60,6 +64,10 @@ export class UpdateMachineDto {
   @IsBoolean({ message: 'noSmenTask должно быть булевым значением' })
   @IsOptional()
   noSmenTask?: boolean;
+
+  @IsEnum(ProductionType, { message: 'Некорректный тип производства' })
+  @IsOptional()
+  productionType?: ProductionType;
 }
 
 // DTO для управления связями с этапами 1-го уровня
@@ -129,6 +137,7 @@ export interface MachineResponse {
   recommendedLoad: number;
   loadUnit: string;
   noSmenTask: boolean;
+  productionType: ProductionType;
   machinesStages?: MachineStageResponse[];
   machineSubstages?: MachineSubstageResponse[];
 }

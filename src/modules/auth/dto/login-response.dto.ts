@@ -11,6 +11,7 @@ export class LoginResponseDto {
     firstName?: string;
     lastName?: string;
     position?: string;
+    productionType?: string;
   };
 
   assignments: {

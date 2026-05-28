@@ -69,6 +69,7 @@ export class UsersService {
           data: {
             login: createUserDto.login,
             password: hashedPassword,
+            productionType: createUserDto.productionType || 'BOTH',
           },
         });
 
@@ -188,6 +189,9 @@ export class UsersService {
             updateUserDto.password,
             10,
           );
+        }
+        if (updateUserDto.productionType !== undefined) {
+          userUpdateData.productionType = updateUserDto.productionType;
         }
 
         if (Object.keys(userUpdateData).length > 0) {
@@ -749,6 +753,7 @@ export class UsersService {
       login: user.login,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      productionType: user.productionType,
       userDetail: user.userDetail
         ? {
             firstName: user.userDetail.firstName,

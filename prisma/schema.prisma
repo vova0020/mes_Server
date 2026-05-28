@@ -31,6 +31,8 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   /// Дата и время последнего обновления записи
   updatedAt DateTime @updatedAt @map("updated_at")
+  /// Тип производства, к которому относится пользователь
+  productionType ProductionType @default(BOTH) @map("production_type")
 
   // связи:
   /// Детальная информация о пользователе (ФИО, телефон и т.д.)
@@ -59,6 +61,7 @@ model User {
   packageStatusHistory   PackageStatusHistory[]
   reclamationHistory     ReclamationHistory[]
   operatorPerformance    OperatorPerformanceStats[]
+  customMachineOperations CustomMachineOperation[] @relation("CustomMachineOperator")
 
   @@map("users")
 }
@@ -145,6 +148,13 @@ enum RoleContextType {
   MACHINE // Конкретный станок
   STAGE_LEVEL1 // Этап 1-го уровня производства
   ORDER_PICKER // Комплектовщик
+}
+
+/// Перечисление ProductionType: тип производства
+enum ProductionType {
+  SERIAL // Серийное производство
+  CUSTOM // Индивидуальное производство
+  BOTH // Используется в обоих типах
 }
 
 /// Таблица login_logs: хранит историю попыток входа пользователей
@@ -738,6 +748,8 @@ model Machine {
   counterResetAt  DateTime?     @map("counter_reset_at")
   /// Частично выполненное количество с момента последнего сброса
   partiallyCompleted Decimal    @default(0) @map("partially_completed")
+  /// Тип производства, к которому относится станок
+  productionType ProductionType @default(BOTH) @map("production_type")
 
   // связи: задачи и этапы, связанные с этим станком
   machinesStages        MachineStage[] // какие этапы 1-го уровня выполняет станок
@@ -758,6 +770,8 @@ model Machine {
   partStatusHistory        PartStatusHistory[]
   defectStats              DefectStatsByMachine[]
   operatorPerformance      OperatorPerformanceStats[]
+  customMachineOperations  CustomMachineOperation[]
+  customMachineAssignments CustomMachineAssignment[]
 
   @@map("machines")
 }
@@ -845,6 +859,8 @@ model RouteStage {
   inventoryReturns    InventoryMovement[] @relation("ReturnToStage")
   /// Прогресс заказного производства
   customPalletPartProgress CustomPalletPartStageProgress[] @relation("CustomPalletPartProgress")
+  customMachineOperations  CustomMachineOperation[]        @relation("CustomMachineOperations")
+  customMachineAssignments CustomMachineAssignment[]       @relation("CustomMachineAssignments")
   
   // История и аналитика
   partStatusHistory     PartStatusHistory[]
@@ -1805,6 +1821,10 @@ model CustomOrderPart {
   route       Route       @relation(fields: [routeId], references: [routeId])
   /// Связи с поддонами (многие-ко-многим)
   customPalletParts CustomPalletPart[]
+  /// История операций на станках
+  customMachineOperations CustomMachineOperation[]
+  /// Детали в заданиях на станки
+  assignmentParts CustomMachineAssignmentPart[]
 
   @@map("custom_order_parts")
 }
@@ -1823,6 +1843,10 @@ model CustomPallet {
   // связи:
   /// Детали на этом поддоне (многие-ко-многим)
   customPalletParts CustomPalletPart[]
+  /// История операций на станках
+  customMachineOperations CustomMachineOperation[]
+  /// Назначения на станки
+  customMachineAssignments CustomMachineAssignment[]
 
   @@map("custom_pallets")
 }
@@ -1874,4 +1898,109 @@ model CustomPalletPartStageProgress {
 
   @@unique([palletPartId, routeStageId])
   @@map("custom_pallet_part_stage_progress")
+}
+
+/// Таблица custom_machine_assignments: назначения заданий на станки для индивидуального производства
+/// Одно задание = один поддон + один этап + несколько деталей
+model CustomMachineAssignment {
+  /// Первичный ключ назначения
+  assignmentId   Int        @id @default(autoincrement()) @map("assignment_id")
+  /// Внешний ключ на станок
+  machineId      Int        @map("machine_id")
+  /// Внешний ключ на поддон
+  customPalletId Int        @map("custom_pallet_id")
+  /// Внешний ключ на этап маршрута
+  routeStageId   Int        @map("route_stage_id")
+  /// Статус задания (общий для всего задания)
+  status         TaskStatus @default(PENDING)
+  /// Приоритет задания (больше = выше приоритет)
+  priority       Int        @default(0)
+  /// Время назначения задания
+  assignedAt     DateTime   @default(now()) @map("assigned_at")
+  /// Время начала выполнения
+  startedAt      DateTime?  @map("started_at")
+  /// Время завершения задания
+  completedAt    DateTime?  @map("completed_at")
+
+  // связи:
+  /// Ссылка на станок
+  machine      Machine         @relation(fields: [machineId], references: [machineId])
+  /// Ссылка на поддон
+  customPallet CustomPallet    @relation(fields: [customPalletId], references: [customPalletId], onDelete: Cascade)
+  /// Ссылка на этап маршрута
+  routeStage   RouteStage      @relation("CustomMachineAssignments", fields: [routeStageId], references: [routeStageId])
+  /// Детали в этом задании
+  assignmentParts CustomMachineAssignmentPart[]
+
+  @@index([machineId, status])
+  @@index([status])
+  @@map("custom_machine_assignments")
+}
+
+/// Таблица custom_machine_assignment_parts: детали в задании на станок
+/// Хранит какие детали с поддона нужно обработать и их статусы
+model CustomMachineAssignmentPart {
+  /// Первичный ключ записи
+  id                Int        @id @default(autoincrement())
+  /// Внешний ключ на задание
+  assignmentId      Int        @map("assignment_id")
+  /// Внешний ключ на деталь
+  customPartId      Int        @map("custom_part_id")
+  /// Запланированное количество для обработки
+  plannedQuantity   Decimal    @map("planned_quantity")
+  /// Обработанное количество
+  processedQuantity Decimal    @default(0) @map("processed_quantity")
+  /// Статус обработки этой детали
+  status            TaskStatus @default(PENDING)
+
+  // связи:
+  /// Ссылка на задание
+  assignment CustomMachineAssignment @relation(fields: [assignmentId], references: [assignmentId], onDelete: Cascade)
+  /// Ссылка на деталь
+  customPart CustomOrderPart         @relation(fields: [customPartId], references: [customPartId], onDelete: Cascade)
+
+  @@unique([assignmentId, customPartId])
+  @@index([customPartId])
+  @@map("custom_machine_assignment_parts")
+}
+
+/// Таблица custom_machine_operations: история операций на станках для индивидуального производства
+model CustomMachineOperation {
+  /// Первичный ключ операции
+  operationId       Int      @id @default(autoincrement()) @map("operation_id")
+  /// Внешний ключ на станок
+  machineId         Int      @map("machine_id")
+  /// Внешний ключ на поддон
+  customPalletId    Int      @map("custom_pallet_id")
+  /// Внешний ключ на деталь
+  customPartId      Int      @map("custom_part_id")
+  /// Внешний ключ на этап маршрута
+  routeStageId      Int      @map("route_stage_id")
+  /// Обработанное количество
+  quantityProcessed Decimal  @map("quantity_processed")
+  /// Время начала операции
+  startedAt         DateTime @map("started_at")
+  /// Время завершения операции
+  completedAt       DateTime @map("completed_at")
+  /// Оператор, выполнивший операцию
+  operatorId        Int?     @map("operator_id")
+  /// Длительность операции (секунды)
+  duration          Int      @map("duration")
+
+  // связи:
+  /// Ссылка на станок
+  machine      Machine         @relation(fields: [machineId], references: [machineId])
+  /// Ссылка на поддон
+  customPallet CustomPallet    @relation(fields: [customPalletId], references: [customPalletId])
+  /// Ссылка на деталь
+  customPart   CustomOrderPart @relation(fields: [customPartId], references: [customPartId])
+  /// Ссылка на этап маршрута
+  routeStage   RouteStage      @relation("CustomMachineOperations", fields: [routeStageId], references: [routeStageId])
+  /// Ссылка на оператора
+  operator     User?           @relation("CustomMachineOperator", fields: [operatorId], references: [userId])
+
+  @@index([machineId, completedAt])
+  @@index([customPartId])
+  @@index([operatorId])
+  @@map("custom_machine_operations")
 }

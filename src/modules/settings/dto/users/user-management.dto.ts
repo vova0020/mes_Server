@@ -5,9 +5,11 @@ import {
   MinLength,
   IsDecimal,
   IsPhoneNumber,
+  IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Decimal } from '@prisma/client/runtime/library';
+import { ProductionType } from '@prisma/client';
 
 export class CreateUserDto {
   @ApiProperty({ description: 'Логин пользователя' })
@@ -42,6 +44,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsDecimal()
   salary?: Decimal;
+
+  @ApiPropertyOptional({ description: 'Тип производства' })
+  @IsOptional()
+  @IsEnum(ProductionType)
+  productionType?: ProductionType;
 }
 
 export class UpdateUserDto {
@@ -81,6 +88,11 @@ export class UpdateUserDto {
   @IsOptional()
   @IsDecimal()
   salary?: Decimal;
+
+  @ApiPropertyOptional({ description: 'Тип производства' })
+  @IsOptional()
+  @IsEnum(ProductionType)
+  productionType?: ProductionType;
 }
 
 export class UserResponseDto {
@@ -95,6 +107,9 @@ export class UserResponseDto {
 
   @ApiProperty({ description: 'Дата обновления' })
   updatedAt: Date;
+
+  @ApiPropertyOptional({ description: 'Тип производства' })
+  productionType?: ProductionType;
 
   @ApiPropertyOptional({ description: 'Детали пользователя' })
   userDetail?: {

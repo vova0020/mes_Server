@@ -23,6 +23,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { MachinesService } from '../../services/machines/machines.service';
+import { ProductionType } from '@prisma/client';
 
 // DTO для создания станка с валидацией
 export class CreateMachineDto {
@@ -56,6 +57,10 @@ export class CreateMachineDto {
     return Boolean(value);
   })
   noSmenTask: boolean;
+
+  @IsOptional()
+  @IsEnum(ProductionType, { message: 'Некорректный тип производства' })
+  productionType?: ProductionType;
 }
 
 // DTO для обновления станка с валидацией
@@ -95,6 +100,10 @@ export class UpdateMachineDto {
     return Boolean(value);
   })
   noSmenTask?: boolean;
+
+  @IsOptional()
+  @IsEnum(ProductionType, { message: 'Некорректный тип производства' })
+  productionType?: ProductionType;
 }
 
 // DTO для управления связями с этапами
