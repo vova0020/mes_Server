@@ -46,6 +46,34 @@ export class CustomPalletsService {
             },
           },
         },
+        customMachineAssignments: {
+          where: {
+            status: { in: ['PENDING', 'IN_PROGRESS'] },
+          },
+          include: {
+            machine: {
+              select: {
+                machineId: true,
+                machineName: true,
+                status: true,
+              },
+            },
+            routeStage: {
+              include: {
+                stage: {
+                  select: {
+                    stageId: true,
+                    stageName: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            assignedAt: 'desc',
+          },
+          take: 1,
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -61,21 +89,36 @@ export class CustomPalletsService {
       };
     }
 
-    // Преобразуем Decimal в number
-    const formattedPallets = pallets.map((pallet) => ({
-      customPalletId: pallet.customPalletId,
-      palletName: pallet.palletName,
-      isActive: pallet.isActive,
-      createdAt: pallet.createdAt,
-      parts: pallet.customPalletParts.map((cpp) => ({
-        customPartId: cpp.customPart.customPartId,
-        partCode: cpp.customPart.partCode,
-        partName: cpp.customPart.partName,
-        materialName: cpp.customPart.materialName,
-        status: cpp.customPart.status,
-        quantity: cpp.quantity.toNumber(),
-      })),
-    }));
+    // Преобразуем Decimal в number и добавляем информацию о станке
+    const formattedPallets = pallets.map((pallet) => {
+      const assignment = pallet.customMachineAssignments[0];
+      
+      return {
+        customPalletId: pallet.customPalletId,
+        palletName: pallet.palletName,
+        isActive: pallet.isActive,
+        createdAt: pallet.createdAt,
+        assignedMachine: assignment ? {
+          assignmentId: assignment.assignmentId,
+          machineId: assignment.machine.machineId,
+          machineName: assignment.machine.machineName,
+          machineStatus: assignment.machine.status,
+          routeStageId: assignment.routeStageId,
+          stageName: assignment.routeStage.stage.stageName,
+          assignmentStatus: assignment.status,
+          priority: assignment.priority,
+          assignedAt: assignment.assignedAt,
+        } : null,
+        parts: pallet.customPalletParts.map((cpp) => ({
+          customPartId: cpp.customPart.customPartId,
+          partCode: cpp.customPart.partCode,
+          partName: cpp.customPart.partName,
+          materialName: cpp.customPart.materialName,
+          status: cpp.customPart.status,
+          quantity: cpp.quantity.toNumber(),
+        })),
+      };
+    });
 
     return {
       status: 'SUCCESS',
