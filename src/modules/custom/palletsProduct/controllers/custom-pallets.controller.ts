@@ -7,6 +7,7 @@ import {
   Body,
   ParseIntPipe,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CustomPalletsService } from '../services/custom-pallets.service';
 import { CreateCustomPalletDto } from '../dto/create-custom-pallet.dto';
@@ -18,8 +19,14 @@ export class CustomPalletsController {
 
   // Получение всех поддонов для заказа
   @Get()
-  async getPalletsByOrderId(@Param('orderId', ParseIntPipe) orderId: number) {
-    return await this.customPalletsService.getPalletsByOrderId(orderId);
+  async getPalletsByOrderId(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Query('stageId') stageId?: string,
+  ) {
+    return await this.customPalletsService.getPalletsByOrderId(
+      orderId,
+      stageId ? Number(stageId) : undefined,
+    );
   }
 
   // Создание поддона с деталями
@@ -38,8 +45,14 @@ export class CustomPalletsManagementController {
 
   // Получение деталей конкретного поддона
   @Get(':id/parts')
-  async getPartsByPalletId(@Param('id', ParseIntPipe) id: number) {
-    return await this.customPalletsService.getPartsByPalletId(id);
+  async getPartsByPalletId(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('stageId') stageId?: string,
+  ) {
+    return await this.customPalletsService.getPartsByPalletId(
+      id,
+      stageId ? Number(stageId) : undefined,
+    );
   }
 
   // Удаление поддона

@@ -132,6 +132,19 @@ export class CustomMachineMasterService {
       where: { assignmentId },
       include: {
         assignmentParts: true,
+        customPallet: {
+          include: {
+            customPalletParts: {
+              include: {
+                customPart: {
+                  include: {
+                    customOrder: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -143,13 +156,15 @@ export class CustomMachineMasterService {
       throw new BadRequestException('Задание уже завершено');
     }
 
+    let orderStatusChanged = false;
+
     await this.prisma.$transaction(async (tx) => {
       // Обновляем статус задания
       await tx.customMachineAssignment.update({
         where: { assignmentId },
         data: {
           status: 'IN_PROGRESS',
-          startedAt: assignment.startedAt || new Date(), // Сохраняем первоначальное время старта
+          startedAt: assignment.startedAt || new Date(),
         },
       });
 
@@ -161,6 +176,19 @@ export class CustomMachineMasterService {
         },
         data: { status: 'IN_PROGRESS' },
       });
+
+      // Обновляем статус заказа на IN_PROGRESS если он еще не в работе
+      const firstPart = assignment.customPallet.customPalletParts[0];
+      if (firstPart) {
+        const order = firstPart.customPart.customOrder;
+        if (order && order.status !== 'IN_PROGRESS') {
+          await tx.customOrder.update({
+            where: { customOrderId: order.customOrderId },
+            data: { status: 'IN_PROGRESS' },
+          });
+          orderStatusChanged = true;
+        }
+      }
     });
 
     // Отправляем WebSocket уведомления
@@ -175,11 +203,20 @@ export class CustomMachineMasterService {
       { status: 'updated' },
     );
 
+    if (orderStatusChanged) {
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:event',
+        { status: 'updated' },
+      );
+    }
+
     return {
       status: 'SUCCESS',
       message: 'Работа над поддоном начата',
       assignmentId,
       startedAt: (assignment.startedAt || new Date()).toISOString(),
+      orderStatusChanged,
     };
   }
 
@@ -188,6 +225,13 @@ export class CustomMachineMasterService {
       where: { assignmentId },
       include: {
         assignmentParts: true,
+        customPallet: {
+          include: {
+            customPalletParts: true,
+          },
+        },
+        routeStage: true,
+        machine: true,
       },
     });
 
@@ -199,20 +243,12 @@ export class CustomMachineMasterService {
       throw new BadRequestException('Задание уже завершено');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Завершаем ТОЛЬКО те детали, которые еще не завершены
-      await tx.customMachineAssignmentPart.updateMany({
-        where: {
-          assignmentId,
-          status: { not: 'COMPLETED' },
-        },
-        data: {
-          status: 'COMPLETED',
-          // Устанавливаем processedQuantity = plannedQuantity для незавершенных деталей
-        },
-      });
+    const completedAt = new Date();
+    const startedAt = assignment.startedAt || new Date();
+    const duration = Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000);
 
-      // Обновляем processedQuantity для незавершенных деталей
+    await this.prisma.$transaction(async (tx) => {
+      // Обновляем processedQuantity и создаем прогресс для незавершенных деталей
       for (const part of assignment.assignmentParts) {
         if (part.status !== 'COMPLETED') {
           await tx.customMachineAssignmentPart.update({
@@ -220,6 +256,61 @@ export class CustomMachineMasterService {
             data: {
               processedQuantity: part.plannedQuantity,
               status: 'COMPLETED',
+            },
+          });
+
+          // Находим соответствующую запись в customPalletPart
+          const palletPart = assignment.customPallet.customPalletParts.find(
+            (pp) => pp.customPartId === part.customPartId,
+          );
+
+          if (palletPart) {
+            // Проверяем, есть ли уже запись прогресса
+            const existingProgress = await tx.customPalletPartStageProgress.findUnique({
+              where: {
+                palletPartId_routeStageId: {
+                  palletPartId: palletPart.id,
+                  routeStageId: assignment.routeStageId,
+                },
+              },
+            });
+
+            if (existingProgress) {
+              await tx.customPalletPartStageProgress.update({
+                where: { progressId: existingProgress.progressId },
+                data: {
+                  completedQuantity: {
+                    increment: part.plannedQuantity,
+                  },
+                  status: 'COMPLETED',
+                  completedAt,
+                },
+              });
+            } else {
+              await tx.customPalletPartStageProgress.create({
+                data: {
+                  palletPartId: palletPart.id,
+                  routeStageId: assignment.routeStageId,
+                  completedQuantity: part.plannedQuantity,
+                  status: 'COMPLETED',
+                  startedAt,
+                  completedAt,
+                },
+              });
+            }
+          }
+
+          // Создаем запись операции
+          await tx.customMachineOperation.create({
+            data: {
+              machineId: assignment.machineId,
+              customPalletId: assignment.customPalletId,
+              customPartId: part.customPartId,
+              routeStageId: assignment.routeStageId,
+              quantityProcessed: part.plannedQuantity,
+              startedAt,
+              completedAt,
+              duration,
             },
           });
         }
@@ -230,7 +321,7 @@ export class CustomMachineMasterService {
         where: { assignmentId },
         data: {
           status: 'COMPLETED',
-          completedAt: new Date(),
+          completedAt,
         },
       });
     });
@@ -256,7 +347,7 @@ export class CustomMachineMasterService {
       status: 'SUCCESS',
       message: 'Работа над поддоном завершена',
       assignmentId,
-      completedAt: new Date().toISOString(),
+      completedAt: completedAt.toISOString(),
     };
   }
 
@@ -295,7 +386,24 @@ export class CustomMachineMasterService {
     const part = await this.prisma.customMachineAssignmentPart.findUnique({
       where: { id: assignmentPartId },
       include: {
-        assignment: true,
+        assignment: {
+          include: {
+            customPallet: {
+              include: {
+                customPalletParts: {
+                  include: {
+                    customPart: {
+                      include: {
+                        customOrder: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            routeStage: true,
+          },
+        },
       },
     });
 
@@ -308,6 +416,7 @@ export class CustomMachineMasterService {
     }
 
     let palletStatusChanged = false;
+    let orderStatusChanged = false;
 
     await this.prisma.$transaction(async (tx) => {
       // Обновляем статус детали
@@ -315,6 +424,55 @@ export class CustomMachineMasterService {
         where: { id: assignmentPartId },
         data: { status: 'IN_PROGRESS' },
       });
+
+      // Находим соответствующую запись в customPalletPart
+      const palletPart = part.assignment.customPallet.customPalletParts.find(
+        (pp) => pp.customPartId === part.customPartId,
+      );
+
+      if (palletPart) {
+        // Проверяем, есть ли уже запись прогресса
+        const existingProgress = await tx.customPalletPartStageProgress.findUnique({
+          where: {
+            palletPartId_routeStageId: {
+              palletPartId: palletPart.id,
+              routeStageId: part.assignment.routeStageId,
+            },
+          },
+        });
+
+        if (!existingProgress) {
+          // Создаем запись прогресса со статусом IN_PROGRESS
+          await tx.customPalletPartStageProgress.create({
+            data: {
+              palletPartId: palletPart.id,
+              routeStageId: part.assignment.routeStageId,
+              completedQuantity: 0,
+              status: 'IN_PROGRESS',
+              startedAt: new Date(),
+            },
+          });
+        } else if (existingProgress.status !== 'IN_PROGRESS' && existingProgress.status !== 'COMPLETED') {
+          // Обновляем статус на IN_PROGRESS
+          await tx.customPalletPartStageProgress.update({
+            where: { progressId: existingProgress.progressId },
+            data: {
+              status: 'IN_PROGRESS',
+              startedAt: existingProgress.startedAt || new Date(),
+            },
+          });
+        }
+
+        // Обновляем статус заказа на IN_PROGRESS если он еще не в работе
+        const order = palletPart.customPart.customOrder;
+        if (order && order.status !== 'IN_PROGRESS') {
+          await tx.customOrder.update({
+            where: { customOrderId: order.customOrderId },
+            data: { status: 'IN_PROGRESS' },
+          });
+          orderStatusChanged = true;
+        }
+      }
 
       // Если поддон еще не в работе, переводим его в работу
       if (
@@ -347,6 +505,14 @@ export class CustomMachineMasterService {
       );
     }
 
+    if (orderStatusChanged) {
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:event',
+        { status: 'updated' },
+      );
+    }
+
     return {
       status: 'SUCCESS',
       message: palletStatusChanged
@@ -354,6 +520,7 @@ export class CustomMachineMasterService {
         : 'Работа над деталью начата',
       assignmentPartId,
       palletStatusChanged,
+      orderStatusChanged,
     };
   }
 
@@ -364,6 +531,17 @@ export class CustomMachineMasterService {
         assignment: {
           include: {
             assignmentParts: true,
+            customPallet: {
+              include: {
+                customPalletParts: {
+                  where: {
+                    customPartId: undefined, // будет заполнено ниже
+                  },
+                },
+              },
+            },
+            routeStage: true,
+            machine: true,
           },
         },
       },
@@ -385,14 +563,79 @@ export class CustomMachineMasterService {
     }
 
     let palletCompleted = false;
+    const completedAt = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      // Обновляем статус детали
+      // Обновляем статус детали в задании
       await tx.customMachineAssignmentPart.update({
         where: { id: assignmentPartId },
         data: {
           processedQuantity,
           status: 'COMPLETED',
+        },
+      });
+
+      // Находим соответствующую запись в customPalletPart
+      const palletPart = await tx.customPalletPart.findFirst({
+        where: {
+          customPalletId: part.assignment.customPalletId,
+          customPartId: part.customPartId,
+        },
+      });
+
+      if (palletPart) {
+        // Проверяем, есть ли уже запись прогресса для этого этапа
+        const existingProgress = await tx.customPalletPartStageProgress.findUnique({
+          where: {
+            palletPartId_routeStageId: {
+              palletPartId: palletPart.id,
+              routeStageId: part.assignment.routeStageId,
+            },
+          },
+        });
+
+        if (existingProgress) {
+          // Обновляем существующую запись
+          await tx.customPalletPartStageProgress.update({
+            where: { progressId: existingProgress.progressId },
+            data: {
+              completedQuantity: {
+                increment: processedQuantity,
+              },
+              status: 'COMPLETED',
+              completedAt,
+            },
+          });
+        } else {
+          // Создаем новую запись прогресса
+          await tx.customPalletPartStageProgress.create({
+            data: {
+              palletPartId: palletPart.id,
+              routeStageId: part.assignment.routeStageId,
+              completedQuantity: processedQuantity,
+              status: 'COMPLETED',
+              startedAt: part.assignment.startedAt || new Date(),
+              completedAt,
+            },
+          });
+        }
+      }
+
+      // Создаем запись операции в custom_machine_operations
+      const startedAt = part.assignment.startedAt || new Date();
+      const duration = Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000); // в секундах
+
+      await tx.customMachineOperation.create({
+        data: {
+          machineId: part.assignment.machineId,
+          customPalletId: part.assignment.customPalletId,
+          customPartId: part.customPartId,
+          routeStageId: part.assignment.routeStageId,
+          quantityProcessed: processedQuantity,
+          startedAt,
+          completedAt,
+          duration,
+          // operatorId можно добавить позже, если нужно отслеживать оператора
         },
       });
 
@@ -408,7 +651,7 @@ export class CustomMachineMasterService {
           where: { assignmentId: part.assignmentId },
           data: {
             status: 'COMPLETED',
-            completedAt: new Date(),
+            completedAt,
           },
         });
         palletCompleted = true;
