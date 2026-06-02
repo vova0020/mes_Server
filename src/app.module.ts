@@ -30,6 +30,7 @@ import { CustomPalletsModule } from './modules/custom/palletsProduct/custom-pall
 import { CustomDetailsModule } from './modules/custom/detailsProduct/custom-details.module';
 import { CustomMachineMasterModule } from './modules/custom/masterPage/machinesCards/custom-machine-master.module';
 import { CustomMachinesModule } from './modules/custom/machines/custom-machines.module';
+import { CustomOrderManagementModule } from './modules/custom/order-management/custom-order-management.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { CustomMachinesModule } from './modules/custom/machines/custom-machines.
     CustomDetailsModule,
     CustomMachineMasterModule,
     CustomMachinesModule,
+    CustomOrderManagementModule,
 
     // MachinNoSmenModule,
     // MachinModule,

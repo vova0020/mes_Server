@@ -5,8 +5,8 @@ import { PrismaService } from '../../../../shared/prisma.service';
 export class CustomDetailsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Получение всех деталей для определенного заказа
-  async getDetailsByOrderId(customOrderId: number) {
+  // Получение всех деталей для определенного заказа с фильтрацией по этапу
+  async getDetailsByOrderId(customOrderId: number, stageId?: number) {
     // Проверяем существование заказа
     const order = await this.prisma.customOrder.findUnique({
       where: { customOrderId },
@@ -16,7 +16,7 @@ export class CustomDetailsService {
       throw new NotFoundException(`Заказ с id ${customOrderId} не найден`);
     }
 
-    // Получаем все детали заказа
+    // Получаем все детали заказа с учетом фильтрации по этапу
     const parts = await this.prisma.customOrderPart.findMany({
       where: { customOrderId },
       include: {
@@ -48,8 +48,17 @@ export class CustomDetailsService {
       },
     });
 
+    // Фильтруем детали по этапу, если stageId указан
+    let filteredParts = parts;
+    if (stageId !== undefined) {
+      filteredParts = parts.filter((part) => {
+        // Проверяем, есть ли указанный этап в маршруте детали
+        return part.route.routeStages.some((rs) => rs.stageId === stageId);
+      });
+    }
+
     // Форматируем ответ, преобразуя Decimal в number
-    const formattedParts = parts.map((part) => {
+    const formattedParts = filteredParts.map((part) => {
       // Подсчитываем распределенное количество по активным поддонам
       const distributedQuantity = part.customPalletParts
         .filter((cpp) => cpp.customPallet.isActive)

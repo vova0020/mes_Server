@@ -251,8 +251,17 @@ export class CustomPalletsService {
       throw new NotFoundException(`Поддон с id ${customPalletId} не найден`);
     }
 
+    // Фильтруем детали по этапу, если stageId указан
+    let filteredPalletParts = pallet.customPalletParts;
+    if (stageId !== undefined) {
+      filteredPalletParts = pallet.customPalletParts.filter((cpp) => {
+        // Проверяем, есть ли указанный этап в маршруте детали
+        return cpp.customPart.route.routeStages.some((rs) => rs.stageId === stageId);
+      });
+    }
+
     // Форматируем ответ
-    const parts = pallet.customPalletParts.map((cpp) => {
+    const parts = filteredPalletParts.map((cpp) => {
       let stageStatus: string | null = null;
       let stageCompletedQuantity = 0;
       let stageReadyQuantity = 0;
