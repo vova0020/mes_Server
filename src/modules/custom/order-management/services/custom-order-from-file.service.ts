@@ -23,13 +23,14 @@ export class CustomOrderFromFileService {
     }
 
     // Создаем заказ для индивидуального производства
+    // ВРЕМЕННО: статус сразу LAUNCH_PERMITTED для упрощения работы
     const order = await this.prisma.customOrder.create({
       data: {
         orderNumber: dto.orderNumber,
         orderName: dto.orderName,
         requiredDate: new Date(dto.requiredDate),
         completionPercentage: 0,
-        status: 'PRELIMINARY',
+        status: 'LAUNCH_PERMITTED',
         priority: dto.priority || 0,
       },
     });
