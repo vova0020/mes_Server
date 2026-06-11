@@ -1689,7 +1689,10 @@ export class PalletMachineService {
       // Получаем исходный поддон
       const sourcePallet = await prisma.pallet.findUnique({
         where: { palletId: sourcePalletId },
-        include: { part: true },
+        include: { 
+          part: true,
+          palletStageProgress: true,
+        },
       });
 
       if (!sourcePallet) {
@@ -1792,6 +1795,18 @@ export class PalletMachineService {
               quantity: distribution.quantity,
             },
           });
+
+          // Копируем прогресс этапов с исходного поддона
+          if (sourcePallet.palletStageProgress.length > 0) {
+            await prisma.palletStageProgress.createMany({
+              data: sourcePallet.palletStageProgress.map(progress => ({
+                palletId: newPallet.palletId,
+                routeStageId: progress.routeStageId,
+                status: progress.status,
+                completedAt: progress.completedAt,
+              })),
+            });
+          }
 
           // КЛЮЧЕВОЕ ОТЛИЧИЕ: если указан machineId, создаем задание для нового поддона
           if (machineId) {

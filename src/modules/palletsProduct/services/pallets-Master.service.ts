@@ -1471,7 +1471,10 @@ export class PalletsMasterService {
 
     const sourcePallet = await this.prisma.pallet.findUnique({
       where: { palletId: sourcePalletId },
-      include: { part: true },
+      include: { 
+        part: true,
+        palletStageProgress: true,
+      },
     });
 
     if (!sourcePallet) {
@@ -1521,6 +1524,19 @@ export class PalletsMasterService {
               quantity: dist.quantity,
             },
           });
+          
+          // Копируем прогресс этапов с исходного поддона
+          if (sourcePallet.palletStageProgress.length > 0) {
+            await prisma.palletStageProgress.createMany({
+              data: sourcePallet.palletStageProgress.map(progress => ({
+                palletId: newPallet.palletId,
+                routeStageId: progress.routeStageId,
+                status: progress.status,
+                completedAt: progress.completedAt,
+              })),
+            });
+          }
+          
           createdPallets.push({
             id: newPallet.palletId,
             name: newPallet.palletName,

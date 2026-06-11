@@ -274,7 +274,7 @@ export class PalletsMachinsNoSmenController {
         partId: { type: 'number', description: 'ID детали', example: 1 },
         quantity: {
           type: 'number',
-          description: 'Количество де��алей на поддоне',
+          description: 'Количество деталей на поддоне',
           example: 100,
         },
         palletName: {
