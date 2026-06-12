@@ -247,30 +247,25 @@ export class PackagePartsService {
             this.logger.log(`ID поддонов: ${JSON.stringify(palletIds)}`);
           }
 
-          const defectMovements = await this.prisma.inventoryMovement.aggregate(
-            {
-              where: {
-                partId: part.partId,
-                reason: 'DEFECT',
-              },
-              _sum: { deltaQuantity: true },
+          const defectReclamations = await this.prisma.reclamation.aggregate({
+            where: {
+              partId: part.partId,
             },
-          );
+            _sum: { quantity: true },
+          });
 
           const returnMovements = await this.prisma.inventoryMovement.aggregate(
             {
               where: {
                 partId: part.partId,
                 reason: 'RETURN_FROM_RECLAMATION',
+                deltaQuantity: { gt: 0 },
               },
               _sum: { deltaQuantity: true },
             },
           );
 
-          // deltaQuantity для DEFECT отрицательное, поэтому берем абсолютное значение
-          totalDefected = Math.abs(
-            defectMovements._sum.deltaQuantity?.toNumber() || 0,
-          );
+          totalDefected = defectReclamations._sum.quantity?.toNumber() || 0;
           totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
           if (part.partId === 1223) {
@@ -539,25 +534,23 @@ export class PackagePartsService {
       this.logger.log(`ID поддонов: ${JSON.stringify(palletIds)}`);
     }
 
-    const defectMovements = await this.prisma.inventoryMovement.aggregate({
+    const defectReclamations = await this.prisma.reclamation.aggregate({
       where: {
         partId: part.partId,
-        reason: 'DEFECT',
       },
-      _sum: { deltaQuantity: true },
+      _sum: { quantity: true },
     });
 
     const returnMovements = await this.prisma.inventoryMovement.aggregate({
       where: {
         partId: part.partId,
         reason: 'RETURN_FROM_RECLAMATION',
+        deltaQuantity: { gt: 0 },
       },
       _sum: { deltaQuantity: true },
     });
 
-    totalDefected = Math.abs(
-      defectMovements._sum.deltaQuantity?.toNumber() || 0,
-    );
+    totalDefected = defectReclamations._sum.quantity?.toNumber() || 0;
     totalReturned = returnMovements._sum.deltaQuantity?.toNumber() || 0;
 
     if (part.partId === 1223) {
