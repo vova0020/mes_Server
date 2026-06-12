@@ -1087,22 +1087,24 @@ export class StatisticsService {
     });
 
     // Получаем все возвраты
-    const partIds = [...new Set(reclamations.map((r) => r.partId))];
-    const returnMovements = partIds.length > 0
+    const reclamationIds = reclamations.map((r) => r.reclamationId);
+    const returnMovements = reclamationIds.length > 0
       ? await this.prisma.inventoryMovement.findMany({
           where: {
-            partId: { in: partIds },
+            sourceReclamationId: { in: reclamationIds },
             reason: 'RETURN_FROM_RECLAMATION',
             deltaQuantity: { gt: 0 },
           },
         })
       : [];
 
-    // Группируем возвраты по partId
-    const returnsByPartId = new Map<number, number>();
+    // Группируем возвраты по reclamationId
+    const returnsByReclamationId = new Map<number, number>();
     for (const mv of returnMovements) {
-      const current = returnsByPartId.get(mv.partId) || 0;
-      returnsByPartId.set(mv.partId, current + Number(mv.deltaQuantity));
+      if (mv.sourceReclamationId) {
+        const current = returnsByReclamationId.get(mv.sourceReclamationId) || 0;
+        returnsByReclamationId.set(mv.sourceReclamationId, current + Number(mv.deltaQuantity));
+      }
     }
 
     // Собираем уникальные заказы и упаковки с невозвращенными деталями
@@ -1111,7 +1113,7 @@ export class StatisticsService {
 
     for (const rec of reclamations) {
       const defectQty = Number(rec.quantity);
-      const returnedQty = returnsByPartId.get(rec.partId) || 0;
+      const returnedQty = returnsByReclamationId.get(rec.reclamationId) || 0;
       const unreturnedQty = defectQty - returnedQty;
 
       // Если есть невозвращенные детали
@@ -1186,22 +1188,24 @@ export class StatisticsService {
     });
 
     // Получаем все возвраты
-    const partIds = [...new Set(reclamations.map((r) => r.partId))];
-    const returnMovements = partIds.length > 0
+    const reclamationIds = reclamations.map((r) => r.reclamationId);
+    const returnMovements = reclamationIds.length > 0
       ? await this.prisma.inventoryMovement.findMany({
           where: {
-            partId: { in: partIds },
+            sourceReclamationId: { in: reclamationIds },
             reason: 'RETURN_FROM_RECLAMATION',
             deltaQuantity: { gt: 0 },
           },
         })
       : [];
 
-    // Группируем возвраты по partId
-    const returnsByPartId = new Map<number, number>();
+    // Группируем возвраты по reclamationId
+    const returnsByReclamationId = new Map<number, number>();
     for (const mv of returnMovements) {
-      const current = returnsByPartId.get(mv.partId) || 0;
-      returnsByPartId.set(mv.partId, current + Number(mv.deltaQuantity));
+      if (mv.sourceReclamationId) {
+        const current = returnsByReclamationId.get(mv.sourceReclamationId) || 0;
+        returnsByReclamationId.set(mv.sourceReclamationId, current + Number(mv.deltaQuantity));
+      }
     }
 
     // Формируем результат
@@ -1209,7 +1213,7 @@ export class StatisticsService {
 
     for (const rec of reclamations) {
       const defectQty = Number(rec.quantity);
-      const returnedQty = returnsByPartId.get(rec.partId) || 0;
+      const returnedQty = returnsByReclamationId.get(rec.reclamationId) || 0;
       const unreturnedQty = defectQty - returnedQty;
 
       // Пропускаем, если все вернули
@@ -1233,42 +1237,47 @@ export class StatisticsService {
         }
       }
 
-      // Добавляем запись для каждой упаковки
-      for (const ppp of rec.part.productionPackageParts) {
-        const order = ppp.package.order;
-        const pkg = ppp.package;
+      // Фильтруем упаковки по orderId и packageId
+      const filteredPackages = rec.part.productionPackageParts.filter(ppp => {
+        if (dto.orderId && ppp.package.orderId !== dto.orderId) return false;
+        if (dto.packageId && ppp.package.packageId !== dto.packageId) return false;
+        return true;
+      });
 
-        // Применяем фильтры
-        if (dto.orderId && order.orderId !== dto.orderId) continue;
-        if (dto.packageId && pkg.packageId !== dto.packageId) continue;
+      // Если после фильтрации нет упаковок, пропускаем эту рекламацию
+      if (filteredPackages.length === 0) continue;
 
-        result.push({
-          reclamationId: rec.reclamationId,
-          orderId: order.orderId,
-          orderBatchNumber: order.batchNumber,
-          orderName: order.orderName,
-          packageId: pkg.packageId,
-          packageCode: pkg.packageCode,
-          packageName: pkg.packageName,
-          partId: rec.partId,
-          partCode: rec.part.partCode,
-          partName: rec.part.partName,
-          partSize: rec.part.size,
-          materialId: materialId,
-          materialName: materialName,
-          materialSku: materialSku,
-          defectQuantity: defectQty,
-          returnedQuantity: returnedQty,
-          unreturnedQuantity: unreturnedQty,
-          detectedAt: rec.createdAt,
-          stageId: rec.routeStage.stageId,
-          stageName: rec.routeStage.stage.stageName,
-          machineId: rec.machineId,
-          machineName: rec.machine?.machineName ?? null,
-          defectTypes: rec.defects.map((d) => d.defectType.name),
-          status: rec.status,
-        });
-      }
+      // Берем первую упаковку для отображения (одна рекламация = одна запись)
+      const firstPpp = filteredPackages[0];
+      const order = firstPpp.package.order;
+      const pkg = firstPpp.package;
+
+      result.push({
+        reclamationId: rec.reclamationId,
+        orderId: order.orderId,
+        orderBatchNumber: order.batchNumber,
+        orderName: order.orderName,
+        packageId: pkg.packageId,
+        packageCode: pkg.packageCode,
+        packageName: pkg.packageName,
+        partId: rec.partId,
+        partCode: rec.part.partCode,
+        partName: rec.part.partName,
+        partSize: rec.part.size,
+        materialId: materialId,
+        materialName: materialName,
+        materialSku: materialSku,
+        defectQuantity: defectQty,
+        returnedQuantity: returnedQty,
+        unreturnedQuantity: unreturnedQty,
+        detectedAt: rec.createdAt,
+        stageId: rec.routeStage.stageId,
+        stageName: rec.routeStage.stage.stageName,
+        machineId: rec.machineId,
+        machineName: rec.machine?.machineName ?? null,
+        defectTypes: rec.defects.map((d) => d.defectType.name),
+        status: rec.status,
+      });
     }
 
     return result;
