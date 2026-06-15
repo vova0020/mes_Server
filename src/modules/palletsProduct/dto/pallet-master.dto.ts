@@ -64,6 +64,11 @@ export class PalletsResponseDto {
     description: 'Количество нераспределенных деталей по поддонам',
   })
   unallocatedQuantity: number;
+
+  @ApiProperty({
+    description: 'Количество отбракованных деталей, доступных для возврата на производство',
+  })
+  defectiveQuantity: number;
 }
 
 // DTO для назначения поддона на станок
@@ -529,6 +534,42 @@ export class ReturnPartsToProductionDto {
   @IsNumber()
   @IsPositive()
   userId: number;
+}
+
+// DTO для создания поддона для возврата отбракованных деталей
+export class CreatePalletForDefectReturnDto {
+  @ApiProperty({ description: 'ID детали', example: 1 })
+  @IsNumber()
+  @IsPositive()
+  partId: number;
+
+  @ApiProperty({ description: 'Количество деталей на поддоне', example: 10 })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiProperty({
+    description: 'ID этапа, на который возвращаются детали',
+    example: 1,
+  })
+  @IsNumber()
+  @IsPositive()
+  returnToStageId: number;
+
+  @ApiProperty({
+    description: 'ID пользователя, выполняющего возврат',
+    example: 1,
+  })
+  @IsNumber()
+  @IsPositive()
+  userId: number;
+
+  @ApiPropertyOptional({
+    description: 'Название поддона (опционально)',
+    example: 'Возврат-001',
+  })
+  @IsOptional()
+  palletName?: string;
 }
 
 // DTO для перераспределения деталей между поддонами

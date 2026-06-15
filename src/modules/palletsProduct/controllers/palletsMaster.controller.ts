@@ -25,6 +25,7 @@ import { PalletsMasterService } from '../services/pallets-Master.service';
 import {
   AssignPalletToMachineDto,
   CreatePalletDto,
+  CreatePalletForDefectReturnDto,
   CreatePalletResponseDto,
   DefectPalletPartsDto,
   MovePalletToBufferDto,
@@ -413,6 +414,53 @@ export class PalletsMasterController {
       this.logger.error(`Ошибка при возврате деталей: ${error.message}`);
       throw new InternalServerErrorException(
         'Ошибка при возврате деталей на производство',
+      );
+    }
+  }
+
+  @Post('create-pallet-for-defect-return')
+  @ApiOperation({ 
+    summary: 'Создать новый поддон для возврата отбракованных деталей',
+    description: 'Создает поддон и автоматически проставляет все предыдущие этапы как завершенные'
+  })
+  @ApiBody({ type: CreatePalletForDefectReturnDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Поддон для возврата отбракованных деталей успешно создан',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Деталь или этап не найден',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Недостаточно отбракованных деталей для возврата',
+  })
+  async createPalletForDefectReturn(
+    @Body() createDto: CreatePalletForDefectReturnDto,
+  ) {
+    this.logger.log(
+      `Создание поддона для возврата ${createDto.quantity} отбракованных деталей детали ${createDto.partId} на этап ${createDto.returnToStageId}`,
+    );
+
+    try {
+      return await this.palletOperationsService.createPalletForDefectReturn(
+        createDto.partId,
+        createDto.quantity,
+        createDto.returnToStageId,
+        createDto.userId,
+        createDto.palletName,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message) {
+        throw new BadRequestException(error.message);
+      }
+      this.logger.error(`Ошибка при создании поддона: ${error.message}`);
+      throw new InternalServerErrorException(
+        'Ошибка при создании поддона для возврата отбракованных деталей',
       );
     }
   }

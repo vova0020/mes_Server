@@ -172,6 +172,7 @@ export class PalletMachineNoSmenService {
       pallets: palletDtos,
       total: palletDtos.length,
       unallocatedQuantity: Math.max(0, unallocatedQuantity), // Не может быть отрицательным
+      defectiveQuantity: Math.max(0, activeDefectiveQuantity), // Количество отбракованных деталей, доступных для возврата
     };
   }
   /**

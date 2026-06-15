@@ -59,9 +59,12 @@ export class PalletsMasterService {
       );
     }
 
-    // 3. Получаем все поддоны для этой детали
+    // 3. Получаем все активные поддоны для этой детали
     const pallets = await this.prisma.pallet.findMany({
-      where: { partId: detailId },
+      where: { 
+        partId: detailId,
+        isActive: true,
+      },
       include: {
         palletBufferCells: {
           where: { removedAt: null },
@@ -90,6 +93,7 @@ export class PalletsMasterService {
 
     // 4. Рассчитываем количество нераспределенных деталей с учетом рекламаций
     const totalPalletQuantity = pallets.reduce((sum, pallet) => {
+      // Только активные поддоны уже отфильтрованы выше
       return sum + Number(pallet.quantity);
     }, 0);
 
@@ -179,6 +183,7 @@ export class PalletsMasterService {
       pallets: palletDtos,
       total: palletDtos.length,
       unallocatedQuantity: Math.max(0, unallocatedQuantity), // Не может быть отрицательным
+      defectiveQuantity: Math.max(0, activeDefectiveQuantity), // Количество отбракованных деталей, доступных для возврата
     };
   }
 
@@ -1396,12 +1401,14 @@ export class PalletsMasterService {
         data: { quantity: { decrement: quantity } },
       });
 
-      // Деактивируем поддон, если на нем не осталось деталей (soft delete)
+      // Деактивируем поддон, если на нем не осталось деталей (не удаляем из-за связей с историей)
+      let palletDeactivated = false;
       if (Number(updatedPallet.quantity) === 0) {
         await prisma.pallet.update({
           where: { palletId },
           data: { isActive: false },
         });
+        palletDeactivated = true;
       }
 
       // Отправляем WebSocket уведомление о событии поддона
@@ -1450,7 +1457,7 @@ export class PalletsMasterService {
         reclamation: {
           id: reclamation.reclamationId,
           quantity: Number(reclamation.quantity),
-          palletDeleted: Number(updatedPallet.quantity) === 0,
+          palletDeleted: palletDeactivated,
         },
       };
     });
@@ -1550,7 +1557,7 @@ export class PalletsMasterService {
       let sourcePalletDeleted = false;
 
       if (remainingQuantity === 0) {
-        // Деактивируем поддон вместо удаления (soft delete)
+        // Деактивируем пустой поддон
         await prisma.pallet.update({
           where: { palletId: sourcePalletId },
           data: { isActive: false, quantity: 0 },
@@ -2194,6 +2201,188 @@ export class PalletsMasterService {
             alreadyReturned: totalReturned + quantity,
             remainingToReturn: availableToReturn - quantity,
           },
+        },
+      };
+    });
+  }
+
+  /**
+   * Создать новый поддон для возврата отбракованных деталей
+   * Автоматически проставляет предыдущие этапы как завершенные
+   */
+  async createPalletForDefectReturn(
+    partId: number,
+    quantity: number,
+    returnToStageId: number,
+    userId: number,
+    palletName?: string,
+  ) {
+    this.logger.log(
+      `Создание поддона для возврата ${quantity} отбракованных деталей детали ${partId} на этап ${returnToStageId}`,
+    );
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // 1. Проверяем деталь и её маршрут
+      const part = await prisma.part.findUnique({
+        where: { partId },
+        include: {
+          route: {
+            include: {
+              routeStages: {
+                include: { stage: true },
+                orderBy: { sequenceNumber: 'asc' },
+              },
+            },
+          },
+        },
+      });
+
+      if (!part) {
+        throw new NotFoundException(`Деталь с ID ${partId} не найдена`);
+      }
+
+      // 2. Проверяем этап возврата
+      const returnRouteStage = part.route.routeStages.find(
+        (rs) => rs.stageId === returnToStageId,
+      );
+
+      if (!returnRouteStage) {
+        throw new NotFoundException(
+          `Этап с ID ${returnToStageId} не найден в маршруте детали`,
+        );
+      }
+
+      // 3. Подсчитываем доступное для возврата количество
+      const totalDefective = await prisma.reclamation.aggregate({
+        where: { partId },
+        _sum: { quantity: true },
+      });
+
+      const alreadyReturned = await prisma.inventoryMovement.aggregate({
+        where: {
+          partId,
+          reason: 'RETURN_FROM_RECLAMATION',
+          deltaQuantity: { gt: 0 },
+        },
+        _sum: { deltaQuantity: true },
+      });
+
+      const totalDefectiveQuantity = Number(totalDefective._sum.quantity || 0);
+      const totalReturned = Number(alreadyReturned._sum.deltaQuantity || 0);
+      const availableToReturn = totalDefectiveQuantity - totalReturned;
+
+      if (quantity > availableToReturn) {
+        throw new Error(
+          `Нельзя вернуть ${quantity} деталей. Доступно для возврата: ${availableToReturn} ` +
+            `(отбраковано: ${totalDefectiveQuantity}, уже возвращено: ${totalReturned})`,
+        );
+      }
+
+      // 4. Создаем новый поддон
+      const finalPalletName =
+        palletName || `Возврат-${part.partCode}-${Date.now()}`;
+
+      const newPallet = await prisma.pallet.create({
+        data: {
+          partId,
+          palletName: finalPalletName,
+          quantity,
+        },
+      });
+
+      // 5. Создаем прогресс для всех ПРЕДЫДУЩИХ этапов как COMPLETED
+      const currentStageIndex = part.route.routeStages.findIndex(
+        (rs) => rs.routeStageId === returnRouteStage.routeStageId,
+      );
+
+      const completedAt = new Date();
+
+      // Проставляем все предыдущие этапы как завершенные
+      for (let i = 0; i < currentStageIndex; i++) {
+        const routeStage = part.route.routeStages[i];
+        await prisma.palletStageProgress.create({
+          data: {
+            palletId: newPallet.palletId,
+            routeStageId: routeStage.routeStageId,
+            status: 'COMPLETED',
+            completedAt,
+          },
+        });
+      }
+
+      // Текущий этап (этап возврата) создаем как PENDING
+      await prisma.palletStageProgress.create({
+        data: {
+          palletId: newPallet.palletId,
+          routeStageId: returnRouteStage.routeStageId,
+          status: 'PENDING',
+        },
+      });
+
+      // 6. Создаем запись о возврате
+      const inventoryMovement = await prisma.inventoryMovement.create({
+        data: {
+          partId,
+          palletId: newPallet.palletId,
+          deltaQuantity: quantity,
+          reason: 'RETURN_FROM_RECLAMATION',
+          returnToStageId: returnRouteStage.routeStageId,
+          userId,
+        },
+      });
+
+      this.logger.log(
+        `Создан поддон ${newPallet.palletId} для возврата ${quantity} деталей на этап ${returnRouteStage.stage.stageName}`,
+      );
+
+      // Логируем создание поддона
+      await this.auditService.logEvent(
+        'PALLET_CREATED',
+        'pallet',
+        newPallet.palletId,
+        userId,
+        undefined,
+        { partId, quantity, returnToStageId, palletName: finalPalletName },
+        { availableToReturn: availableToReturn - quantity },
+      );
+
+      // Отправляем WebSocket уведомления
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machinesnosmen'],
+        'pallet:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:masterceh', 'room:machinesnosmen'],
+        'detail:event',
+        { status: 'updated' },
+      );
+      this.socketService.emitToMultipleRooms(
+        ['room:technologist', 'room:director'],
+        'order:stats',
+        { status: 'updated' },
+      );
+
+      return {
+        message: 'Поддон для возврата отбракованных деталей успешно создан',
+        pallet: {
+          id: newPallet.palletId,
+          name: newPallet.palletName,
+          partId: newPallet.partId,
+          quantity: Number(newPallet.quantity),
+          returnToStage: {
+            id: returnRouteStage.stageId,
+            name: returnRouteStage.stage.stageName,
+          },
+        },
+        movement: {
+          id: inventoryMovement.movementId,
+          quantity,
+        },
+        defectStats: {
+          totalDefective: totalDefectiveQuantity,
+          alreadyReturned: totalReturned + quantity,
+          remainingToReturn: availableToReturn - quantity,
         },
       };
     });

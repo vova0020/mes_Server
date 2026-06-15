@@ -1077,6 +1077,7 @@ export class StatisticsService {
                 package: {
                   include: {
                     order: true,
+                    composition: true,
                   },
                 },
               },
@@ -1086,25 +1087,25 @@ export class StatisticsService {
       },
     });
 
-    // Получаем все возвраты
-    const reclamationIds = reclamations.map((r) => r.reclamationId);
-    const returnMovements = reclamationIds.length > 0
+    // Собираем уникальные partId для запроса возвратов
+    const partIds = [...new Set(reclamations.map((r) => r.partId))];
+    
+    // Получаем все возвраты по partId (не по reclamationId!)
+    const returnMovements = partIds.length > 0
       ? await this.prisma.inventoryMovement.findMany({
           where: {
-            sourceReclamationId: { in: reclamationIds },
+            partId: { in: partIds },
             reason: 'RETURN_FROM_RECLAMATION',
             deltaQuantity: { gt: 0 },
           },
         })
       : [];
 
-    // Группируем возвраты по reclamationId
-    const returnsByReclamationId = new Map<number, number>();
+    // Группируем возвраты по partId
+    const returnsByPartId = new Map<number, number>();
     for (const mv of returnMovements) {
-      if (mv.sourceReclamationId) {
-        const current = returnsByReclamationId.get(mv.sourceReclamationId) || 0;
-        returnsByReclamationId.set(mv.sourceReclamationId, current + Number(mv.deltaQuantity));
-      }
+      const current = returnsByPartId.get(mv.partId) || 0;
+      returnsByPartId.set(mv.partId, current + Number(mv.deltaQuantity));
     }
 
     // Собираем уникальные заказы и упаковки с невозвращенными деталями
@@ -1113,11 +1114,14 @@ export class StatisticsService {
 
     for (const rec of reclamations) {
       const defectQty = Number(rec.quantity);
-      const returnedQty = returnsByReclamationId.get(rec.reclamationId) || 0;
+      const returnedQty = returnsByPartId.get(rec.partId) || 0;
       const unreturnedQty = defectQty - returnedQty;
 
       // Если есть невозвращенные детали
       if (unreturnedQty > 0) {
+        // Ищем упаковки через productionPackageParts или через composition
+        let packagesFound = false;
+        
         for (const ppp of rec.part.productionPackageParts) {
           const order = ppp.package.order;
           const pkg = ppp.package;
@@ -1137,6 +1141,44 @@ export class StatisticsService {
               packageName: pkg.packageName,
               orderId: pkg.orderId,
             });
+          }
+          packagesFound = true;
+        }
+        
+        // Если не нашли через productionPackageParts, ищем через composition
+        if (!packagesFound) {
+          const packagesWithComposition = await this.prisma.package.findMany({
+            where: {
+              composition: {
+                some: {
+                  partCode: rec.part.partCode,
+                },
+              },
+            },
+            include: {
+              order: true,
+            },
+          });
+          
+          for (const pkg of packagesWithComposition) {
+            const order = pkg.order;
+            
+            if (!ordersMap.has(order.orderId)) {
+              ordersMap.set(order.orderId, {
+                orderId: order.orderId,
+                batchNumber: order.batchNumber,
+                orderName: order.orderName,
+              });
+            }
+            
+            if (!packagesMap.has(pkg.packageId)) {
+              packagesMap.set(pkg.packageId, {
+                packageId: pkg.packageId,
+                packageCode: pkg.packageCode,
+                packageName: pkg.packageName,
+                orderId: pkg.orderId,
+              });
+            }
           }
         }
       }
@@ -1187,25 +1229,25 @@ export class StatisticsService {
       },
     });
 
-    // Получаем все возвраты
-    const reclamationIds = reclamations.map((r) => r.reclamationId);
-    const returnMovements = reclamationIds.length > 0
+    // Собираем уникальные partId для запроса возвратов
+    const partIds = [...new Set(reclamations.map((r) => r.partId))];
+    
+    // Получаем все возвраты по partId (не по reclamationId!)
+    const returnMovements = partIds.length > 0
       ? await this.prisma.inventoryMovement.findMany({
           where: {
-            sourceReclamationId: { in: reclamationIds },
+            partId: { in: partIds },
             reason: 'RETURN_FROM_RECLAMATION',
             deltaQuantity: { gt: 0 },
           },
         })
       : [];
 
-    // Группируем возвраты по reclamationId
-    const returnsByReclamationId = new Map<number, number>();
+    // Группируем возвраты по partId
+    const returnsByPartId = new Map<number, number>();
     for (const mv of returnMovements) {
-      if (mv.sourceReclamationId) {
-        const current = returnsByReclamationId.get(mv.sourceReclamationId) || 0;
-        returnsByReclamationId.set(mv.sourceReclamationId, current + Number(mv.deltaQuantity));
-      }
+      const current = returnsByPartId.get(mv.partId) || 0;
+      returnsByPartId.set(mv.partId, current + Number(mv.deltaQuantity));
     }
 
     // Формируем результат
@@ -1213,39 +1255,82 @@ export class StatisticsService {
 
     for (const rec of reclamations) {
       const defectQty = Number(rec.quantity);
-      const returnedQty = returnsByReclamationId.get(rec.reclamationId) || 0;
+      const returnedQty = returnsByPartId.get(rec.partId) || 0;
       const unreturnedQty = defectQty - returnedQty;
 
       // Пропускаем, если все вернули
       if (unreturnedQty <= 0) continue;
+
+      // Фильтруем упаковки по orderId и packageId
+      let filteredPackages = rec.part.productionPackageParts.filter(ppp => {
+        if (dto.orderId && ppp.package.orderId !== dto.orderId) return false;
+        if (dto.packageId && ppp.package.packageId !== dto.packageId) return false;
+        return true;
+      });
+
+      // Если после фильтрации нет упаковок, ищем через composition
+      if (filteredPackages.length === 0) {
+        const packagesWithComposition = await this.prisma.package.findMany({
+          where: {
+            ...(dto.orderId && { orderId: dto.orderId }),
+            ...(dto.packageId && { packageId: dto.packageId }),
+            composition: {
+              some: {
+                partCode: rec.part.partCode,
+              },
+            },
+          },
+          include: {
+            order: true,
+            composition: true,
+          },
+        });
+        
+        // Преобразуем в формат productionPackageParts
+        filteredPackages = packagesWithComposition.map(pkg => ({
+          packageId: pkg.packageId,
+          package: pkg,
+        })) as any[];
+      }
+
+      // Если после фильтрации нет упаковок, пропускаем эту рекламацию
+      if (filteredPackages.length === 0) continue;
 
       // Получаем материал
       let materialId = rec.part.materialId;
       let materialName = rec.part.material?.materialName ?? null;
       let materialSku = rec.part.material?.article ?? null;
 
-      if (!materialName && rec.part.productionPackageParts.length > 0) {
-        const firstPackage = rec.part.productionPackageParts[0];
-        if (firstPackage.package.composition && firstPackage.package.composition.length > 0) {
-          const compositionItem = firstPackage.package.composition.find(
-            (comp) => comp.partCode === rec.part.partCode,
-          );
-          if (compositionItem) {
-            materialName = compositionItem.materialName;
-            materialSku = compositionItem.materialSku;
+      // Если материал не найден в part, пытаемся взять из composition
+      if (!materialName) {
+        // Ищем в productionPackageParts
+        if (rec.part.productionPackageParts.length > 0) {
+          const firstPackage = rec.part.productionPackageParts[0];
+          if (firstPackage.package.composition && firstPackage.package.composition.length > 0) {
+            const compositionItem = firstPackage.package.composition.find(
+              (comp) => comp.partCode === rec.part.partCode,
+            );
+            if (compositionItem) {
+              materialName = compositionItem.materialName;
+              materialSku = compositionItem.materialSku;
+            }
+          }
+        }
+        
+        // Если всё ещё не нашли, ищем в filteredPackages
+        if (!materialName && filteredPackages.length > 0) {
+          const firstPkg = filteredPackages[0].package;
+          if (firstPkg.composition && firstPkg.composition.length > 0) {
+            const compositionItem = firstPkg.composition.find(
+              (comp) => comp.partCode === rec.part.partCode,
+            );
+            if (compositionItem) {
+              materialName = compositionItem.materialName;
+              materialSku = compositionItem.materialSku;
+            }
           }
         }
       }
-
-      // Фильтруем упаковки по orderId и packageId
-      const filteredPackages = rec.part.productionPackageParts.filter(ppp => {
-        if (dto.orderId && ppp.package.orderId !== dto.orderId) return false;
-        if (dto.packageId && ppp.package.packageId !== dto.packageId) return false;
-        return true;
-      });
-
-      // Если после фильтрации нет упаковок, пропускаем эту рекламацию
-      if (filteredPackages.length === 0) continue;
 
       // Берем первую упаковку для отображения (одна рекламация = одна запись)
       const firstPpp = filteredPackages[0];
