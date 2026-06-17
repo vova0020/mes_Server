@@ -902,6 +902,20 @@ export class PalletsMasterService {
 
       this.logger.log(`Операция ${operationId} обновлена: ${message}`);
 
+      // Если операция завершена, логируем её в MachineOperationHistory для статистики
+      if (status === OperationCompletionStatus.COMPLETED) {
+        await this.auditService.logMachineOperation({
+          machineId: machineAssignment.machineId,
+          palletId: machineAssignment.palletId,
+          partId: machineAssignment.pallet.partId,
+          routeStageId: machineRouteStage.routeStageId,
+          quantityProcessed: Number(pallet.quantity),
+          startedAt: machineAssignment.assignedAt,
+          completedAt: updateData.completedAt,
+          operatorId: masterId,
+        });
+      }
+
       // Логируем обновление статуса операции
       await this.auditService.logEvent(
         'OPERATION_STATUS_CHANGED',

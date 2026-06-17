@@ -9,6 +9,7 @@ import {
   UnreturnedDefectsFilterOptions,
   UnreturnedDefectRecord,
 } from '../services/statistics.service';
+import { StatisticsOptimizedService } from '../services/statistics-optimized.service';
 import {
   GetProductionLineStatsDto,
   GetStageStatsDto,
@@ -19,7 +20,10 @@ import {
 
 @Controller('statistics')
 export class StatisticsController {
-  constructor(private readonly statisticsService: StatisticsService) {}
+  constructor(
+    private readonly statisticsService: StatisticsService,
+    private readonly statisticsOptimizedService: StatisticsOptimizedService,
+  ) {}
 
   @Get('production-lines')
   async getProductionLines() {
@@ -57,12 +61,13 @@ export class StatisticsController {
   /**
    * Получить данные учёта выпуска продукции по рабочим местам (станкам).
    * Фильтры: startDate, endDate, machineId, orderId, stageId (все опциональны).
+   * ИСПОЛЬЗУЕТ ОПТИМИЗИРОВАННУЮ ВЕРСИЮ для решения проблемы зависания при фильтрации по orderId
    */
   @Get('machine-production')
   async getMachineProduction(
     @Query() dto: GetMachineProductionDto,
   ): Promise<MachineProductionRecord[]> {
-    return this.statisticsService.getMachineProduction(dto);
+    return this.statisticsOptimizedService.getMachineProduction(dto);
   }
 
   /**
