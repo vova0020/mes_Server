@@ -85,6 +85,23 @@ export class MachineUptimeService {
     const stats: MachineUptimeStats[] = [];
 
     for (const machine of machines) {
+      // Получаем последний статус ПЕРЕД началом периода
+      const statusBeforePeriod = await this.prisma.machineStatusHistory.findFirst({
+        where: {
+          machineId: machine.machineId,
+          createdAt: {
+            lt: startDate,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          newStatus: true,
+        },
+      });
+
+      // Получаем историю изменений В ТЕЧЕНИЕ периода
       const statusHistory = await this.prisma.machineStatusHistory.findMany({
         where: {
           machineId: machine.machineId,
@@ -98,9 +115,12 @@ export class MachineUptimeService {
         },
       });
 
+      // Начальный статус - либо последний перед периодом, либо текущий
+      const initialStatus = statusBeforePeriod?.newStatus || machine.status;
+
       const statusBreakdown = this.calculateStatusBreakdown(
         statusHistory,
-        machine.status,
+        initialStatus,
         startDate,
         endDate,
       );
@@ -122,7 +142,7 @@ export class MachineUptimeService {
 
   private calculateStatusBreakdown(
     history: Array<{ newStatus: MachineStatus; createdAt: Date }>,
-    currentStatus: MachineStatus,
+    initialStatus: MachineStatus,
     startDate: Date,
     endDate: Date,
   ): StatusBreakdown[] {
@@ -135,17 +155,14 @@ export class MachineUptimeService {
       statusDurations.set(status, 0);
     });
 
-    // Получаем последнюю запись перед startDate для определения начального статуса
-    const previousHistory =
-      history.length > 0 ? history[0].newStatus : currentStatus;
-
     if (history.length === 0) {
-      // Если нет истории изменений в периоде, используем текущий статус
+      // Если нет истории изменений в периоде, используем начальный статус весь период
       const duration =
         (actualEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
-      statusDurations.set(currentStatus, duration);
+      statusDurations.set(initialStatus, duration);
     } else {
-      let activeStatus = previousHistory;
+      // Начинаем с начального статуса (который был до периода или текущий)
+      let activeStatus = initialStatus;
       let currentTime = startDate;
 
       for (const record of history) {
@@ -164,7 +181,7 @@ export class MachineUptimeService {
         currentTime = changeTime;
       }
 
-      // Добавляем время от последнего изменения до текущего момента (или конца периода)
+      // Добавляем время от последнего изменения до конца периода
       const finalDuration =
         (actualEndDate.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
       if (finalDuration > 0) {
@@ -200,8 +217,13 @@ export class MachineUptimeService {
     let endDate: Date;
 
     if (dto.dateRangeType === DateRangeType.CUSTOM) {
+      // Парсим дату и устанавливаем время на 00:00:00 в локальной временной зоне
       startDate = new Date(dto.startDate!);
+      startDate.setHours(0, 0, 0, 0);
+      
+      // Для endDate устанавливаем 23:59:59.999
       endDate = new Date(dto.endDate!);
+      endDate.setHours(23, 59, 59, 999);
     } else {
       switch (dto.dateRangeType) {
         case DateRangeType.DAY:
