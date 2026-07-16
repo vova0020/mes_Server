@@ -1619,6 +1619,11 @@ export class PalletMachineNoSmenService {
         include: { 
           part: true,
           palletStageProgress: true,
+          machineAssignments: {
+            where: { completedAt: null },
+            orderBy: { assignedAt: 'desc' },
+            take: 1,
+          },
         },
       });
 
@@ -1699,6 +1704,19 @@ export class PalletMachineNoSmenService {
                 status: progress.status,
                 completedAt: progress.completedAt,
               })),
+            });
+          }
+
+          // Копируем активное назначение на станок с исходного поддона
+          const activeAssignment = sourcePallet.machineAssignments[0];
+          if (activeAssignment) {
+            await prisma.machineAssignment.create({
+              data: {
+                palletId: newPallet.palletId,
+                machineId: activeAssignment.machineId,
+                routeStageId: activeAssignment.routeStageId,
+                assignedAt: new Date(),
+              },
             });
           }
 
