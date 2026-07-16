@@ -232,7 +232,7 @@ export class PalletMachinController {
   })
   async redistributePalletParts(
     @Body()
-    redistributeDto: RedistributePalletPartsDto & { machineId?: number },
+    redistributeDto: RedistributePalletPartsDto,
   ): Promise<RedistributePalletPartsResponseDto> {
     this.logger.log(
       `Перераспределение деталей с поддона ${redistributeDto.sourcePalletId}`,

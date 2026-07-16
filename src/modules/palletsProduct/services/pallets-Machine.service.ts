@@ -1710,38 +1710,13 @@ export class PalletMachineService {
         );
       }
 
-      // Если указан machineId, получаем информацию о задании на этом станке
-      let targetStageProgress: any = null;
-
-      if (machineId) {
-        // Проверяем существование станка
-        const machine = await prisma.machine.findUnique({
-          where: { machineId },
-        });
-
-        if (!machine) {
-          throw new NotFoundException(`Станок с ID ${machineId} не найден`);
-        }
-
-        // Получаем текущий прогресс этапа для исходного поддона на указанном станке
-        const assignment = await prisma.machineAssignment.findFirst({
-          where: {
-            palletId: sourcePalletId,
-            machineId,
-            completedAt: null,
-          },
-        });
-
-        if (assignment) {
-          targetStageProgress = await prisma.palletStageProgress.findFirst({
-            where: {
-              palletId: sourcePalletId,
-              status: { in: ['PENDING', 'IN_PROGRESS'] },
-            },
-            include: { routeStage: true },
-          });
-        }
-      }
+      // Берём активное назначение исходного поддона на указанном станке
+      const activeAssignment = machineId
+        ? await prisma.machineAssignment.findFirst({
+            where: { palletId: sourcePalletId, machineId, completedAt: null },
+            orderBy: { assignedAt: 'desc' },
+          })
+        : null;
 
       const createdPallets: { id: number; name: string; quantity: number }[] =
         [];
@@ -1808,28 +1783,16 @@ export class PalletMachineService {
             });
           }
 
-          // КЛЮЧЕВОЕ ОТЛИЧИЕ: если указан machineId, создаем задание для нового поддона
-          if (machineId) {
-            // Создаем назначение на указанный станок
+          // КЛЮЧЕВОЕ ОТЛИЧИЕ: если есть активное назначение исходного поддона — копируем его
+          if (machineId && activeAssignment) {
             await prisma.machineAssignment.create({
               data: {
                 palletId: newPallet.palletId,
-                machineId: machineId,
+                machineId: activeAssignment.machineId,
+                routeStageId: activeAssignment.routeStageId,
                 assignedAt: new Date(),
               },
             });
-
-            // Если есть прогресс этапа, создаем такой же для нового поддона
-            if (targetStageProgress) {
-              await prisma.palletStageProgress.create({
-                data: {
-                  palletId: newPallet.palletId,
-                  routeStageId: targetStageProgress.routeStageId,
-                  status: targetStageProgress.status,
-                },
-              });
-            }
-
             this.logger.log(
               `Создано задание для нового поддона ${newPallet.palletId} на станке ${machineId}`,
             );
