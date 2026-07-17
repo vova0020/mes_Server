@@ -60,7 +60,7 @@ export class PalletMachineNoSmenService {
 
     // 3. Получаем все поддоны для этой детали
     const pallets = await this.prisma.pallet.findMany({
-      where: { partId: detailId },
+      where: { partId: detailId, isActive: true, quantity: { gt: 0 } },
       include: {
         palletBufferCells: {
           where: { removedAt: null },

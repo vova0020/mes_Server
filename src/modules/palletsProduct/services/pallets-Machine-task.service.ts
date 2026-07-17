@@ -76,6 +76,8 @@ export class PalletsMachineTaskService {
     const pallets = await this.prisma.pallet.findMany({
       where: {
         partId,
+        isActive: true,
+        quantity: { gt: 0 },
         // Фильтр по активным заданиям на этот станок для конкретного этапа:
         machineAssignments: {
           some: {

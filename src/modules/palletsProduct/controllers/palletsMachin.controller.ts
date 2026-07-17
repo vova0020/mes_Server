@@ -243,6 +243,7 @@ export class PalletMachinController {
         redistributeDto.sourcePalletId,
         redistributeDto.distributions,
         redistributeDto.machineId,
+        redistributeDto.sourceMachineId,
       );
     } catch (error) {
       if (error instanceof NotFoundException) {

@@ -585,6 +585,12 @@ export class RedistributePalletPartsDto {
   @IsPositive()
   machineId?: number;
 
+  @ApiPropertyOptional({ description: 'ID станка, на котором сейчас находится исходный поддон', example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  sourceMachineId?: number;
+
   @ApiProperty({
     description: 'Распределение деталей по поддонам',
     type: 'array',

@@ -1682,6 +1682,7 @@ export class PalletMachineService {
       palletName?: string;
     }[],
     machineId?: number,
+    sourceMachineId?: number,
   ): Promise<RedistributePalletPartsResponseDto> {
     this.logger.log(`Перераспределение деталей с поддона ${sourcePalletId}`);
 
@@ -1710,10 +1711,10 @@ export class PalletMachineService {
         );
       }
 
-      // Берём активное назначение исходного поддона на указанном станке
-      const activeAssignment = machineId
+      // Берём активное назначение исходного поддона только если sourceMachineId передан
+      const activeAssignment = sourceMachineId
         ? await prisma.machineAssignment.findFirst({
-            where: { palletId: sourcePalletId, machineId, completedAt: null },
+            where: { palletId: sourcePalletId, machineId: sourceMachineId, completedAt: null },
             orderBy: { assignedAt: 'desc' },
           })
         : null;
@@ -1784,7 +1785,7 @@ export class PalletMachineService {
           }
 
           // КЛЮЧЕВОЕ ОТЛИЧИЕ: если есть активное назначение исходного поддона — копируем его
-          if (machineId && activeAssignment) {
+          if (activeAssignment) {
             await prisma.machineAssignment.create({
               data: {
                 palletId: newPallet.palletId,
