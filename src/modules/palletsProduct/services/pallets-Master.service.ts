@@ -294,9 +294,10 @@ export class PalletsMasterService {
       });
       let stageProgress;
       if (existingProgress) {
+        // Сбрасываем isRedistributed, т.к. это реальное назначение на станок
         stageProgress = await prisma.palletStageProgress.update({
           where: { pspId: existingProgress.pspId },
-          data: { status: TaskStatus.PENDING, completedAt: null },
+          data: { status: TaskStatus.PENDING, completedAt: null, isRedistributed: false },
           include: { routeStage: { include: { stage: true, substage: true } } },
         });
       } else {
@@ -778,7 +779,8 @@ export class PalletsMasterService {
       }
 
       // Подготовка данных для обновления
-      const updateData: any = {};
+      // Сбрасываем isRedistributed, т.к. это реальная операция (не перераспределение)
+      const updateData: any = { isRedistributed: false };
 
       // Определяем новый статус на основе OperationCompletionStatus
       if (status === OperationCompletionStatus.COMPLETED) {
@@ -1552,6 +1554,7 @@ export class PalletsMasterService {
           });
           
           // Копируем прогресс этапов с исходного поддона
+          // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
               data: sourcePallet.palletStageProgress.map(progress => ({
@@ -1559,6 +1562,7 @@ export class PalletsMasterService {
                 routeStageId: progress.routeStageId,
                 status: progress.status,
                 completedAt: progress.completedAt,
+                isRedistributed: true,
               })),
             });
           }

@@ -1224,15 +1224,17 @@ model PartRouteProgress {
 // Прогресс прохождения паллеты по этапам маршрута
 model PalletStageProgress {
   /// Уникальный идентификатор записи прогресса
-  pspId        Int        @id @default(autoincrement()) @map("psp_id")
+  pspId            Int        @id @default(autoincrement()) @map("psp_id")
   /// Ссылка на паллету
-  palletId     Int        @map("pallet_id")
+  palletId         Int        @map("pallet_id")
   /// Ссылка на этап маршрута
-  routeStageId Int        @map("route_stage_id")
+  routeStageId     Int        @map("route_stage_id")
   /// Статус задачи (AWAITING_PROCESSING, PENDING и т.д.)
-  status       TaskStatus
+  status           TaskStatus
   /// Время завершения этапа (если выполнено)
-  completedAt  DateTime?  @map("completed_at")
+  completedAt      DateTime?  @map("completed_at")
+  /// Флаг: запись создана при перераспределении (не учитывается в истории обработки)
+  isRedistributed  Boolean    @default(false) @map("is_redistributed")
 
   // связи: навигация к паллете и этапу маршрута
   pallet     Pallet     @relation(fields: [palletId], references: [palletId], onDelete: Cascade)

@@ -287,6 +287,7 @@ export class StatisticsOptimizedService {
       const progressWhereCondition: any = {
         status: 'COMPLETED',
         completedAt: { not: null },
+        isRedistributed: false,
       };
 
       // Фильтр по дате
@@ -383,15 +384,17 @@ export class StatisticsOptimizedService {
         `Found ${palletProgress.length} completed pallets from PalletStageProgress`,
       );
 
-      // Получаем список palletId и routeStageId из MachineOperationHistory для исключения дубликатов
+      // Получаем список partId и routeStageId из MachineOperationHistory для исключения дубликатов
+      // Используем partId (а не palletId), чтобы при перераспределении деталей на новый поддон
+      // скопированный прогресс не попадал в историю обработки повторно
       const operationKeys = new Set(
-        operations.map((op) => `${op.palletId}-${op.routeStageId}`),
+        operations.map((op) => `${op.partId}-${op.routeStageId}`),
       );
 
       // Добавляем только те записи из PalletStageProgress, которых нет в MachineOperationHistory
       const manualCompletions = palletProgress.filter(
         (progress) =>
-          !operationKeys.has(`${progress.palletId}-${progress.routeStageId}`),
+          !operationKeys.has(`${progress.pallet.part.partId}-${progress.routeStageId}`),
       );
 
       console.log(

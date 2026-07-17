@@ -374,9 +374,10 @@ export class PalletMachineNoSmenService {
       const routeStage = currentStageProgress.routeStage;
 
       // 7. Обновляем статус этапа на IN_PROGRESS
+      // Сбрасываем isRedistributed, т.к. это реальная обработка на станке
       await prisma.palletStageProgress.update({
         where: { pspId: currentStageProgress.pspId },
-        data: { status: TaskStatus.IN_PROGRESS },
+        data: { status: TaskStatus.IN_PROGRESS, isRedistributed: false },
       });
 
       // 8. Обновляем статус детали на IN_PROGRESS если еще не обновлен
@@ -1696,6 +1697,7 @@ export class PalletMachineNoSmenService {
           });
 
           // Копируем прогресс этапов с исходного поддона
+          // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
               data: sourcePallet.palletStageProgress.map(progress => ({
@@ -1703,6 +1705,7 @@ export class PalletMachineNoSmenService {
                 routeStageId: progress.routeStageId,
                 status: progress.status,
                 completedAt: progress.completedAt,
+                isRedistributed: true,
               })),
             });
           }

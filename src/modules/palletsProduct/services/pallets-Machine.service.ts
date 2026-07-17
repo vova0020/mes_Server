@@ -242,6 +242,7 @@ export class PalletMachineService {
       );
 
       // Обновляем прогресс этапа на "В ПРОЦЕССЕ"
+      // Сбрасываем isRedistributed, т.к. это реальная обработка на станке
       await this.prisma.palletStageProgress.updateMany({
         where: {
           palletId: palletId,
@@ -250,6 +251,7 @@ export class PalletMachineService {
         },
         data: {
           status: 'IN_PROGRESS',
+          isRedistributed: false,
         },
       });
 
@@ -347,9 +349,10 @@ export class PalletMachineService {
       });
 
       if (existingProgress) {
+        // Сбрасываем isRedistributed, т.к. это реальная обработка на станке
         await prisma.palletStageProgress.update({
           where: { pspId: existingProgress.pspId },
-          data: { status: 'IN_PROGRESS' },
+          data: { status: 'IN_PROGRESS', isRedistributed: false },
         });
       } else {
         await prisma.palletStageProgress.create({
@@ -1773,6 +1776,7 @@ export class PalletMachineService {
           });
 
           // Копируем прогресс этапов с исходного поддона
+          // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
               data: sourcePallet.palletStageProgress.map(progress => ({
@@ -1780,6 +1784,7 @@ export class PalletMachineService {
                 routeStageId: progress.routeStageId,
                 status: progress.status,
                 completedAt: progress.completedAt,
+                isRedistributed: true,
               })),
             });
           }
