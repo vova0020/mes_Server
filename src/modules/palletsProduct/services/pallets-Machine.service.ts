@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+﻿import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { TaskStatus } from '@prisma/client';
 import { SocketService } from '../../websocket/services/socket.service';
@@ -1693,9 +1693,13 @@ export class PalletMachineService {
       // Получаем исходный поддон
       const sourcePallet = await prisma.pallet.findUnique({
         where: { palletId: sourcePalletId },
-        include: { 
+        include: {
           part: true,
           palletStageProgress: true,
+          machineAssignments: {
+            where: { completedAt: null },
+            orderBy: { assignedAt: 'desc' },
+          },
         },
       });
 
@@ -1714,13 +1718,14 @@ export class PalletMachineService {
         );
       }
 
-      // Берём активное назначение исходного поддона только если sourceMachineId передан
-      const activeAssignment = sourceMachineId
-        ? await prisma.machineAssignment.findFirst({
-            where: { palletId: sourcePalletId, machineId: sourceMachineId, completedAt: null },
-            orderBy: { assignedAt: 'desc' },
-          })
-        : null;
+      // Берём активное назначение исходного поддона:
+      // 1. Если передан sourceMachineId — ищем по нему
+      // 2. Если передан machineId — ищем по нему
+      // 3. Иначе берём первое активное назначение (как у мастера)
+      const targetMachineId = sourceMachineId || machineId;
+      const activeAssignment = targetMachineId
+        ? sourcePallet.machineAssignments.find(a => a.machineId === targetMachineId) || sourcePallet.machineAssignments[0] || null
+        : sourcePallet.machineAssignments[0] || null;
 
       const createdPallets: { id: number; name: string; quantity: number }[] =
         [];
@@ -1822,6 +1827,12 @@ export class PalletMachineService {
         await prisma.pallet.update({
           where: { palletId: sourcePalletId },
           data: { isActive: false, quantity: 0 },
+        });
+        // Завершаем все активные назначения деактивированного поддона,
+        // чтобы он не отображался в заданиях станка
+        await prisma.machineAssignment.updateMany({
+          where: { palletId: sourcePalletId, completedAt: null },
+          data: { completedAt: new Date() },
         });
         sourcePalletDeleted = true;
       } else {
