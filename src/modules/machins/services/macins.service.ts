@@ -25,6 +25,22 @@ export class MachinsService {
             stage: true,
           },
         },
+        operatorBindings: {
+          where: {
+            isActive: true,
+            unboundAt: null,
+          },
+          include: {
+            user: {
+              include: {
+                userDetail: true,
+              },
+            },
+          },
+          orderBy: {
+            operatorNumber: 'asc',
+          },
+        },
       },
     });
 
@@ -164,16 +180,28 @@ export class MachinsService {
     // Получаем первый связанный этап (участок) для обратной совместимости
     const firstStage = machine.machinesStages[0]?.stage || null;
 
+    // Формируем список привязанных операторов
+    const boundOperators = machine.operatorBindings.map((binding) => ({
+      userId: binding.userId,
+      operatorNumber: binding.operatorNumber,
+      firstName: binding.user.userDetail?.firstName || 'Неизвестно',
+      lastName: binding.user.userDetail?.lastName || '',
+      position: binding.user.userDetail?.position || undefined,
+      boundAt: binding.boundAt,
+    }));
+
     return {
       id: machine.machineId,
       name: machine.machineName,
       status: machine.status,
+      machineCode: machine.machineCode || null,
       recommendedLoad: recommendedLoad,
       noShiftAssignment: machine.noSmenTask,
       segmentId: firstStage?.stageId || null,
       segmentName: firstStage?.stageName || null,
       completedQuantity: roundedCompletedQuantity,
       completionPercentage: completionPercentage,
+      boundOperators: boundOperators.length > 0 ? boundOperators : undefined,
     };
   }
 

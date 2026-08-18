@@ -8,9 +8,10 @@ import { MachinsController } from './controllers/machins.controller';
 import { MachinsService } from './services/macins.service';
 import { MachineSchedulerService } from './services/machine-scheduler.service';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [SharedModule, WebsocketModule, ScheduleModule.forRoot()],
+  imports: [SharedModule, WebsocketModule, SettingsModule, ScheduleModule.forRoot()],
   controllers: [MachinsMasterController, MachinsController],
   providers: [MachinMasterService, MachinsService, MachineSchedulerService],
   exports: [MachinMasterService, MachinsService],

@@ -31,6 +31,8 @@ import { UsersController } from './controllers/users/users.controller';
 import { PickersService } from './services/users/pickers.service';
 import { SettingsImagesController } from './controllers/images/settings-images.controller';
 import { SettingsImagesService } from './services/images/settings-images.service';
+import { OperatorBindingController } from './controllers/operators/operator-binding.controller';
+import { OperatorBindingService } from './services/operators/operator-binding.service';
 
 @Module({
   imports: [
@@ -53,6 +55,7 @@ import { SettingsImagesService } from './services/images/settings-images.service
     BuffersController,
     UsersController,
     SettingsImagesController,
+    OperatorBindingController,
   ],
   providers: [
     MaterialGroupsService,
@@ -72,6 +75,7 @@ import { SettingsImagesService } from './services/images/settings-images.service
     UsersService,
     PickersService,
     SettingsImagesService,
+    OperatorBindingService,
   ],
   exports: [
     MaterialGroupsService,
@@ -90,6 +94,7 @@ import { SettingsImagesService } from './services/images/settings-images.service
     BufferStagesService,
     UsersService,
     PickersService,
+    OperatorBindingService,
   ],
 })
 export class SettingsModule {}

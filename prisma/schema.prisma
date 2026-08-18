@@ -62,6 +62,8 @@ model User {
   reclamationHistory     ReclamationHistory[]
   operatorPerformance    OperatorPerformanceStats[]
   customMachineOperations CustomMachineOperation[] @relation("CustomMachineOperator")
+  /// Привязки оператора к станкам
+  operatorMachineBindings OperatorMachineBinding[]
 
   @@map("users")
 }
@@ -736,6 +738,8 @@ model Machine {
   machineId       Int           @id @default(autoincrement()) @map("machine_id")
   /// Название или код станка
   machineName     String        @map("machine_name")
+  /// Уникальный код станка для привязки операторов (формат: буква + 3 цифры, например H431)
+  machineCode     String?       @unique @map("machine_code")
   /// Текущий статус (ACTIVE, INACTIVE или MAINTENANCE)
   status          MachineStatus
   /// Рекомендуемая загрузка станка (числовое значение)
@@ -762,6 +766,8 @@ model Machine {
   reclamations          Reclamation[]
   /// Возвраты деталей на этот станок
   inventoryReturns      InventoryMovement[] @relation("ReturnToMachine")
+  /// Привязки операторов к станку
+  operatorBindings      OperatorMachineBinding[]
   
   // История и аналитика
   statusHistory            MachineStatusHistory[]
@@ -806,6 +812,35 @@ model MachineSubstage {
 
   @@unique([machineId, substageId])
   @@map("machines_substages")
+}
+
+/// Таблица привязок операторов к станкам
+model OperatorMachineBinding {
+  /// Первичный ключ привязки
+  bindingId   Int       @id @default(autoincrement()) @map("binding_id")
+  /// Внешний ключ на пользователя (оператора)
+  userId      Int       @map("user_id")
+  /// Внешний ключ на станок
+  machineId   Int       @map("machine_id")
+  /// Порядковый номер оператора на станке (1 = первый, 2 = второй и т.д.)
+  operatorNumber Int    @map("operator_number")
+  /// Время привязки к станку
+  boundAt     DateTime  @default(now()) @map("bound_at")
+  /// Время отвязки от станка (null = активная привязка)
+  unboundAt   DateTime? @map("unbound_at")
+  /// Флаг активности привязки
+  isActive    Boolean   @default(true) @map("is_active")
+
+  // связи:
+  /// Ссылка на пользователя
+  user    User    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  /// Ссылка на станок
+  machine Machine @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([machineId, isActive])
+  @@index([machineId, operatorNumber, isActive])
+  @@map("operator_machine_bindings")
 }
 
 // ========================================

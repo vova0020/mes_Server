@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../shared/prisma.service';
 import { SocketService } from '../../websocket/services/socket.service';
 import { AuditService } from '../../audit/services/audit.service';
+import { OperatorBindingService } from '../../settings/services/operators/operator-binding.service';
 import { MachineStatus, EventType } from '@prisma/client';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class MachineSchedulerService {
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
     private readonly auditService: AuditService,
+    @Inject(forwardRef(() => OperatorBindingService))
+    private readonly operatorBindingService: OperatorBindingService,
   ) {}
 
   /**
@@ -104,6 +107,12 @@ export class MachineSchedulerService {
         );
       }
 
+      // Отвязываем всех операторов от станков
+      this.logger.log('Отвязка всех операторов от станков...');
+      const unboundCount =
+        await this.operatorBindingService.unbindAllOperators();
+      this.logger.log(`Отвязано операторов: ${unboundCount}`);
+
       // Отправляем WebSocket уведомление во все комнаты
       this.socketService.emitToMultipleRooms(
         [
@@ -128,7 +137,7 @@ export class MachineSchedulerService {
       );
 
       this.logger.log(
-        `Сброс смены завершён: ${machines.length} станков переведены в INACTIVE, счётчики сброшены.`,
+        `Сброс смены завершён: ${machines.length} станков переведены в INACTIVE, счётчики сброшены, ${unboundCount} операторов отвязано.`,
       );
     } catch (error) {
       this.logger.error(

@@ -178,6 +178,45 @@ export class UserInfoDto {
   fullName: string | null;
 }
 
+export class BoundOperatorDto {
+  @ApiProperty({
+    description: 'ID оператора',
+    example: 123,
+  })
+  userId: number;
+
+  @ApiProperty({
+    description: 'Номер оператора на станке',
+    example: 1,
+  })
+  operatorNumber: number;
+
+  @ApiProperty({
+    description: 'Имя оператора',
+    example: 'Петр',
+  })
+  firstName: string;
+
+  @ApiProperty({
+    description: 'Фамилия оператора',
+    example: 'Сидоров',
+  })
+  lastName: string;
+
+  @ApiProperty({
+    description: 'Должность оператора',
+    example: 'Старший оператор',
+    nullable: true,
+  })
+  position?: string;
+
+  @ApiProperty({
+    description: 'Время привязки к станку',
+    example: '2026-08-18T08:00:00.000Z',
+  })
+  boundAt: Date;
+}
+
 export class MachineInfoDto {
   @ApiProperty({
     description: 'ID станка',
@@ -356,6 +395,13 @@ export class MachineResponseDto {
   status: string;
 
   @ApiProperty({
+    description: 'Код станка для привязки операторов',
+    example: 'H431',
+    nullable: true,
+  })
+  machineCode?: string | null;
+
+  @ApiProperty({
     description: 'Рекомендуемая загрузка станка',
     example: 100,
   })
@@ -394,6 +440,13 @@ export class MachineResponseDto {
     required: false,
   })
   completionPercentage?: number;
+
+  @ApiProperty({
+    description: 'Список привязанных операторов',
+    type: [BoundOperatorDto],
+    required: false,
+  })
+  boundOperators?: BoundOperatorDto[];
 }
 
 export class SegmentOrdersResponseDto {
