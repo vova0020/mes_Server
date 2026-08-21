@@ -42,4 +42,12 @@ export class GetMachineProductionDto {
   @Type(() => Number)
   @IsInt()
   stageId?: number;
+
+  /**
+   * ID оператора (фильтр по оператору)
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  operatorId?: number;
 }

@@ -123,6 +123,11 @@ export class StatisticsOptimizedService {
         whereCondition.partId = { in: partIdsForOrder };
       }
 
+      // Фильтр по оператору
+      if (dto.operatorId) {
+        whereCondition.operatorId = dto.operatorId;
+      }
+
       const operations = await this.prisma.machineOperationHistory.findMany({
         where: whereCondition,
         select: {
@@ -392,17 +397,21 @@ export class StatisticsOptimizedService {
       );
 
       // Добавляем только те записи из PalletStageProgress, которых нет в MachineOperationHistory
+      // ВАЖНО: Если фильтруем по operatorId, пропускаем ручные завершения (у них operatorId всегда null)
       const manualCompletions = palletProgress.filter(
         (progress) =>
           !operationKeys.has(`${progress.pallet.part.partId}-${progress.routeStageId}`),
       );
 
+      // Если указан фильтр по оператору, не добавляем ручные завершения (у них нет operatorId)
+      const filteredManualCompletions = dto.operatorId ? [] : manualCompletions;
+
       console.log(
-        `Adding ${manualCompletions.length} manual completions (not in MachineOperationHistory)`,
+        `Adding ${filteredManualCompletions.length} manual completions (not in MachineOperationHistory)${dto.operatorId ? ' - skipped due to operatorId filter' : ''}`,
       );
 
       result.push(
-        ...manualCompletions.map((progress) => {
+        ...filteredManualCompletions.map((progress) => {
           const packages = progress.pallet.part.productionPackageParts.map(
             (ppp) => ({
               packageId: ppp.packageId,
@@ -483,6 +492,11 @@ export class StatisticsOptimizedService {
       // Фильтр по заказу
       if (dto.orderId) {
         packingTaskWhere.package = { orderId: dto.orderId };
+      }
+
+      // Фильтр по оператору
+      if (dto.operatorId) {
+        packingTaskWhere.assignedTo = dto.operatorId;
       }
 
       const packingTasks = await this.prisma.packingTask.findMany({
@@ -603,7 +617,7 @@ export class StatisticsOptimizedService {
 
     // Сортируем результат по дате завершения
     console.log(
-      `Returning ${result.length} records (MachineOperationHistory + PalletStageProgress + PackingTask) for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}`,
+      `Returning ${result.length} records (MachineOperationHistory + PalletStageProgress + PackingTask) for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}, operatorId: ${dto.operatorId || 'all'}`,
     );
 
     return result.sort(

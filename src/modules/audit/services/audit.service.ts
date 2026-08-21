@@ -105,19 +105,49 @@ export class AuditService {
         (data.completedAt.getTime() - data.startedAt.getTime()) / 1000,
       );
 
-      await this.prisma.machineOperationHistory.create({
-        data: {
+      // Получаем всех активных операторов, привязанных к станку
+      const activeOperators = await this.prisma.operatorMachineBinding.findMany({
+        where: {
           machineId: data.machineId,
-          palletId: data.palletId,
-          partId: data.partId,
-          routeStageId: data.routeStageId,
-          quantityProcessed: data.quantityProcessed,
-          startedAt: data.startedAt,
-          completedAt: data.completedAt,
-          operatorId: data.operatorId,
-          duration,
+          isActive: true,
+          unboundAt: null,
+        },
+        select: {
+          userId: true,
         },
       });
+
+      // Если есть привязанные операторы, создаем запись для каждого
+      if (activeOperators.length > 0) {
+        await this.prisma.machineOperationHistory.createMany({
+          data: activeOperators.map((operator) => ({
+            machineId: data.machineId,
+            palletId: data.palletId,
+            partId: data.partId,
+            routeStageId: data.routeStageId,
+            quantityProcessed: data.quantityProcessed,
+            startedAt: data.startedAt,
+            completedAt: data.completedAt,
+            operatorId: operator.userId,
+            duration,
+          })),
+        });
+      } else {
+        // Если нет привязанных операторов, создаем одну запись с operatorId из параметра (может быть null)
+        await this.prisma.machineOperationHistory.create({
+          data: {
+            machineId: data.machineId,
+            palletId: data.palletId,
+            partId: data.partId,
+            routeStageId: data.routeStageId,
+            quantityProcessed: data.quantityProcessed,
+            startedAt: data.startedAt,
+            completedAt: data.completedAt,
+            operatorId: data.operatorId,
+            duration,
+          },
+        });
+      }
     } catch (error) {
       this.logger.error(`Failed to log machine operation: ${error.message}`);
     }

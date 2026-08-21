@@ -169,6 +169,12 @@ export interface FilterOptions {
     stageId: number;
     stageName: string;
   }>;
+  operators: Array<{
+    userId: number;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  }>;
 }
 
 /**
@@ -1018,9 +1024,10 @@ export class StatisticsService {
    * - список материалов
    * - список станков (рабочих мест)
    * - список этапов производства (ProductionStageLevel1)
+   * - список операторов
    */
   async getFilterOptions(): Promise<FilterOptions> {
-    const [orders, materials, machines, stages] = await Promise.all([
+    const [orders, materials, machines, stages, operators] = await Promise.all([
       // Заказы: id, номер партии, название
       this.prisma.order.findMany({
         select: {
@@ -1058,9 +1065,44 @@ export class StatisticsService {
         },
         orderBy: { stageName: 'asc' },
       }),
+
+      // Операторы: получаем пользователей с ролью 'operator'
+      this.prisma.user.findMany({
+        where: {
+          userRoles: {
+            some: {
+              role: {
+                roleName: 'operator',
+              },
+            },
+          },
+        },
+        select: {
+          userId: true,
+          userDetail: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+        orderBy: {
+          userDetail: {
+            lastName: 'asc',
+          },
+        },
+      }),
     ]);
 
-    return { orders, materials, machines, stages };
+    // Форматируем операторов
+    const formattedOperators = operators.map((op) => ({
+      userId: op.userId,
+      firstName: op.userDetail?.firstName || 'Неизвестно',
+      lastName: op.userDetail?.lastName || '',
+      fullName: `${op.userDetail?.firstName || 'Неизвестно'} ${op.userDetail?.lastName || ''}`.trim(),
+    }));
+
+    return { orders, materials, machines, stages, operators: formattedOperators };
   }
 
   /**
@@ -1945,5 +1987,45 @@ export class StatisticsService {
     return result.sort(
       (a, b) => b.completedAt.getTime() - a.completedAt.getTime(),
     );
+  }
+
+  /**
+   * Получить список операторов (пользователей с ролью 'operator')
+   */
+  async getOperators() {
+    const operators = await this.prisma.user.findMany({
+      where: {
+        userRoles: {
+          some: {
+            role: {
+              roleName: 'operator',
+            },
+          },
+        },
+      },
+      select: {
+        userId: true,
+        userDetail: {
+          select: {
+            firstName: true,
+            lastName: true,
+            position: true,
+          },
+        },
+      },
+      orderBy: {
+        userDetail: {
+          lastName: 'asc',
+        },
+      },
+    });
+
+    return operators.map((op) => ({
+      userId: op.userId,
+      firstName: op.userDetail?.firstName || 'Неизвестно',
+      lastName: op.userDetail?.lastName || '',
+      fullName: `${op.userDetail?.firstName || 'Неизвестно'} ${op.userDetail?.lastName || ''}`.trim(),
+      position: op.userDetail?.position || undefined,
+    }));
   }
 }

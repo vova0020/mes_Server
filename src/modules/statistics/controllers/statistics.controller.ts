@@ -89,4 +89,13 @@ export class StatisticsController {
   ): Promise<UnreturnedDefectRecord[]> {
     return this.statisticsService.getUnreturnedDefects(dto);
   }
+
+  /**
+   * Получить список операторов для фильтров.
+   * Возвращает всех пользователей, которые работали на станках или упаковке.
+   */
+  @Get('operators')
+  async getOperators() {
+    return this.statisticsService.getOperators();
+  }
 }
