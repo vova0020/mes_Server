@@ -105,91 +105,91 @@
 
 
   
-// import { PrismaClient } from '@prisma/client';
-// import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
-// const prisma = new PrismaClient();
+const prisma = new PrismaClient();
 
-// async function main() {
-//   console.log('Создаем администратора...');
+async function main() {
+  console.log('Создаем администратора...');
 
-//   // Создаем роль администратора
-//   const adminRole = await prisma.role.create({
-//     data: {
-//       roleName: 'admin',
-//     },
-//   });
-//   const masterRole = await prisma.role.create({
-//     data: {
-//       roleName: 'master',
-//     },
-//   });
-//   const managementRole = await prisma.role.create({
-//     data: {
-//       roleName: 'management',
-//     },
-//   });
-//   const technologistRole = await prisma.role.create({
-//     data: {
-//       roleName: 'technologist',
-//     },
-//   });
-//   const orderPickerRole = await prisma.role.create({
-//     data: {
-//       roleName: 'orderPicker',
-//     },
-//   });
-//   const workplaceRole = await prisma.role.create({
-//     data: {
-//       roleName: 'workplace',
-//     },
-//   });
-//   const operatorRole = await prisma.role.create({
-//     data: {
-//       roleName: 'operator',
-//     },
-//   });
+  // Создаем роль администратора
+  const adminRole = await prisma.role.create({
+    data: {
+      roleName: 'admin',
+    },
+  });
+  const masterRole = await prisma.role.create({
+    data: {
+      roleName: 'master',
+    },
+  });
+  const managementRole = await prisma.role.create({
+    data: {
+      roleName: 'management',
+    },
+  });
+  const technologistRole = await prisma.role.create({
+    data: {
+      roleName: 'technologist',
+    },
+  });
+  const orderPickerRole = await prisma.role.create({
+    data: {
+      roleName: 'orderPicker',
+    },
+  });
+  const workplaceRole = await prisma.role.create({
+    data: {
+      roleName: 'workplace',
+    },
+  });
+  const operatorRole = await prisma.role.create({
+    data: {
+      roleName: 'operator',
+    },
+  });
 
-//   // Хешируем пароль
-//   const hashedPassword = await bcrypt.hash('12345', 10);
+  // Хешируем пароль
+  const hashedPassword = await bcrypt.hash('12345', 10);
 
-//   // Создаем администратора
-//   const adminUser = await prisma.user.create({
-//     data: {
-//       login: 'admin',
-//       password: hashedPassword,
-//       userDetail: {
-//         create: {
-//           firstName: 'Администратор',
-//           lastName: 'Системы',
-//           phone: '+7 (900) 123-45-67',
-//           position: 'Системный администратор',
-//           salary: 100000,
-//         },
-//       },
-//     },
-//   });
+  // Создаем администратора
+  const adminUser = await prisma.user.create({
+    data: {
+      login: 'admin',
+      password: hashedPassword,
+      userDetail: {
+        create: {
+          firstName: 'Администратор',
+          lastName: 'Системы',
+          phone: '+7 (900) 123-45-67',
+          position: 'Системный администратор',
+          salary: 100000,
+        },
+      },
+    },
+  });
 
-//   // Назначаем роль администратора
-//   await prisma.userRole.create({
-//     data: {
-//       userId: adminUser.userId,
-//       roleId: adminRole.roleId,
-//     },
-//   });
+  // Назначаем роль администратора
+  await prisma.userRole.create({
+    data: {
+      userId: adminUser.userId,
+      roleId: adminRole.roleId,
+    },
+  });
 
-//   console.log('✅ Администратор создан успешно!');
-//   console.log('');
-//   console.log('🔑 Данные для входа:');
-//   console.log('   Логин: admin');
-//   console.log('   Пароль: 12345');
-// }
+  console.log('✅ Администратор создан успешно!');
+  console.log('');
+  console.log('🔑 Данные для входа:');
+  console.log('   Логин: admin');
+  console.log('   Пароль: 12345');
+}
 
-// main()
-//   .catch((e) => {
-//     console.error('❌ Ошибка при создании администратора:', e);
-//     process.exit(1);
-//   })
-//   .finally(async () => {
-//     await prisma.$disconnect();
-//   });
+main()
+  .catch((e) => {
+    console.error('❌ Ошибка при создании администратора:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
