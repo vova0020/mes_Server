@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/shared/prisma.service';
 import { CreateMachineAssignmentDto } from '../dto/create-machine-assignment.dto';
 
@@ -48,19 +52,19 @@ export class CustomMachinesService {
 
     // Находим routeStage для указанного stageId
     const routeStages = pallet.customPalletParts
-      .flatMap(pp => pp.customPart.route.routeStages)
-      .filter(rs => rs.stageId === stageId);
+      .flatMap((pp) => pp.customPart.route.routeStages)
+      .filter((rs) => rs.stageId === stageId);
 
     if (routeStages.length === 0) {
       // Получаем доступные этапы для более информативной ошибки
       const availableStages = pallet.customPalletParts
-        .flatMap(pp => pp.customPart.route.routeStages)
-        .map(rs => `${rs.stageId} (${rs.stage.stageName})`)
+        .flatMap((pp) => pp.customPart.route.routeStages)
+        .map((rs) => `${rs.stageId} (${rs.stage.stageName})`)
         .filter((value, index, self) => self.indexOf(value) === index);
-      
+
       throw new NotFoundException(
         `Этап с ID ${stageId} не найден в маршрутах деталей на поддоне. ` +
-        `Доступные этапы: ${availableStages.join(', ')}`
+          `Доступные этапы: ${availableStages.join(', ')}`,
       );
     }
 
@@ -111,5 +115,4 @@ export class CustomMachinesService {
 
     return assignment;
   }
-
 }

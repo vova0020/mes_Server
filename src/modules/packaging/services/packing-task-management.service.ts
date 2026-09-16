@@ -18,12 +18,14 @@ import {
 } from '../dto/packing-assignment-response.dto';
 import { PackingTaskStatus, PackageStatus } from '@prisma/client';
 import { SocketService } from '../../websocket/services/socket.service';
+import { AuditService } from '../../audit/services/audit.service';
 
 @Injectable()
 export class PackingTaskManagementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketService: SocketService,
+    private readonly auditService: AuditService,
   ) {}
 
   // Отметить задание как взято в работу
@@ -220,6 +222,18 @@ export class PackingTaskManagementService {
 
       // Проверяем и обновляем статус заказа
       await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
+
+      // Логируем операцию упаковки для всех активных операторов на станке
+      await this.auditService.logMachineOperation({
+        machineId: updatedTask.machineId,
+        palletId: 0, // Для упаковки поддон не используется, передаем 0
+        partId: 0, // Для упаковки partId не используется, передаем 0
+        routeStageId: 0, // Для упаковки нет routeStageId, передаем 0
+        quantityProcessed: completedQty,
+        startedAt: updatedTask.assignedAt,
+        completedAt: new Date(),
+        operatorId: undefined, // Не передаем, чтобы audit service сам нашел операторов
+      });
 
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(

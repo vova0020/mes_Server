@@ -245,7 +245,9 @@ export class CustomMachineMasterService {
 
     const completedAt = new Date();
     const startedAt = assignment.startedAt || new Date();
-    const duration = Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000);
+    const duration = Math.floor(
+      (completedAt.getTime() - startedAt.getTime()) / 1000,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       // Обновляем processedQuantity и создаем прогресс для незавершенных деталей
@@ -266,14 +268,15 @@ export class CustomMachineMasterService {
 
           if (palletPart) {
             // Проверяем, есть ли уже запись прогресса
-            const existingProgress = await tx.customPalletPartStageProgress.findUnique({
-              where: {
-                palletPartId_routeStageId: {
-                  palletPartId: palletPart.id,
-                  routeStageId: assignment.routeStageId,
+            const existingProgress =
+              await tx.customPalletPartStageProgress.findUnique({
+                where: {
+                  palletPartId_routeStageId: {
+                    palletPartId: palletPart.id,
+                    routeStageId: assignment.routeStageId,
+                  },
                 },
-              },
-            });
+              });
 
             if (existingProgress) {
               await tx.customPalletPartStageProgress.update({
@@ -432,14 +435,15 @@ export class CustomMachineMasterService {
 
       if (palletPart) {
         // Проверяем, есть ли уже запись прогресса
-        const existingProgress = await tx.customPalletPartStageProgress.findUnique({
-          where: {
-            palletPartId_routeStageId: {
-              palletPartId: palletPart.id,
-              routeStageId: part.assignment.routeStageId,
+        const existingProgress =
+          await tx.customPalletPartStageProgress.findUnique({
+            where: {
+              palletPartId_routeStageId: {
+                palletPartId: palletPart.id,
+                routeStageId: part.assignment.routeStageId,
+              },
             },
-          },
-        });
+          });
 
         if (!existingProgress) {
           // Создаем запись прогресса со статусом IN_PROGRESS
@@ -452,7 +456,10 @@ export class CustomMachineMasterService {
               startedAt: new Date(),
             },
           });
-        } else if (existingProgress.status !== 'IN_PROGRESS' && existingProgress.status !== 'COMPLETED') {
+        } else if (
+          existingProgress.status !== 'IN_PROGRESS' &&
+          existingProgress.status !== 'COMPLETED'
+        ) {
           // Обновляем статус на IN_PROGRESS
           await tx.customPalletPartStageProgress.update({
             where: { progressId: existingProgress.progressId },
@@ -585,14 +592,15 @@ export class CustomMachineMasterService {
 
       if (palletPart) {
         // Проверяем, есть ли уже запись прогресса для этого этапа
-        const existingProgress = await tx.customPalletPartStageProgress.findUnique({
-          where: {
-            palletPartId_routeStageId: {
-              palletPartId: palletPart.id,
-              routeStageId: part.assignment.routeStageId,
+        const existingProgress =
+          await tx.customPalletPartStageProgress.findUnique({
+            where: {
+              palletPartId_routeStageId: {
+                palletPartId: palletPart.id,
+                routeStageId: part.assignment.routeStageId,
+              },
             },
-          },
-        });
+          });
 
         if (existingProgress) {
           // Обновляем существующую запись
@@ -623,7 +631,9 @@ export class CustomMachineMasterService {
 
       // Создаем запись операции в custom_machine_operations
       const startedAt = part.assignment.startedAt || new Date();
-      const duration = Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000); // в секундах
+      const duration = Math.floor(
+        (completedAt.getTime() - startedAt.getTime()) / 1000,
+      ); // в секундах
 
       await tx.customMachineOperation.create({
         data: {

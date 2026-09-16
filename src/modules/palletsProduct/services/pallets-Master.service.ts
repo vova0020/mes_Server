@@ -61,7 +61,7 @@ export class PalletsMasterService {
 
     // 3. Получаем все активные поддоны для этой детали
     const pallets = await this.prisma.pallet.findMany({
-      where: { 
+      where: {
         partId: detailId,
         isActive: true,
       },
@@ -297,7 +297,11 @@ export class PalletsMasterService {
         // Сбрасываем isRedistributed, т.к. это реальное назначение на станок
         stageProgress = await prisma.palletStageProgress.update({
           where: { pspId: existingProgress.pspId },
-          data: { status: TaskStatus.PENDING, completedAt: null, isRedistributed: false },
+          data: {
+            status: TaskStatus.PENDING,
+            completedAt: null,
+            isRedistributed: false,
+          },
           include: { routeStage: { include: { stage: true, substage: true } } },
         });
       } else {
@@ -1494,7 +1498,7 @@ export class PalletsMasterService {
 
     const sourcePallet = await this.prisma.pallet.findUnique({
       where: { palletId: sourcePalletId },
-      include: { 
+      include: {
         part: true,
         palletStageProgress: true,
         machineAssignments: {
@@ -1552,12 +1556,12 @@ export class PalletsMasterService {
               quantity: dist.quantity,
             },
           });
-          
+
           // Копируем прогресс этапов с исходного поддона
           // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
-              data: sourcePallet.palletStageProgress.map(progress => ({
+              data: sourcePallet.palletStageProgress.map((progress) => ({
                 palletId: newPallet.palletId,
                 routeStageId: progress.routeStageId,
                 status: progress.status,
@@ -1566,7 +1570,7 @@ export class PalletsMasterService {
               })),
             });
           }
-          
+
           // Копируем активное назначение на станок с исходного поддона
           const activeAssignment = sourcePallet.machineAssignments[0];
           if (activeAssignment) {
@@ -1579,7 +1583,7 @@ export class PalletsMasterService {
               },
             });
           }
-          
+
           createdPallets.push({
             id: newPallet.palletId,
             name: newPallet.palletName,

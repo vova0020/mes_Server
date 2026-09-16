@@ -91,11 +91,13 @@ export class CustomPalletsService {
         let hasInProgressPart = false;
         let hasCompletedPart = false;
         let allPartsCompleted = true;
-        
+
         for (const palletPart of pallet.customPalletParts) {
           const part = palletPart.customPart;
           const routeStages = part.route.routeStages;
-          const stageIndex = routeStages.findIndex((rs) => rs.stageId === stageId);
+          const stageIndex = routeStages.findIndex(
+            (rs) => rs.stageId === stageId,
+          );
 
           if (stageIndex === -1) continue;
 
@@ -135,7 +137,8 @@ export class CustomPalletsService {
             const prevProgress = palletPart.stageProgress.find(
               (p) => p.routeStageId === prevStage.routeStageId,
             );
-            const prevCompleted = prevProgress?.completedQuantity.toNumber() || 0;
+            const prevCompleted =
+              prevProgress?.completedQuantity.toNumber() || 0;
             readyQuantity += prevCompleted;
           }
         }
@@ -147,7 +150,10 @@ export class CustomPalletsService {
           palletStatus = 'NOT_PROCESSED';
         } else if (hasInProgressPart) {
           palletStatus = 'IN_PROGRESS';
-        } else if (allPartsCompleted && completedQuantity >= totalQuantityForStage) {
+        } else if (
+          allPartsCompleted &&
+          completedQuantity >= totalQuantityForStage
+        ) {
           palletStatus = 'COMPLETED';
         } else if (hasCompletedPart || completedQuantity > 0) {
           palletStatus = 'IN_PROGRESS';
@@ -256,7 +262,9 @@ export class CustomPalletsService {
     if (stageId !== undefined) {
       filteredPalletParts = pallet.customPalletParts.filter((cpp) => {
         // Проверяем, есть ли указанный этап в маршруте детали
-        return cpp.customPart.route.routeStages.some((rs) => rs.stageId === stageId);
+        return cpp.customPart.route.routeStages.some(
+          (rs) => rs.stageId === stageId,
+        );
       });
     }
 
@@ -270,7 +278,9 @@ export class CustomPalletsService {
       if (stageId) {
         const routeStages = cpp.customPart.route.routeStages;
         // Ищем этап в маршруте по stageId (это ID из production_stages_level_1)
-        const currentRouteStage = routeStages.find((rs) => rs.stageId === stageId);
+        const currentRouteStage = routeStages.find(
+          (rs) => rs.stageId === stageId,
+        );
 
         if (currentRouteStage) {
           const partQty = cpp.quantity.toNumber();
@@ -285,7 +295,10 @@ export class CustomPalletsService {
           // Определяем статус детали для этого этапа на основе статуса в прогрессе
           if (progress) {
             // Если есть запись прогресса, используем её статус
-            if (progress.status === 'COMPLETED' || stageCompletedQuantity >= partQty) {
+            if (
+              progress.status === 'COMPLETED' ||
+              stageCompletedQuantity >= partQty
+            ) {
               stageStatus = 'COMPLETED';
             } else if (progress.status === 'IN_PROGRESS') {
               stageStatus = 'IN_PROGRESS';
@@ -311,7 +324,8 @@ export class CustomPalletsService {
               const prevProgress = cpp.stageProgress.find(
                 (p) => p.routeStageId === prevStage.routeStageId,
               );
-              const prevCompleted = prevProgress?.completedQuantity.toNumber() || 0;
+              const prevCompleted =
+                prevProgress?.completedQuantity.toNumber() || 0;
 
               if (prevCompleted >= partQty) {
                 stageStatus = 'PENDING';
@@ -561,7 +575,9 @@ export class CustomPalletsService {
         });
 
         if (!targetPallet) {
-          throw new NotFoundException(`Целевой поддон с id ${toPalletId} не найден`);
+          throw new NotFoundException(
+            `Целевой поддон с id ${toPalletId} не найден`,
+          );
         }
       } else {
         // Создаем новый поддон
@@ -613,14 +629,15 @@ export class CustomPalletsService {
 
           // Копируем прогресс по этапам
           for (const progress of sourcePalletPart.stageProgress) {
-            const existingProgress = await tx.customPalletPartStageProgress.findUnique({
-              where: {
-                palletPartId_routeStageId: {
-                  palletPartId: existingTargetPart.id,
-                  routeStageId: progress.routeStageId,
+            const existingProgress =
+              await tx.customPalletPartStageProgress.findUnique({
+                where: {
+                  palletPartId_routeStageId: {
+                    palletPartId: existingTargetPart.id,
+                    routeStageId: progress.routeStageId,
+                  },
                 },
-              },
-            });
+              });
 
             if (existingProgress) {
               // Обновляем количество
@@ -715,9 +732,10 @@ export class CustomPalletsService {
       }
 
       return {
-        message: remainingParts === 0 
-          ? `Детали перемещены. Исходный поддон ${fromPallet.palletName} удален (был пустой)`
-          : 'Детали успешно перемещены',
+        message:
+          remainingParts === 0
+            ? `Детали перемещены. Исходный поддон ${fromPallet.palletName} удален (был пустой)`
+            : 'Детали успешно перемещены',
         sourcePalletDeleted: remainingParts === 0,
         targetPallet: {
           customPalletId: result.customPalletId,

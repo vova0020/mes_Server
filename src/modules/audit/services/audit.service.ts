@@ -106,16 +106,18 @@ export class AuditService {
       );
 
       // Получаем всех активных операторов, привязанных к станку
-      const activeOperators = await this.prisma.operatorMachineBinding.findMany({
-        where: {
-          machineId: data.machineId,
-          isActive: true,
-          unboundAt: null,
+      const activeOperators = await this.prisma.operatorMachineBinding.findMany(
+        {
+          where: {
+            machineId: data.machineId,
+            isActive: true,
+            unboundAt: null,
+          },
+          select: {
+            userId: true,
+          },
         },
-        select: {
-          userId: true,
-        },
-      });
+      );
 
       // Если есть привязанные операторы, создаем запись для каждого
       if (activeOperators.length > 0) {

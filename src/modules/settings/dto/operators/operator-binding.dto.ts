@@ -1,4 +1,10 @@
-import { IsInt, IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**

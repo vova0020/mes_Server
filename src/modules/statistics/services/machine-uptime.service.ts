@@ -86,20 +86,21 @@ export class MachineUptimeService {
 
     for (const machine of machines) {
       // Получаем последний статус ПЕРЕД началом периода
-      const statusBeforePeriod = await this.prisma.machineStatusHistory.findFirst({
-        where: {
-          machineId: machine.machineId,
-          createdAt: {
-            lt: startDate,
+      const statusBeforePeriod =
+        await this.prisma.machineStatusHistory.findFirst({
+          where: {
+            machineId: machine.machineId,
+            createdAt: {
+              lt: startDate,
+            },
           },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        select: {
-          newStatus: true,
-        },
-      });
+          orderBy: {
+            createdAt: 'desc',
+          },
+          select: {
+            newStatus: true,
+          },
+        });
 
       // Получаем историю изменений В ТЕЧЕНИЕ периода
       const statusHistory = await this.prisma.machineStatusHistory.findMany({
@@ -220,7 +221,7 @@ export class MachineUptimeService {
       // Парсим дату и устанавливаем время на 00:00:00 в локальной временной зоне
       startDate = new Date(dto.startDate!);
       startDate.setHours(0, 0, 0, 0);
-      
+
       // Для endDate устанавливаем 23:59:59.999
       endDate = new Date(dto.endDate!);
       endDate.setHours(23, 59, 59, 999);

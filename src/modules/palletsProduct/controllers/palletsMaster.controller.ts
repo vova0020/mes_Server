@@ -419,9 +419,10 @@ export class PalletsMasterController {
   }
 
   @Post('create-pallet-for-defect-return')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Создать новый поддон для возврата отбракованных деталей',
-    description: 'Создает поддон и автоматически проставляет все предыдущие этапы как завершенные'
+    description:
+      'Создает поддон и автоматически проставляет все предыдущие этапы как завершенные',
   })
   @ApiBody({ type: CreatePalletForDefectReturnDto })
   @ApiResponse({

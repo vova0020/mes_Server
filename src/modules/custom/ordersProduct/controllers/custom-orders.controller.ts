@@ -21,9 +21,7 @@ export class CustomOrdersController {
   // Получение заказа по id
   @Get(':id')
   async getCustomOrderById(@Param('id') id: string) {
-    const order = await this.customOrdersService.getCustomOrderById(
-      Number(id),
-    );
+    const order = await this.customOrdersService.getCustomOrderById(Number(id));
     if (!order) {
       throw new NotFoundException(`Заказ с id ${id} не найден`);
     }

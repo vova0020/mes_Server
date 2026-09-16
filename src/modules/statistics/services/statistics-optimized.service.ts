@@ -400,7 +400,9 @@ export class StatisticsOptimizedService {
       // ВАЖНО: Если фильтруем по operatorId, пропускаем ручные завершения (у них operatorId всегда null)
       const manualCompletions = palletProgress.filter(
         (progress) =>
-          !operationKeys.has(`${progress.pallet.part.partId}-${progress.routeStageId}`),
+          !operationKeys.has(
+            `${progress.pallet.part.partId}-${progress.routeStageId}`,
+          ),
       );
 
       // Если указан фильтр по оператору, не добавляем ручные завершения (у них нет operatorId)

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Query, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { CustomMachineTasksService } from '../services/custom-machine-tasks.service';
 import { CompletePartDto } from '../dto/custom-machine-master.dto';
 
@@ -23,17 +31,23 @@ export class CustomMachineTasksController {
   }
 
   @Post('assignments/:assignmentId/start')
-  async startAssignment(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
+  async startAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ) {
     return this.tasksService.startAssignment(assignmentId);
   }
 
   @Post('assignments/:assignmentId/complete')
-  async completeAssignment(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
+  async completeAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ) {
     return this.tasksService.completeAssignment(assignmentId);
   }
 
   @Post('assignments/parts/:assignmentPartId/start')
-  async startPart(@Param('assignmentPartId', ParseIntPipe) assignmentPartId: number) {
+  async startPart(
+    @Param('assignmentPartId', ParseIntPipe) assignmentPartId: number,
+  ) {
     return this.tasksService.startPart(assignmentPartId);
   }
 
@@ -42,6 +56,9 @@ export class CustomMachineTasksController {
     @Param('assignmentPartId', ParseIntPipe) assignmentPartId: number,
     @Body() dto: CompletePartDto,
   ) {
-    return this.tasksService.completePart(assignmentPartId, dto.processedQuantity);
+    return this.tasksService.completePart(
+      assignmentPartId,
+      dto.processedQuantity,
+    );
   }
 }

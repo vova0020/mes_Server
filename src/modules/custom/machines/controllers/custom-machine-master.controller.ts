@@ -9,7 +9,10 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { CustomMachineMasterService } from '../services/custom-machine-master.service';
-import { CompletePartDto, ReassignMachineDto } from '../dto/custom-machine-master.dto';
+import {
+  CompletePartDto,
+  ReassignMachineDto,
+} from '../dto/custom-machine-master.dto';
 
 @Controller('custom/machines')
 export class CustomMachineMasterController {
@@ -18,27 +21,37 @@ export class CustomMachineMasterController {
   ) {}
 
   @Get(':machineId/assignments')
-  async getMachineAssignments(@Param('machineId', ParseIntPipe) machineId: number) {
+  async getMachineAssignments(
+    @Param('machineId', ParseIntPipe) machineId: number,
+  ) {
     return this.customMachineMasterService.getMachineAssignments(machineId);
   }
 
   @Post('assignments/:assignmentId/start')
-  async startAssignment(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
+  async startAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ) {
     return this.customMachineMasterService.startAssignment(assignmentId);
   }
 
   @Post('assignments/:assignmentId/complete')
-  async completeAssignment(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
+  async completeAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ) {
     return this.customMachineMasterService.completeAssignment(assignmentId);
   }
 
   @Delete('assignments/:assignmentId')
-  async deleteAssignment(@Param('assignmentId', ParseIntPipe) assignmentId: number) {
+  async deleteAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ) {
     return this.customMachineMasterService.deleteAssignment(assignmentId);
   }
 
   @Post('assignments/parts/:assignmentPartId/start')
-  async startPart(@Param('assignmentPartId', ParseIntPipe) assignmentPartId: number) {
+  async startPart(
+    @Param('assignmentPartId', ParseIntPipe) assignmentPartId: number,
+  ) {
     return this.customMachineMasterService.startPart(assignmentPartId);
   }
 
@@ -47,11 +60,16 @@ export class CustomMachineMasterController {
     @Param('assignmentPartId', ParseIntPipe) assignmentPartId: number,
     @Body() dto: CompletePartDto,
   ) {
-    return this.customMachineMasterService.completePart(assignmentPartId, dto.processedQuantity);
+    return this.customMachineMasterService.completePart(
+      assignmentPartId,
+      dto.processedQuantity,
+    );
   }
 
   @Delete('assignments/parts/:assignmentPartId')
-  async deletePart(@Param('assignmentPartId', ParseIntPipe) assignmentPartId: number) {
+  async deletePart(
+    @Param('assignmentPartId', ParseIntPipe) assignmentPartId: number,
+  ) {
     return this.customMachineMasterService.deletePart(assignmentPartId);
   }
 
@@ -60,6 +78,9 @@ export class CustomMachineMasterController {
     @Param('assignmentId', ParseIntPipe) assignmentId: number,
     @Body() dto: ReassignMachineDto,
   ) {
-    return this.customMachineMasterService.reassignMachine(assignmentId, dto.newMachineId);
+    return this.customMachineMasterService.reassignMachine(
+      assignmentId,
+      dto.newMachineId,
+    );
   }
 }

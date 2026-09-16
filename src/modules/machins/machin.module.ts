@@ -11,7 +11,12 @@ import { WebsocketModule } from '../websocket/websocket.module';
 import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [SharedModule, WebsocketModule, SettingsModule, ScheduleModule.forRoot()],
+  imports: [
+    SharedModule,
+    WebsocketModule,
+    SettingsModule,
+    ScheduleModule.forRoot(),
+  ],
   controllers: [MachinsMasterController, MachinsController],
   providers: [MachinMasterService, MachinsService, MachineSchedulerService],
   exports: [MachinMasterService, MachinsService],

@@ -1617,7 +1617,7 @@ export class PalletMachineNoSmenService {
     return await this.prisma.$transaction(async (prisma) => {
       const sourcePallet = await prisma.pallet.findUnique({
         where: { palletId: sourcePalletId },
-        include: { 
+        include: {
           part: true,
           palletStageProgress: true,
           machineAssignments: {
@@ -1700,7 +1700,7 @@ export class PalletMachineNoSmenService {
           // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
-              data: sourcePallet.palletStageProgress.map(progress => ({
+              data: sourcePallet.palletStageProgress.map((progress) => ({
                 palletId: newPallet.palletId,
                 routeStageId: progress.routeStageId,
                 status: progress.status,

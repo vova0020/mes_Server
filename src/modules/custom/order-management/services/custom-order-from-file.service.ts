@@ -42,7 +42,9 @@ export class CustomOrderFromFileService {
           customOrderId: order.customOrderId,
           partCode: partDto.partCode || partDto.partSku || `AUTO-${Date.now()}`,
           partName: partDto.partName,
-          materialName: partDto.materialName ? String(partDto.materialName) : '',
+          materialName: partDto.materialName
+            ? String(partDto.materialName)
+            : '',
           materialSku: partDto.materialSku ? String(partDto.materialSku) : '',
           thickness: partDto.thickness ?? undefined,
           thicknessWithEdging: partDto.thicknessWithEdging ?? undefined,

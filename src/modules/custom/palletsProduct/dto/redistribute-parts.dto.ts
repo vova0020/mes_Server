@@ -1,4 +1,12 @@
-import { IsInt, IsNumber, IsOptional, IsString, IsArray, ValidateNested, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsArray,
+  ValidateNested,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PartToRedistribute {

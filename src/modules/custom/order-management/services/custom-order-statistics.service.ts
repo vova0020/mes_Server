@@ -84,9 +84,7 @@ export class CustomOrderStatisticsService {
     });
 
     if (!order) {
-      throw new NotFoundException(
-        `Заказ с ID ${customOrderId} не найден`,
-      );
+      throw new NotFoundException(`Заказ с ID ${customOrderId} не найден`);
     }
 
     // Формируем список деталей с информацией о поддонах и этапах
@@ -168,9 +166,7 @@ export class CustomOrderStatisticsService {
     });
 
     if (!order) {
-      throw new NotFoundException(
-        `Заказ с ID ${customOrderId} не найден`,
-      );
+      throw new NotFoundException(`Заказ с ID ${customOrderId} не найден`);
     }
 
     // Принудительно переводим заказ в статус COMPLETED

@@ -47,9 +47,7 @@ export class OperatorBindingService {
     });
 
     if (!user) {
-      throw new NotFoundException(
-        `Пользователь с ID ${dto.userId} не найден`,
-      );
+      throw new NotFoundException(`Пользователь с ID ${dto.userId} не найден`);
     }
 
     // Ищем активную привязку оператора
@@ -109,9 +107,7 @@ export class OperatorBindingService {
     });
 
     if (!user) {
-      throw new NotFoundException(
-        `Пользователь с ID ${dto.userId} не найден`,
-      );
+      throw new NotFoundException(`Пользователь с ID ${dto.userId} не найден`);
     }
 
     // Ищем станок по коду
@@ -126,15 +122,13 @@ export class OperatorBindingService {
     }
 
     // Проверяем, не привязан ли уже оператор к другому станку
-    const existingBinding = await this.prisma.operatorMachineBinding.findFirst(
-      {
-        where: {
-          userId: dto.userId,
-          isActive: true,
-          unboundAt: null,
-        },
+    const existingBinding = await this.prisma.operatorMachineBinding.findFirst({
+      where: {
+        userId: dto.userId,
+        isActive: true,
+        unboundAt: null,
       },
-    );
+    });
 
     if (existingBinding) {
       // Если привязан к тому же станку, возвращаем информацию
@@ -165,8 +159,8 @@ export class OperatorBindingService {
     }
 
     // Определяем номер оператора (следующий свободный)
-    const maxOperatorNumber = await this.prisma.operatorMachineBinding.findFirst(
-      {
+    const maxOperatorNumber =
+      await this.prisma.operatorMachineBinding.findFirst({
         where: {
           machineId: machine.machineId,
           isActive: true,
@@ -178,8 +172,7 @@ export class OperatorBindingService {
         select: {
           operatorNumber: true,
         },
-      },
-    );
+      });
 
     const operatorNumber = maxOperatorNumber
       ? maxOperatorNumber.operatorNumber + 1

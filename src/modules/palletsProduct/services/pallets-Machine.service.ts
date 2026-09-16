@@ -1724,7 +1724,11 @@ export class PalletMachineService {
       // 3. Иначе берём первое активное назначение (как у мастера)
       const targetMachineId = sourceMachineId || machineId;
       const activeAssignment = targetMachineId
-        ? sourcePallet.machineAssignments.find(a => a.machineId === targetMachineId) || sourcePallet.machineAssignments[0] || null
+        ? sourcePallet.machineAssignments.find(
+            (a) => a.machineId === targetMachineId,
+          ) ||
+          sourcePallet.machineAssignments[0] ||
+          null
         : sourcePallet.machineAssignments[0] || null;
 
       const createdPallets: { id: number; name: string; quantity: number }[] =
@@ -1784,7 +1788,7 @@ export class PalletMachineService {
           // Помечаем как isRedistributed, чтобы не учитывать в истории обработки
           if (sourcePallet.palletStageProgress.length > 0) {
             await prisma.palletStageProgress.createMany({
-              data: sourcePallet.palletStageProgress.map(progress => ({
+              data: sourcePallet.palletStageProgress.map((progress) => ({
                 palletId: newPallet.palletId,
                 routeStageId: progress.routeStageId,
                 status: progress.status,

@@ -9,8 +9,22 @@ import { PrismaService } from 'src/shared/prisma.service';
 import { SocketService } from 'src/modules/websocket/services/socket.service';
 
 @Module({
-  controllers: [CustomMachinesController, CustomMachineMasterController, CustomMachineTasksController],
-  providers: [CustomMachinesService, CustomMachineMasterService, CustomMachineTasksService, PrismaService, SocketService],
-  exports: [CustomMachinesService, CustomMachineMasterService, CustomMachineTasksService],
+  controllers: [
+    CustomMachinesController,
+    CustomMachineMasterController,
+    CustomMachineTasksController,
+  ],
+  providers: [
+    CustomMachinesService,
+    CustomMachineMasterService,
+    CustomMachineTasksService,
+    PrismaService,
+    SocketService,
+  ],
+  exports: [
+    CustomMachinesService,
+    CustomMachineMasterService,
+    CustomMachineTasksService,
+  ],
 })
 export class CustomMachinesModule {}

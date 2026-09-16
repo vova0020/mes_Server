@@ -66,7 +66,8 @@ export class PalletsResponseDto {
   unallocatedQuantity: number;
 
   @ApiProperty({
-    description: 'Количество отбракованных деталей, доступных для возврата на производство',
+    description:
+      'Количество отбракованных деталей, доступных для возврата на производство',
   })
   defectiveQuantity: number;
 }
@@ -579,13 +580,19 @@ export class RedistributePalletPartsDto {
   @IsPositive()
   sourcePalletId: number;
 
-  @ApiPropertyOptional({ description: 'ID станка (для создания назначения на новые поддоны)', example: 1 })
+  @ApiPropertyOptional({
+    description: 'ID станка (для создания назначения на новые поддоны)',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
   machineId?: number;
 
-  @ApiPropertyOptional({ description: 'ID станка, на котором сейчас находится исходный поддон', example: 1 })
+  @ApiPropertyOptional({
+    description: 'ID станка, на котором сейчас находится исходный поддон',
+    example: 1,
+  })
   @IsOptional()
   @IsNumber()
   @IsPositive()
