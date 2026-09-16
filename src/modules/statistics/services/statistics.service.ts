@@ -1439,7 +1439,7 @@ export class StatisticsService {
   /**
    * Получить данные учёта выпуска продукции по рабочим местам (станкам).
    * Источник данных — таблица MachineOperationHistory (обычные этапы) и PackingTask (финальный этап упаковки).
-   * Фильтры: период (startDate/endDate), конкретный станок (machineId).
+   * Фильтры: период (startDate/endDate), конкретный станок (machineId), этап (stageId), оператор (operatorId).
    */
   async getMachineProduction(
     dto: GetMachineProductionDto,
@@ -1447,6 +1447,31 @@ export class StatisticsService {
     let result: MachineProductionRecord[] = [];
 
     console.log('getMachineProduction called with:', dto);
+
+    // Строим условие WHERE для дат
+    const dateWhere: { gte?: Date; lte?: Date } = {};
+    if (dto.startDate) {
+      dateWhere.gte = new Date(dto.startDate);
+    }
+    if (dto.endDate) {
+      const endDate = new Date(dto.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      dateWhere.lte = endDate;
+    }
+
+    // Определяем, является ли запрошенный этап финальным (упаковка)
+    let isFinalStage = false;
+    let finalStageId: number | null = null;
+    if (dto.stageId) {
+      const stage = await this.prisma.productionStageLevel1.findUnique({
+        where: { stageId: dto.stageId },
+      });
+      isFinalStage = stage?.finalStage ?? false;
+      if (isFinalStage) {
+        finalStageId = dto.stageId;
+      }
+      console.log(`Stage ${dto.stageId} is final:`, isFinalStage);
+    }
 
     // Определяем, является ли запрошенный станок финальным
     let isFinalMachine = false;
@@ -1463,28 +1488,24 @@ export class StatisticsService {
       console.log(`Machine ${dto.machineId} is final:`, isFinalMachine);
     }
 
-    // Строим условие WHERE для дат
-    const dateWhere: { gte?: Date; lte?: Date } = {};
-    if (dto.startDate) {
-      dateWhere.gte = new Date(dto.startDate);
-    }
-    if (dto.endDate) {
-      const endDate = new Date(dto.endDate);
-      endDate.setHours(23, 59, 59, 999);
-      dateWhere.lte = endDate;
-    }
-
     // Если запрошен конкретный станок
     if (dto.machineId) {
       if (isFinalMachine) {
         // Финальный станок - берем данные из PackingTask
+        const packingWhere: any = {
+          machineId: dto.machineId,
+          completedQuantity: { gt: 0 },
+          completedAt:
+            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+        };
+
+        // Добавляем фильтр по оператору
+        if (dto.operatorId) {
+          packingWhere.assignedTo = dto.operatorId;
+        }
+
         const packingTasks = await this.prisma.packingTask.findMany({
-          where: {
-            machineId: dto.machineId,
-            completedQuantity: { gt: 0 },
-            completedAt:
-              Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
-          },
+          where: packingWhere,
           include: {
             machine: {
               select: {
@@ -1591,6 +1612,11 @@ export class StatisticsService {
           whereCondition.routeStage = {
             stageId: dto.stageId,
           };
+        }
+
+        // Добавляем фильтр по оператору
+        if (dto.operatorId) {
+          whereCondition.operatorId = dto.operatorId;
         }
 
         const operations = await this.prisma.machineOperationHistory.findMany({
@@ -1729,34 +1755,43 @@ export class StatisticsService {
     } else {
       // Запрошены все станки - получаем данные из обеих таблиц
 
-      // Получаем список финальных станков
+      // Получаем список финальных станков (с учетом фильтра по этапу, если это финальный этап)
       const finalStageMachines = await this.prisma.machineStage.findMany({
         where: {
           stage: {
             finalStage: true,
+            ...(finalStageId && { stageId: finalStageId }),
           },
         },
         select: {
           machineId: true,
+          stageId: true,
         },
       });
       const finalMachineIds = finalStageMachines.map((m) => m.machineId);
 
-      // 1. Обычные станки - MachineOperationHistory
-      const whereCondition: any = {
-        machineId:
-          finalMachineIds.length > 0 ? { notIn: finalMachineIds } : undefined,
-        completedAt: Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
-      };
-
-      // Добавляем фильтр по этапу производства
-      if (dto.stageId) {
-        whereCondition.routeStage = {
-          stageId: dto.stageId,
+      // 1. Обычные станки - MachineOperationHistory (только если не запрошен финальный этап)
+      if (!isFinalStage) {
+        const whereCondition: any = {
+          machineId:
+            finalMachineIds.length > 0 ? { notIn: finalMachineIds } : undefined,
+          completedAt:
+            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
         };
-      }
 
-      const operations = await this.prisma.machineOperationHistory.findMany({
+        // Добавляем фильтр по этапу производства
+        if (dto.stageId) {
+          whereCondition.routeStage = {
+            stageId: dto.stageId,
+          };
+        }
+
+        // Добавляем фильтр по оператору
+        if (dto.operatorId) {
+          whereCondition.operatorId = dto.operatorId;
+        }
+
+        const operations = await this.prisma.machineOperationHistory.findMany({
         where: whereCondition,
         include: {
           machine: {
@@ -1888,16 +1923,39 @@ export class StatisticsService {
           };
         }),
       );
+      }
 
       // 2. Финальные станки - PackingTask
       if (finalMachineIds.length > 0) {
+        const packingWhere: any = {
+          completedQuantity: { gt: 0 },
+          completedAt:
+            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
+        };
+
+        // Фильтр по станку
+        if (isFinalStage || !dto.machineId) {
+          packingWhere.machineId = { in: finalMachineIds };
+        }
+
+        // Фильтр по оператору
+        if (dto.operatorId) {
+          packingWhere.assignedTo = dto.operatorId;
+        }
+
+        // Фильтр по этапу (через связь machine -> machineStage)
+        if (finalStageId) {
+          packingWhere.machine = {
+            machinesStages: {
+              some: {
+                stageId: finalStageId,
+              },
+            },
+          };
+        }
+
         const packingTasks = await this.prisma.packingTask.findMany({
-          where: {
-            machineId: { in: finalMachineIds },
-            completedQuantity: { gt: 0 },
-            completedAt:
-              Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
-          },
+          where: packingWhere,
           include: {
             machine: {
               select: {
@@ -2001,14 +2059,9 @@ export class StatisticsService {
       );
     }
 
-    // Применяем фильтр по этапу (stageId) на уровне приложения для финальных станков
-    if (dto.stageId && result.length > 0) {
-      result = result.filter((record) => record.stageId === dto.stageId);
-    }
-
     // Сортируем результат по дате завершения
     console.log(
-      `Returning ${result.length} records for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}`,
+      `Returning ${result.length} records for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}, operatorId: ${dto.operatorId || 'all'}`,
     );
     return result.sort(
       (a, b) => b.completedAt.getTime() - a.completedAt.getTime(),
