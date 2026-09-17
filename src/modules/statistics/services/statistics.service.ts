@@ -1953,8 +1953,8 @@ export class StatisticsService {
       );
       }
 
-      // 2. Финальные станки - PackingTask
-      if (finalMachineIds.length > 0) {
+      // 2. Финальные станки - PackingTask (только если не указан stageId или указан финальный stageId)
+      if (finalMachineIds.length > 0 && (!dto.stageId || isFinalStage)) {
         const packingWhere: any = {
           completedQuantity: { gt: 0 },
         };

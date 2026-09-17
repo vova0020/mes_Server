@@ -82,6 +82,15 @@ export class StatisticsOptimizedService {
       );
     }
 
+    // Определяем, является ли запрошенный этап финальным (упаковка)
+    let isFinalStage = false;
+    if (dto.stageId) {
+      const stage = await this.prisma.productionStageLevel1.findUnique({
+        where: { stageId: dto.stageId },
+      });
+      isFinalStage = stage?.finalStage ?? false;
+    }
+
     // Определяем финальные станки
     const finalStageMachines = await this.prisma.machineStage.findMany({
       where: { stage: { finalStage: true } },
@@ -473,8 +482,8 @@ export class StatisticsOptimizedService {
       );
     }
 
-    // 2. Обрабатываем финальные станки (PackingTask)
-    if (!dto.machineId || isFinalMachine) {
+    // 2. Обрабатываем финальные станки (PackingTask) - только если не указан stageId или указан финальный stageId
+    if ((!dto.machineId || isFinalMachine) && (!dto.stageId || isFinalStage)) {
       const packingTaskWhere: any = {
         completedQuantity: { gt: 0 },
       };
@@ -644,103 +653,9 @@ export class StatisticsOptimizedService {
       );
     }
 
-    // 3. Получаем операции упаковки из MachineOperationHistory (для операторов)
-    // Это новые записи после исправления привязки операторов
-    if (!dto.machineId || isFinalMachine) {
-      const packingOperationsWhere: any = {};
-
-      // Фильтр по станку упаковки
-      if (dto.machineId) {
-        packingOperationsWhere.machineId = dto.machineId;
-      } else if (finalMachineIds.length > 0) {
-        packingOperationsWhere.machineId = { in: finalMachineIds };
-      }
-
-      if (Object.keys(dateWhere).length > 0) {
-        packingOperationsWhere.completedAt = dateWhere;
-      }
-
-      if (dto.operatorId) {
-        packingOperationsWhere.operatorId = dto.operatorId;
-      }
-
-      const packingOperations =
-        await this.prisma.machineOperationHistory.findMany({
-          where: packingOperationsWhere,
-          select: {
-            operationId: true,
-            machineId: true,
-            quantityProcessed: true,
-            startedAt: true,
-            completedAt: true,
-            duration: true,
-            operatorId: true,
-            machine: {
-              select: {
-                machineId: true,
-                machineName: true,
-                loadUnit: true,
-              },
-            },
-            operator: {
-              select: {
-                userId: true,
-                userDetail: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { completedAt: 'desc' },
-          take: 1000,
-        });
-
-      console.log(
-        `Found ${packingOperations.length} packing operations from MachineOperationHistory`,
-      );
-
-      result.push(
-        ...packingOperations.map((op) => {
-          const operatorName = op.operator
-            ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() ||
-              null
-            : null;
-
-          return {
-            operationId: op.operationId,
-            machineId: op.machine.machineId,
-            machineName: op.machine.machineName,
-            machineLoadUnit: op.machine.loadUnit,
-            partId: 0,
-            partCode: '',
-            partName: 'Упаковка',
-            partSize: '',
-            materialId: null,
-            materialName: null,
-            materialSku: null,
-            palletId: 0,
-            palletName: '',
-            routeStageId: 0,
-            stageId: 0,
-            stageName: 'Упаковка',
-            quantityProcessed: Number(op.quantityProcessed),
-            startedAt: op.startedAt,
-            completedAt: op.completedAt,
-            durationSeconds: op.duration,
-            operatorId: op.operatorId,
-            operatorName,
-            packages: [],
-          };
-        }),
-      );
-    }
-
     // Сортируем результат по дате завершения
     console.log(
-      `Returning ${result.length} records (MachineOperationHistory + PalletStageProgress + PackingTask + PackingOperations) for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}, operatorId: ${dto.operatorId || 'all'}`,
+      `Returning ${result.length} records (MachineOperationHistory + PalletStageProgress + PackingTask) for machineId: ${dto.machineId || 'all'}, orderId: ${dto.orderId || 'all'}, stageId: ${dto.stageId || 'all'}, operatorId: ${dto.operatorId || 'all'}`,
     );
 
     return result.sort(
