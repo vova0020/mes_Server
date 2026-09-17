@@ -1495,9 +1495,12 @@ export class StatisticsService {
         const packingWhere: any = {
           machineId: dto.machineId,
           completedQuantity: { gt: 0 },
-          completedAt:
-            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
         };
+
+        // Фильтр по дате - используем assignedAt для учета частично выполненных задач
+        if (Object.keys(dateWhere).length > 0) {
+          packingWhere.assignedAt = dateWhere;
+        }
 
         // Добавляем фильтр по оператору
         if (dto.operatorId) {
@@ -1929,9 +1932,12 @@ export class StatisticsService {
       if (finalMachineIds.length > 0) {
         const packingWhere: any = {
           completedQuantity: { gt: 0 },
-          completedAt:
-            Object.keys(dateWhere).length > 0 ? dateWhere : undefined,
         };
+
+        // Фильтр по дате - используем assignedAt для учета частично выполненных задач
+        if (Object.keys(dateWhere).length > 0) {
+          packingWhere.assignedAt = dateWhere;
+        }
 
         // Фильтр по станку
         if (isFinalStage || !dto.machineId) {

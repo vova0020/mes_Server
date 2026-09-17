@@ -223,18 +223,6 @@ export class PackingTaskManagementService {
       // Проверяем и обновляем статус заказа
       await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
 
-      // Логируем операцию упаковки для всех активных операторов на станке
-      await this.auditService.logMachineOperation({
-        machineId: updatedTask.machineId,
-        palletId: 0, // Для упаковки поддон не используется, передаем 0
-        partId: 0, // Для упаковки partId не используется, передаем 0
-        routeStageId: 0, // Для упаковки нет routeStageId, передаем 0
-        quantityProcessed: completedQty,
-        startedAt: updatedTask.assignedAt,
-        completedAt: new Date(),
-        operatorId: undefined, // Не передаем, чтобы audit service сам нашел операторов
-      });
-
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
@@ -645,6 +633,38 @@ export class PackingTaskManagementService {
 
         // Проверяем и обновляем статус заказа
         await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
+
+        // Сохраняем первого привязанного оператора в assigned_to
+        const machineIdToUse = updatedTask.machineId || existingTask.machineId;
+        if (machineIdToUse && !updatedTask.assignedTo) {
+          // Находим первого активного оператора, привязанного к станку
+          const firstOperator = await tx.operatorMachineBinding.findFirst({
+            where: {
+              machineId: machineIdToUse,
+              isActive: true,
+              unboundAt: null,
+            },
+            select: {
+              userId: true,
+            },
+            orderBy: {
+              operatorNumber: 'asc',
+            },
+          });
+
+          if (firstOperator) {
+            // Обновляем assigned_to в задаче
+            await tx.packingTask.update({
+              where: { taskId },
+              data: {
+                assignedTo: firstOperator.userId,
+              },
+            });
+            console.log(
+              `[PACKING] Сохранен оператор ${firstOperator.userId} в assigned_to для задачи ${taskId}`,
+            );
+          }
+        }
 
         return updatedTask;
       })
