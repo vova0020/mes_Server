@@ -1502,9 +1502,13 @@ export class StatisticsService {
           packingWhere.assignedAt = dateWhere;
         }
 
-        // Добавляем фильтр по оператору
+        // Добавляем фильтр по оператору через junction table
         if (dto.operatorId) {
-          packingWhere.assignedTo = dto.operatorId;
+          packingWhere.operators = {
+            some: {
+              userId: dto.operatorId,
+            },
+          };
         }
 
         const packingTasks = await this.prisma.packingTask.findMany({
@@ -1525,6 +1529,20 @@ export class StatisticsService {
                     orderId: true,
                     batchNumber: true,
                     orderName: true,
+                  },
+                },
+              },
+            },
+            operators: {
+              include: {
+                operator: {
+                  include: {
+                    userDetail: {
+                      select: {
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
                   },
                 },
               },
@@ -1556,10 +1574,17 @@ export class StatisticsService {
               },
             ];
 
-            const operatorName = task.assignedUser
-              ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() ||
-                null
-              : null;
+            // Формируем список всех операторов через запятую
+            const operatorName = task.operators && task.operators.length > 0
+              ? task.operators
+                  .map(op =>
+                    `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim()
+                  )
+                  .filter(name => name.length > 0)
+                  .join(', ') || null
+              : task.assignedUser
+                ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() || null
+                : null;
 
             const routeStageId = task.package.composition[0]?.routeId || 0;
 
@@ -1944,9 +1969,13 @@ export class StatisticsService {
           packingWhere.machineId = { in: finalMachineIds };
         }
 
-        // Фильтр по оператору
+        // Фильтр по оператору через junction table
         if (dto.operatorId) {
-          packingWhere.assignedTo = dto.operatorId;
+          packingWhere.operators = {
+            some: {
+              userId: dto.operatorId,
+            },
+          };
         }
 
         // Фильтр по этапу (через связь machine -> machineStage)
@@ -1982,6 +2011,20 @@ export class StatisticsService {
                 },
               },
             },
+            operators: {
+              include: {
+                operator: {
+                  include: {
+                    userDetail: {
+                      select: {
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
             assignedUser: {
               include: {
                 userDetail: {
@@ -2009,10 +2052,17 @@ export class StatisticsService {
               },
             ];
 
-            const operatorName = task.assignedUser
-              ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() ||
-                null
-              : null;
+            // Формируем список всех операторов через запятую
+            const operatorName = task.operators && task.operators.length > 0
+              ? task.operators
+                  .map(op =>
+                    `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim()
+                  )
+                  .filter(name => name.length > 0)
+                  .join(', ') || null
+              : task.assignedUser
+                ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() || null
+                : null;
 
             const routeStageId = task.package.composition[0]?.routeId || 0;
 

@@ -43,8 +43,10 @@ model User {
   loginLogs             LoginLog[]
   /// Связанные комплектовщики (если пользователь является комплектовщиком)
   pickers               Picker[]
-  /// Задачи упаковки, назначенные пользователю
+  /// Задачи упаковки, назначенные пользователю (как основной ответственный)
   packingTasks          PackingTask[] @relation("AssignedUser")
+  /// Задачи упаковки, в которых пользователь участвовал как оператор
+  packingTaskAssignments PackingTaskOperator[] @relation("PackingTaskOperators")
   /// Привязки ролей к различным контекстам (станок, этап и т.д.)
   roleBindings          RoleBinding[]
   /// Рекламации, созданные пользователем
@@ -1084,10 +1086,37 @@ model PackingTask {
   package      Package @relation("AssignedPackage", fields: [packageId], references: [packageId], onDelete: Cascade)
   /// Станок или место упаковки
   machine      Machine @relation(fields: [machineId], references: [machineId])
-  /// Пользователь-упаковщик
+  /// Пользователь-упаковщик (основной ответственный)
   assignedUser User?   @relation("AssignedUser", fields: [assignedTo], references: [userId])
+  /// Операторы, работавшие над задачей (может быть несколько)
+  operators    PackingTaskOperator[]
 
   @@map("packing_tasks")
+}
+
+// Junction table для связи задач упаковки с операторами (many-to-many)
+model PackingTaskOperator {
+  /// Уникальный идентификатор записи
+  id             Int      @id @default(autoincrement())
+  /// Ссылка на задачу упаковки
+  taskId         Int      @map("task_id")
+  /// Ссылка на оператора
+  userId         Int      @map("user_id")
+  /// Порядковый номер оператора (1 = первый, 2 = второй и т.д.)
+  operatorNumber Int      @map("operator_number")
+  /// Время назначения оператора на задачу
+  assignedAt     DateTime @default(now()) @map("assigned_at")
+
+  // связи:
+  /// Задача упаковки
+  task     PackingTask @relation(fields: [taskId], references: [taskId], onDelete: Cascade)
+  /// Оператор
+  operator User        @relation("PackingTaskOperators", fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@map("packing_task_operators")
 }
 
 // ========================================

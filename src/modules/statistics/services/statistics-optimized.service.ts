@@ -496,9 +496,13 @@ export class StatisticsOptimizedService {
         packingTaskWhere.package = { orderId: dto.orderId };
       }
 
-      // Фильтр по оператору
+      // Фильтр по оператору через junction table
       if (dto.operatorId) {
-        packingTaskWhere.assignedTo = dto.operatorId;
+        packingTaskWhere.operators = {
+          some: {
+            userId: dto.operatorId,
+          },
+        };
       }
 
       const packingTasks = await this.prisma.packingTask.findMany({
@@ -516,6 +520,22 @@ export class StatisticsOptimizedService {
               machineId: true,
               machineName: true,
               loadUnit: true,
+            },
+          },
+          operators: {
+            select: {
+              userId: true,
+              operatorNumber: true,
+              operator: {
+                select: {
+                  userDetail: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
             },
           },
           package: {
@@ -572,10 +592,17 @@ export class StatisticsOptimizedService {
             },
           ];
 
-          const operatorName = task.assignedUser
-            ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() ||
-              null
-            : null;
+          // Формируем список всех операторов через запятую
+          const operatorName = task.operators && task.operators.length > 0
+            ? task.operators
+                .map((op) =>
+                  `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim()
+                )
+                .filter((name) => name.length > 0)
+                .join(', ') || null
+            : task.assignedUser
+              ? `${task.assignedUser.userDetail?.firstName ?? ''} ${task.assignedUser.userDetail?.lastName ?? ''}`.trim() || null
+              : null;
 
           const routeStageId = task.package.composition[0]?.routeId || 0;
           const durationSeconds = task.completedAt

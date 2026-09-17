@@ -223,6 +223,54 @@ export class PackingTaskManagementService {
       // Проверяем и обновляем статус заказа
       await this.checkAndUpdateOrderStatus(existingTask.package.orderId, tx);
 
+      // Сохраняем информацию об операторах, работавших над задачей
+      // Сначала пытаемся найти операторов через OperatorMachineBinding
+      let operatorsToSave: number[] = [];
+      
+      console.log('[PackingTask] Сохранение операторов для задачи:', updatedTask.taskId);
+      console.log('[PackingTask] Machine ID:', updatedTask.machineId);
+      console.log('[PackingTask] Assigned To:', updatedTask.assignedTo);
+      
+      if (updatedTask.machineId) {
+        const activeOperators = await tx.operatorMachineBinding.findMany({
+          where: {
+            machineId: updatedTask.machineId,
+            isActive: true,
+            unboundAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        
+        console.log('[PackingTask] Найдено операторов через OperatorMachineBinding:', activeOperators.length);
+        operatorsToSave = activeOperators.map((op) => op.userId);
+      }
+      
+      // Если не нашли через OperatorMachineBinding, используем assignedTo
+      if (operatorsToSave.length === 0 && updatedTask.assignedTo) {
+        console.log('[PackingTask] Используем assignedTo:', updatedTask.assignedTo);
+        operatorsToSave = [updatedTask.assignedTo];
+      }
+      
+      console.log('[PackingTask] Операторы для сохранения:', operatorsToSave);
+      
+      // Создаем записи для всех найденных операторов
+      if (operatorsToSave.length > 0) {
+        const result = await tx.packingTaskOperator.createMany({
+          data: operatorsToSave.map((userId, index) => ({
+            taskId: updatedTask.taskId,
+            userId: userId,
+            operatorNumber: index + 1,
+            assignedAt: updatedTask.assignedAt,
+          })),
+          skipDuplicates: true, // Пропускаем дубликаты если оператор уже был добавлен
+        });
+        console.log('[PackingTask] Создано записей в PackingTaskOperator:', result.count);
+      } else {
+        console.log('[PackingTask] НЕТ ОПЕРАТОРОВ ДЛЯ СОХРАНЕНИЯ!');
+      }
+
       // Отправляем WebSocket уведомление о событии
       this.socketService.emitToMultipleRooms(
         [
@@ -663,6 +711,60 @@ export class PackingTaskManagementService {
             console.log(
               `[PACKING] Сохранен оператор ${firstOperator.userId} в assigned_to для задачи ${taskId}`,
             );
+          }
+        }
+
+        // ⭐ НОВОЕ: Сохраняем ВСЕХ операторов в PackingTaskOperator
+        // Только если задача завершена или частично выполнена
+        if (
+          updatedTask.status === PackingTaskStatus.COMPLETED ||
+          updatedTask.status === PackingTaskStatus.PARTIALLY_COMPLETED ||
+          updatedTask.status === PackingTaskStatus.IN_PROGRESS
+        ) {
+          let operatorsToSave: number[] = [];
+          
+          console.log('[PackingTask updateTaskStatus] Сохранение операторов для задачи:', taskId);
+          console.log('[PackingTask updateTaskStatus] Machine ID:', machineIdToUse);
+          console.log('[PackingTask updateTaskStatus] Assigned To:', updatedTask.assignedTo);
+          
+          if (machineIdToUse) {
+            const activeOperators = await tx.operatorMachineBinding.findMany({
+              where: {
+                machineId: machineIdToUse,
+                isActive: true,
+                unboundAt: null,
+              },
+              select: {
+                userId: true,
+              },
+            });
+            
+            console.log('[PackingTask updateTaskStatus] Найдено операторов через OperatorMachineBinding:', activeOperators.length);
+            operatorsToSave = activeOperators.map((op) => op.userId);
+          }
+          
+          // Если не нашли через OperatorMachineBinding, используем assignedTo
+          if (operatorsToSave.length === 0 && updatedTask.assignedTo) {
+            console.log('[PackingTask updateTaskStatus] Используем assignedTo:', updatedTask.assignedTo);
+            operatorsToSave = [updatedTask.assignedTo];
+          }
+          
+          console.log('[PackingTask updateTaskStatus] Операторы для сохранения:', operatorsToSave);
+          
+          // Создаем записи для всех найденных операторов
+          if (operatorsToSave.length > 0) {
+            const result = await tx.packingTaskOperator.createMany({
+              data: operatorsToSave.map((userId, index) => ({
+                taskId: taskId,
+                userId: userId,
+                operatorNumber: index + 1,
+                assignedAt: updatedTask.assignedAt,
+              })),
+              skipDuplicates: true,
+            });
+            console.log('[PackingTask updateTaskStatus] Создано записей в PackingTaskOperator:', result.count);
+          } else {
+            console.log('[PackingTask updateTaskStatus] НЕТ ОПЕРАТОРОВ ДЛЯ СОХРАНЕНИЯ!');
           }
         }
 
