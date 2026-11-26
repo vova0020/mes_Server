@@ -34,4 +34,48 @@ export class OperatorProductivityController {
   ): Promise<OperatorProductivitySummary[]> {
     return this.operatorProductivityService.getOperatorProductivity(dto);
   }
+
+  /**
+   * Получить список операторов (сотрудники с ролью «оператор»).
+   * Используется для заполнения фильтра operatorId на фронте.
+   *
+   * Возвращает: userId, fullName, position.
+   */
+  @Get('operators')
+  async getOperators(): Promise<
+    Array<{ userId: number; fullName: string; position: string | null }>
+  > {
+    return this.operatorProductivityService.getOperators();
+  }
+
+  /**
+   * Получить список этапов производства 1-го уровня.
+   * Используется для заполнения фильтра stageId на фронте.
+   *
+   * Возвращает: stageId, stageName, finalStage.
+   */
+  @Get('stages')
+  async getStages(): Promise<
+    Array<{ stageId: number; stageName: string; finalStage: boolean }>
+  > {
+    return this.operatorProductivityService.getStages();
+  }
+
+  /**
+   * Получить список станков (рабочих мест).
+   * Используется для заполнения фильтра machineId на фронте.
+   *
+   * Возвращает: machineId, machineName, machineCode, loadUnit.
+   */
+  @Get('machines')
+  async getMachines(): Promise<
+    Array<{
+      machineId: number;
+      machineName: string;
+      machineCode: string | null;
+      loadUnit: string;
+    }>
+  > {
+    return this.operatorProductivityService.getMachines();
+  }
 }

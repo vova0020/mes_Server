@@ -393,4 +393,77 @@ export class OperatorProductivityService {
 
     return { startDate, endDate };
   }
+
+  /**
+   * Получить список сотрудников с ролью «оператор».
+   * Возвращает ФИО и должность каждого оператора.
+   */
+  async getOperators(): Promise<Array<{ userId: number; fullName: string; position: string | null }>> {
+    const operators = await this.prisma.user.findMany({
+      where: {
+        userRoles: {
+          some: {
+            role: {
+              roleName: 'operator',
+            },
+          },
+        },
+      },
+      select: {
+        userId: true,
+        userDetail: {
+          select: {
+            firstName: true,
+            lastName: true,
+            position: true,
+          },
+        },
+      },
+      orderBy: {
+        userDetail: {
+          lastName: 'asc',
+        },
+      },
+    });
+
+    return operators.map((op) => ({
+      userId: op.userId,
+      fullName:
+        `${op.userDetail?.firstName ?? 'Неизвестно'} ${op.userDetail?.lastName ?? ''}`.trim(),
+      position: op.userDetail?.position ?? null,
+    }));
+  }
+
+  /**
+   * Получить список этапов производства 1-го уровня.
+   * Возвращает ID, название и флаг финального этапа (упаковка).
+   */
+  async getStages(): Promise<Array<{ stageId: number; stageName: string; finalStage: boolean }>> {
+    const stages = await this.prisma.productionStageLevel1.findMany({
+      orderBy: { stageName: 'asc' },
+    });
+
+    return stages.map((s) => ({
+      stageId: s.stageId,
+      stageName: s.stageName,
+      finalStage: s.finalStage,
+    }));
+  }
+
+  /**
+   * Получить список станков (рабочих мест).
+   * Возвращает ID, название, код и единица измерения каждого станка.
+   */
+  async getMachines(): Promise<Array<{ machineId: number; machineName: string; machineCode: string | null; loadUnit: string }>> {
+    const machines = await this.prisma.machine.findMany({
+      orderBy: { machineName: 'asc' },
+    });
+
+    return machines.map((m) => ({
+      machineId: m.machineId,
+      machineName: m.machineName,
+      machineCode: m.machineCode,
+      loadUnit: m.loadUnit,
+    }));
+  }
 }
