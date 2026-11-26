@@ -81,13 +81,16 @@ export class OperatorProductivityService {
   async getOperatorProductivity(
     dto: GetOperatorProductivityDto,
   ): Promise<OperatorProductivitySummary[]> {
-    const { startDate, endDate } = this.calculateDateRange(dto);
-
     // 1. Получаем записи из MachineOperationHistory
+    // Даты — опциональные фильтры: если дата не передана, ограничение по периоду не применяется
+    // (ищем за всё время). Комбинирование любых фильтров: оператор / станок / этап / период.
     const operationWhere: any = {
       operatorId: { not: null },
-      completedAt: { gte: startDate, lte: endDate },
     };
+    const operationDateFilter = this.buildDateFilter(dto);
+    if (Object.keys(operationDateFilter).length > 0) {
+      operationWhere.completedAt = operationDateFilter;
+    }
 
     if (dto.machineId) {
       operationWhere.machineId = dto.machineId;
@@ -165,8 +168,11 @@ export class OperatorProductivityService {
     // 3. Получаем задачи упаковки, где операторы участвовали через junction
     const packingWhere: any = {
       completedQuantity: { gt: 0 },
-      assignedAt: { gte: startDate, lte: endDate },
     };
+    const packingDateFilter = this.buildDateFilter(dto);
+    if (Object.keys(packingDateFilter).length > 0) {
+      packingWhere.assignedAt = packingDateFilter;
+    }
     if (dto.operatorId) {
       packingWhere.operators = { some: { userId: dto.operatorId } };
     }
@@ -371,27 +377,32 @@ export class OperatorProductivityService {
   }
 
   /**
-   * Считает диапазон дат из DTO.
+   * Формирует фильтр по дате из DTO для использования в where-условии Prisma.
+   *
+   * Правила:
+   * - startDate → gte (включительно с начала дня)
+   * - endDate → lte (включительно до конца дня)
+   * - если поле не передано, соответствующее ограничение НЕ добавляется,
+   *   что позволяет искать за всё время при отсутствии дат.
    */
-  private calculateDateRange(
+  private buildDateFilter(
     dto: GetOperatorProductivityDto,
-  ): { startDate: Date; endDate: Date } {
-    const now = new Date();
-    let startDate = new Date(now);
-    startDate.setHours(0, 0, 0, 0);
-    let endDate = new Date(now);
-    endDate.setHours(23, 59, 59, 999);
+  ): Record<string, Date> {
+    const filter: Record<string, Date> = {};
 
     if (dto.startDate) {
-      startDate = new Date(dto.startDate);
-      startDate.setHours(0, 0, 0, 0);
-    }
-    if (dto.endDate) {
-      endDate = new Date(dto.endDate);
-      endDate.setHours(23, 59, 59, 999);
+      const start = new Date(dto.startDate);
+      start.setHours(0, 0, 0, 0);
+      filter.gte = start;
     }
 
-    return { startDate, endDate };
+    if (dto.endDate) {
+      const end = new Date(dto.endDate);
+      end.setHours(23, 59, 59, 999);
+      filter.lte = end;
+    }
+
+    return filter;
   }
 
   /**
