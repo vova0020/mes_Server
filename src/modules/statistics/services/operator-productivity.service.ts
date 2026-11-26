@@ -81,11 +81,14 @@ export class OperatorProductivityService {
   async getOperatorProductivity(
     dto: GetOperatorProductivityDto,
   ): Promise<OperatorProductivitySummary[]> {
+    // Получаем ID только пользователей с ролью «оператор» — фильтруем по ним оба запроса
+    const operatorRoleIds = await this.getOperatorIds();
+
     // 1. Получаем записи из MachineOperationHistory
     // Даты — опциональные фильтры: если дата не передана, ограничение по периоду не применяется
     // (ищем за всё время). Комбинирование любых фильтров: оператор / станок / этап / период.
     const operationWhere: any = {
-      operatorId: { not: null },
+      operatorId: { not: null, in: operatorRoleIds },
     };
     const operationDateFilter = this.buildDateFilter(dto);
     if (Object.keys(operationDateFilter).length > 0) {
@@ -173,8 +176,11 @@ export class OperatorProductivityService {
     if (Object.keys(packingDateFilter).length > 0) {
       packingWhere.assignedAt = packingDateFilter;
     }
+    // Участвовали только операторы с ролью «оператор»
     if (dto.operatorId) {
       packingWhere.operators = { some: { userId: dto.operatorId } };
+    } else if (operatorRoleIds.length > 0) {
+      packingWhere.operators = { some: { userId: { in: operatorRoleIds } } };
     }
     // Если запрошен конкретный финальный станок — фильтруем по machineId
     if (dto.machineId && finalMachineMap.has(dto.machineId)) {
@@ -403,6 +409,20 @@ export class OperatorProductivityService {
     }
 
     return filter;
+  }
+
+  /**
+   * Получить ID всех пользователей с ролью «оператор».
+   * Используется для фильтрации записей о выработке — показываем только операторов.
+   */
+  private async getOperatorIds(): Promise<number[]> {
+    const roles = await this.prisma.userRole.findMany({
+      where: {
+        role: { roleName: 'operator' },
+      },
+      select: { userId: true },
+    });
+    return roles.map((r) => r.userId);
   }
 
   /**
