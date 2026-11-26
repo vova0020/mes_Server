@@ -36,6 +36,51 @@ export class MachinesService {
     this.logger.log('🔧 MachinesService: Сервис инициализирован');
   }
 
+  /**
+   * Генерирует уникальный код станка в формате: буква + 3 цифры
+   * (например, H431) и проверяет его на отсутствие в базе данных.
+   *
+   * @returns новый уникальный код станка
+   */
+  private async generateUniqueMachineCode(): Promise<string> {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const maxAttempts = 10000;
+
+    // Получаем все уже существующие коды станков из базы данных
+    const existing = await this.prisma.machine.findMany({
+      select: { machineCode: true },
+    });
+
+    const existingCodes = new Set<string>();
+    for (const m of existing) {
+      if (m.machineCode) {
+        existingCodes.add(m.machineCode);
+      }
+    }
+
+    let code: string;
+    let attempts = 0;
+
+    do {
+      // Генерируем случайную букву
+      const letter = letters[Math.floor(Math.random() * letters.length)];
+      // Генерируем 3 случайные цифры (от 000 до 999)
+      const numbers = Math.floor(Math.random() * 1000)
+        .toString()
+        .padStart(3, '0');
+      code = `${letter}${numbers}`;
+      attempts++;
+
+      if (attempts >= maxAttempts) {
+        throw new Error(
+          'Не удалось сгенерировать уникальный код станка после максимального количества попыток',
+        );
+      }
+    } while (existingCodes.has(code));
+
+    return code;
+  }
+
   // Получить все станки с их связями
   async findAll() {
     const startTime = Date.now();
@@ -134,9 +179,14 @@ export class MachinesService {
     this.logger.debug('📝 Данные для создания:', JSON.stringify(data, null, 2));
 
     try {
+      // Генерируем уникальный код станка (буква + 3 цифры, например H431)
+      const machineCode = await this.generateUniqueMachineCode();
+      this.logger.debug('🔑 Сгенерирован код станка:', machineCode);
+
       const result = await this.prisma.machine.create({
         data: {
           machineName: data.machineName,
+          machineCode,
           status: data.status,
           recommendedLoad: data.recommendedLoad,
           loadUnit: data.loadUnit,

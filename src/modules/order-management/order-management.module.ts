@@ -5,11 +5,13 @@ import { WebsocketModule } from '../websocket/websocket.module';
 import { OrderManagementController } from './controllers/order-management.controller';
 import { OrderStatisticsController } from './controllers/order-statistics.controller';
 import { OrderParserController } from './controllers/order-parser.controller';
+import { OperatorWorkMonitorController } from './controllers/operator-work-monitor.controller';
 import { OrderManagementService } from './services/order-management.service';
 import { OrderStatisticsService } from './services/order-statistics.service';
 import { OrderParserService } from './services/order-parser.service';
 import { OrderValidationService } from './services/order-validation.service';
 import { OrderFromFileService } from './services/order-from-file.service';
+import { OperatorWorkMonitorService } from './services/operator-work-monitor.service';
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { OrderFromFileService } from './services/order-from-file.service';
     OrderManagementController,
     OrderStatisticsController,
     OrderParserController,
+    OperatorWorkMonitorController,
   ],
   providers: [
     OrderManagementService,
@@ -28,6 +31,7 @@ import { OrderFromFileService } from './services/order-from-file.service';
     OrderParserService,
     OrderValidationService,
     OrderFromFileService,
+    OperatorWorkMonitorService,
   ],
   exports: [OrderManagementService, OrderStatisticsService],
 })
