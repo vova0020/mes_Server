@@ -4,3 +4,4 @@ export * from './machine-uptime-stats.dto';
 export * from './get-defect-stats.dto';
 export * from './get-machine-production.dto';
 export * from './get-unreturned-defects.dto';
+export * from './get-operator-productivity.dto';
