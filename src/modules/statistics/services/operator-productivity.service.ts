@@ -169,54 +169,78 @@ export class OperatorProductivityService {
     }
 
     // 3. Получаем задачи упаковки, где операторы участвовали через junction
-    const packingWhere: any = {
-      completedQuantity: { gt: 0 },
-    };
-    const packingDateFilter = this.buildDateFilter(dto);
-    if (Object.keys(packingDateFilter).length > 0) {
-      packingWhere.assignedAt = packingDateFilter;
-    }
-    // Участвовали только операторы с ролью «оператор»
-    if (dto.operatorId) {
-      packingWhere.operators = { some: { userId: dto.operatorId } };
-    } else if (operatorRoleIds.length > 0) {
-      packingWhere.operators = { some: { userId: { in: operatorRoleIds } } };
-    }
-    // Если запрошен конкретный финальный станок — фильтруем по machineId
-    if (dto.machineId && finalMachineMap.has(dto.machineId)) {
-      packingWhere.machineId = dto.machineId;
+    // Если запрошен конкретный станок, которого нет среди станков упаковки — пропускаем запрос
+    const skipPackingTasks = dto.machineId && !finalMachineMap.has(dto.machineId);
+    // Если запрошен конкретный этап — определяем, какие станки упаковки относятся к этому этапу
+    let packingMachineIdsForStage: number[] | null = null;
+    if (dto.stageId) {
+      packingMachineIdsForStage = Array.from(finalMachineMap.values())
+        .filter((m) => m.stageId === dto.stageId)
+        .map((m) => m.machineId);
+      // Если ни один станок упаковки не относится к запрошенному этапу — пропускаем
+      if (packingMachineIdsForStage.length === 0) {
+        packingMachineIdsForStage = null;
+      }
     }
 
-    const packingTasks = await this.prisma.packingTask.findMany({
-      where: packingWhere,
-      include: {
-        operators: {
-          select: {
-            userId: true,
-            operator: {
-              select: {
-                userDetail: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
+    let packingTasks: any[] = [];
+
+    if (!skipPackingTasks && !(dto.stageId && !packingMachineIdsForStage)) {
+      const packingWhere: any = {
+        completedQuantity: { gt: 0 },
+      };
+      const packingDateFilter = this.buildDateFilter(dto);
+      if (Object.keys(packingDateFilter).length > 0) {
+        packingWhere.completedAt = packingDateFilter;
+      }
+      // Участвовали только операторы с ролью «оператор»
+      if (dto.operatorId) {
+        packingWhere.operators = { some: { userId: dto.operatorId } };
+      } else if (operatorRoleIds.length > 0) {
+        packingWhere.operators = { some: { userId: { in: operatorRoleIds } } };
+      }
+      // Если запрошен конкретный станок упаковки — фильтруем по machineId
+      if (dto.machineId) {
+        packingWhere.machineId = dto.machineId;
+      }
+      // Если запрошен конкретный этап — фильтруем по станкам этого этапа
+      if (packingMachineIdsForStage) {
+        packingWhere.machineId = packingMachineIdsForStage.length === 1
+          ? packingMachineIdsForStage[0]
+          : { in: packingMachineIdsForStage };
+      }
+
+      packingTasks = await this.prisma.packingTask.findMany({
+        where: packingWhere,
+        include: {
+          operators: {
+            select: {
+              userId: true,
+              operator: {
+                select: {
+                  userDetail: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                    },
                   },
                 },
               },
             },
           },
-        },
-        machine: {
-          select: {
-            machineId: true,
-            machineName: true,
-            machineCode: true,
-            loadUnit: true,
+          machine: {
+            select: {
+              machineId: true,
+              machineName: true,
+              machineCode: true,
+              loadUnit: true,
+            },
           },
         },
-      },
-      orderBy: { completedAt: 'desc' },
-      take: 10000,
-    });
+        orderBy: { completedAt: 'desc' },
+        take: 10000,
+      });
+    }
 
     // 4. Формируем плоский список записей о выработке
     const records: OperatorProductivityRecord[] = [];
@@ -247,6 +271,11 @@ export class OperatorProductivityService {
     for (const task of packingTasks) {
       // Для каждого оператора в задаче упаковки
       for (const op of task.operators) {
+        // Если запрошен конкретный оператор — пропускаем записи других операторов
+        if (dto.operatorId && op.userId !== dto.operatorId) continue;
+        // Пропускаем операторов, не имеющих роли «оператор»
+        if (!operatorRoleIds.includes(op.userId)) continue;
+
         const machineInfo = finalMachineMap.get(task.machineId);
         const operatorName = op.operator
           ? `${op.operator.userDetail?.firstName ?? ''} ${op.operator.userDetail?.lastName ?? ''}`.trim() || null
@@ -274,13 +303,8 @@ export class OperatorProductivityService {
       }
     }
 
-    // 5. Применяем фильтр по stageId (для не-финальных станков) на уровне приложения
+    // 5. Применяем фильтр по поиску по ФИО
     let filteredRecords = records;
-    if (dto.stageId && finalMachineMap.size === 0) {
-      filteredRecords = records.filter((r) => r.stageId === dto.stageId);
-    }
-
-    // 6. Применяем фильтр по поиску по ФИО
     if (dto.search) {
       const search = dto.search.toLowerCase();
       filteredRecords = filteredRecords.filter((r) =>
