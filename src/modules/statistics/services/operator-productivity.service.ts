@@ -10,6 +10,8 @@ export interface OperatorProductivityRecord {
   // Оператор
   operatorId: number;
   operatorName: string | null;
+  // Номер оператора на станке (из привязки или задачи упаковки)
+  operatorNumber: number | null;
   // Этап производства, к которому привязан станок (на котором выполнял задачу)
   stageId: number;
   stageName: string | null;
@@ -49,6 +51,8 @@ export interface OperatorProductivitySummary {
     loadUnit: string;
     quantityProcessed: number;
     bindingCount: number;
+    // Номера оператора на этом станке (из привязок)
+    operatorNumbers: number[];
   }>;
   // Детализация по этапам
   stages: Array<{
@@ -216,6 +220,7 @@ export class OperatorProductivityService {
           operators: {
             select: {
               userId: true,
+              operatorNumber: true,
               operator: {
                 select: {
                   userDetail: {
@@ -254,6 +259,7 @@ export class OperatorProductivityService {
       records.push({
         operatorId: op.operatorId,
         operatorName,
+        operatorNumber: null,
         stageId: op.routeStage?.stage?.stageId ?? 0,
         stageName: op.routeStage?.stage?.stageName ?? null,
         machineId: op.machine.machineId,
@@ -284,6 +290,7 @@ export class OperatorProductivityService {
         records.push({
           operatorId: op.userId,
           operatorName,
+          operatorNumber: op.operatorNumber ?? null,
           stageId: machineInfo?.stageId ?? 0,
           stageName: machineInfo?.stageName ?? 'Упаковка',
           machineId: task.machine.machineId,
@@ -341,10 +348,15 @@ export class OperatorProductivityService {
           loadUnit: rec.machineLoadUnit ?? '',
           quantityProcessed: 0,
           bindingCount: 0,
+          operatorNumbers: [],
         };
         summary.machines.push(machineEntry);
       }
       machineEntry.quantityProcessed += rec.quantityProcessed;
+      // Добавляем номер оператора из записи (упаковка)
+      if (rec.operatorNumber != null && !machineEntry.operatorNumbers.includes(rec.operatorNumber)) {
+        machineEntry.operatorNumbers.push(rec.operatorNumber);
+      }
 
       // Детализация по этапам
       let stageEntry = summary.stages.find(
@@ -370,6 +382,8 @@ export class OperatorProductivityService {
         },
         select: {
           userId: true,
+          machineId: true,
+          operatorNumber: true,
           boundAt: true,
           unboundAt: true,
           isActive: true,
@@ -390,6 +404,13 @@ export class OperatorProductivityService {
         const summary = operatorsMap.get(b.userId);
         if (summary) {
           summary.totalAuthorizedSeconds += duration;
+          // Добавляем номер оператора к соответствующему станку
+          const machineEntry = summary.machines.find(
+            (m) => m.machineId === b.machineId,
+          );
+          if (machineEntry && !machineEntry.operatorNumbers.includes(b.operatorNumber)) {
+            machineEntry.operatorNumbers.push(b.operatorNumber);
+          }
         }
         const count = bindingCountByOperator.get(b.userId) || 0;
         bindingCountByOperator.set(b.userId, count + 1);
