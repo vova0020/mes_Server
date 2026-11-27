@@ -7,6 +7,8 @@ import { MachinMasterService } from './services/machinMaster.service';
 import { MachinsController } from './controllers/machins.controller';
 import { MachinsService } from './services/macins.service';
 import { MachineSchedulerService } from './services/machine-scheduler.service';
+import { MasterOperatorBindingController } from './controllers/master-operator-binding.controller';
+import { MasterOperatorBindingService } from './services/master-operator-binding.service';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { SettingsModule } from '../settings/settings.module';
 
@@ -17,8 +19,17 @@ import { SettingsModule } from '../settings/settings.module';
     SettingsModule,
     ScheduleModule.forRoot(),
   ],
-  controllers: [MachinsMasterController, MachinsController],
-  providers: [MachinMasterService, MachinsService, MachineSchedulerService],
-  exports: [MachinMasterService, MachinsService],
+  controllers: [
+    MachinsMasterController,
+    MachinsController,
+    MasterOperatorBindingController,
+  ],
+  providers: [
+    MachinMasterService,
+    MachinsService,
+    MachineSchedulerService,
+    MasterOperatorBindingService,
+  ],
+  exports: [MachinMasterService, MachinsService, MasterOperatorBindingService],
 })
 export class MachinsModule {}

@@ -41,7 +41,7 @@ export interface OperatorProductivitySummary {
   totalAuthorizedSeconds: number;
   // Суммарное выполненное количество (по всем станкам, в разных единицах)
   totalQuantity: number;
-  // Сколько раз привязывался к станку (активных/исторических привязок)
+  // Сколько раз привязывался к станкам (суммарно по всем станкам)
   bindingCount: number;
   // Детализация по станкам
   machines: Array<{
@@ -50,7 +50,10 @@ export interface OperatorProductivitySummary {
     machineCode: string | null;
     loadUnit: string;
     quantityProcessed: number;
+    // Сколько раз оператор привязывался к этому станку
     bindingCount: number;
+    // Суммарное время привязки к этому станку в секундах
+    authorizedSeconds: number;
     // Номера оператора на этом станке (из привязок)
     operatorNumbers: number[];
   }>;
@@ -348,6 +351,7 @@ export class OperatorProductivityService {
           loadUnit: rec.machineLoadUnit ?? '',
           quantityProcessed: 0,
           bindingCount: 0,
+          authorizedSeconds: 0,
           operatorNumbers: [],
         };
         summary.machines.push(machineEntry);
@@ -387,6 +391,13 @@ export class OperatorProductivityService {
           boundAt: true,
           unboundAt: true,
           isActive: true,
+          machine: {
+            select: {
+              machineName: true,
+              machineCode: true,
+              loadUnit: true,
+            },
+          },
         },
       });
 
@@ -404,11 +415,30 @@ export class OperatorProductivityService {
         const summary = operatorsMap.get(b.userId);
         if (summary) {
           summary.totalAuthorizedSeconds += duration;
-          // Добавляем номер оператора к соответствующему станку
-          const machineEntry = summary.machines.find(
+
+          // Находим или создаём запись станка для привязки
+          let machineEntry = summary.machines.find(
             (m) => m.machineId === b.machineId,
           );
-          if (machineEntry && !machineEntry.operatorNumbers.includes(b.operatorNumber)) {
+          if (!machineEntry) {
+            // Станок есть в привязках, но нет в выработке — добавляем с данными из привязки
+            machineEntry = {
+              machineId: b.machineId,
+              machineName: b.machine.machineName ?? '',
+              machineCode: b.machine.machineCode ?? null,
+              loadUnit: b.machine.loadUnit ?? '',
+              quantityProcessed: 0,
+              bindingCount: 0,
+              authorizedSeconds: 0,
+              operatorNumbers: [],
+            };
+            summary.machines.push(machineEntry);
+          }
+          // Добавляем время и счётчик привязок к конкретному станку
+          machineEntry.authorizedSeconds += duration;
+          machineEntry.bindingCount += 1;
+          // Добавляем номер оператора
+          if (!machineEntry.operatorNumbers.includes(b.operatorNumber)) {
             machineEntry.operatorNumbers.push(b.operatorNumber);
           }
         }
