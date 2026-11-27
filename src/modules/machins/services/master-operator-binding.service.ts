@@ -2,7 +2,6 @@
   Injectable,
   Logger,
   NotFoundException,
-  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma.service';
 import { SocketService } from '../../websocket/services/socket.service';
@@ -310,11 +309,18 @@ export class MasterOperatorBindingService {
         };
       }
 
-      const opName =
-        `${operator.userDetail?.firstName || ''} ${operator.userDetail?.lastName || ''}`.trim();
-      throw new ConflictException(
-        `Оператор ${opName} уже привязан к станку "${existingBinding.machine.machineName}". Сначала отвяжите его.`,
+      // Автоматически завершаем старую привязку перед созданием новой
+      this.logger.log(
+        `Автоматическая отвязка оператора ID: ${operatorId} от станка "${existingBinding.machine.machineName}" перед привязкой к новому`,
       );
+
+      await this.prisma.operatorMachineBinding.update({
+        where: { bindingId: existingBinding.bindingId },
+        data: {
+          isActive: false,
+          unboundAt: new Date(),
+        },
+      });
     }
 
     // Определяем номер оператора
